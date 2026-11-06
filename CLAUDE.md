@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 QRIS DevGuard AI is a capstone project. `docs/QRIS_DevGuard_AI_PRD_TRD.md` is the source of truth for requirements, architecture, data model, API contract and release gates. Read the relevant section before you implement anything.
 
-Phase P0 (§27, scope and source inventory) is done, but its sign-off is still pending:
+Phase P0 (§27, scope and source inventory) is signed off (2026-11-06). The decision chain is in `docs/scope-and-source-inventory/`.
 - `docs/scope.md` covers the use case, boundaries, roles and data owners.
-- `docs/threat-model.md` lists threats T1–T15, each mapped to the phase that must prove its control.
+- `docs/threat-model.md` lists threats T1–T17, each mapped to the phase that must prove its control.
 - `skills/qris-integration-troubleshooting/SKILL.md` is the SOP outline.
 - `knowledge_base/manifests/sources.yaml` is the source inventory, validated against `source.schema.json`.
 - `configs/security.yaml` defines the role/tool matrix, redaction fields and egress allowlist.
@@ -25,7 +25,11 @@ uv run pytest tests/unit/test_check_sources.py::test_duplicate_document_id_rejec
 uv run python scripts/check_sources.py                   # validate source manifest (P0 exit check)
 ```
 
-Source manifest rules: only `approved` entries may be ingested. An `approved` entry needs a real URL, a version, an effective date and confirmed permission with evidence. Never fill in versions, dates or URLs by guessing; leave them `null` until confirmed.
+Source manifest rules (enforced by `scripts/check_sources.py`):
+- Only `approved` entries may be ingested. An approved entry needs a version, an effective date (`YYYY-MM` or `YYYY-MM-DD`) and confirmed permission with evidence.
+- `reference_only` (public ASPI/SNAP documents with no published terms) needs a real URL. Its files stay under the git-ignored `knowledge_base/sources/` and are never committed. Citations quote at most 300 characters (`configs/security.yaml`).
+- `team_authored` documents have the ID prefix `synthetic-` and the title marker `(SYNTHETIC — not an official ASPI/BI document)`, and are committed under `knowledge_base/synthetic/`.
+- Never guess versions, dates or URLs; leave them `null` until confirmed.
 
 ## What the system is
 
@@ -83,3 +87,18 @@ Read `docs/product.md`, `docs/tech.md` and `docs/structure.md` before
 making changes — they describe what this project is, what it's built
 with, and how it's laid out. Keep them current when the stack or
 layout changes.
+
+## Documentation layout
+All documentation lives under `docs/`, and `docs/index.md` is the table of contents. Each feature gets its own folder, `docs/<feature-name>/`. Update `docs/index.md` in the same change whenever a feature is added or changed.
+
+## Test scope
+- Scripts and CLI entry points: add an integration test that runs the real entry point as a subprocess (`tests/integration/`), in addition to unit tests.
+- Changes to existing behaviour: add a regression test, and keep the existing tests passing unchanged.
+
+Run `uv run pytest` before reporting a task complete, and paste the output.
+
+## Workflow
+Nothing is implemented without an accepted plan. Each feature follows `intent.md` → `spec.md` → `plan.md` (+ `tasks.md`) in `docs/<feature-name>/`, each committed before the next starts.
+
+## Common mistakes
+- None recorded yet.
