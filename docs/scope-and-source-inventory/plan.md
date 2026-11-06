@@ -18,6 +18,8 @@
 - `docs/scope.md`: edit. §1.1 endpoint confirmations with `document_id`s, §3/§4 reference-only policy, exit criteria. The §5 signatures are entered by the user.
 - `docs/structure.md`: edit. Adds `knowledge_base/synthetic/` and `tests/integration/` to the directory map.
 - `CLAUDE.md`: merge. Adds the missing template sections (agent configuration, below).
+- `.github/workflows/ci.yml`: new. Test workflow: runs `uv run pytest` and the manifest checker on every push to `main` and on every PR.
+- `.github/workflows/agent-config-eval.yml`: new. The agent-configuration eval, triggered when `CLAUDE.md`, `.claude/**`, `skills/**` or the workflows change.
 - `docs/scope-and-source-inventory/tasks.md`: new. Mirrors the work sequence.
 - `docs/index.md`: edit. Links `plan.md`.
 
@@ -35,6 +37,7 @@
 6. **Scope document and structure map.** Files: `docs/scope.md` (§1.1, §3, §4, the exit criteria) and `docs/structure.md`. Advances AC #7, partly.
 7. **User sign-off.** The user enters a name and date in each `docs/scope.md` §5 row, on or before 2026-11-10. Completes AC #7.
 8. **`CLAUDE.md` merge.** File: `CLAUDE.md`. This is agent configuration; see below.
+9. **GitHub Actions CI.** Added 2026-11-06, after the user chose GitHub Actions in Phase 4. Files: `.github/workflows/ci.yml`, `.github/workflows/agent-config-eval.yml`. Advances AC #1 and #11 (they now run on every push and PR). Each file gets its own `approve write`.
 
 ## Test coverage
 
@@ -49,7 +52,8 @@ Only these rows from `test-scope-by-stage.md` matched: *Backend service / script
   - Regression: the "committed manifest is valid" test still passes against the new manifest.
 - **Step 4:** unit tests for git-tracked files in the sources directory and for the excerpt-limit key.
 - **Steps 5–7:** documentation only, with no automated test. The AC #7 and #8 checks are done by reading the files at Phase 4 and quoting the relevant lines.
-- **Step 8:** the agent-configuration eval is required on this path, but there's no CI platform yet (Phase 0: "not yet"), so it is **deferred**. See below.
+- **Step 8:** covered by the agent-configuration eval in step 9.
+- **Step 9:** the always-on agent-configuration eval row. Locally, run the same commands the workflows run (`uv sync --locked`, `uv run pytest`, `uv run python scripts/check_sources.py`) and paste the output. The first run on GitHub happens after the push in Phase 5.
 
 ## Agent configuration changes
 
@@ -59,8 +63,8 @@ Only these rows from `test-scope-by-stage.md` matched: *Backend service / script
   - I'll show the merged diff and wait for `approve write`.
 - **Subagents:** none. Nothing in the spec is a recurring, well-bounded task yet.
 - **Build-time hooks:** none proposed. `jq` is not installed here, so any later hook will be written in Python under the same fail-closed contract.
-- **CI agent-configuration eval job:** deferred until a CI platform is chosen. It is recorded here so a later feature picks it up.
+- **CI:** GitHub Actions, chosen by the user in Phase 4. Two new workflows (step 9). `agent-config-eval` starts as `continue-on-error: true`; switch it to blocking once it has passed a few times. It has no `eval.sh` step yet, because no hooks are installed. A later feature that adds a hook also adds the `eval.sh` step.
 
 ## Rollback
 
-Every change is on branch `feature/scope-and-source-inventory`, which nothing has merged. To roll back, revert or drop the branch's commits. There is no data or external state to undo.
+Steps 1–8 were pushed directly to `main` by the user. To roll back, revert those commits (`32af7b3..1f9e4b2`). Step 9 is on branch `feature/scope-and-source-inventory-ci`; drop the branch or close its PR. There is no data or external state to undo.
