@@ -61,3 +61,11 @@ redact_patterns:
 limits:
   max_message_chars: 8000
   max_payload_bytes: 32768
+
+# Citation policy by manifest permission.basis (docs/scope-and-source-inventory/spec.md).
+# Enforced by the citation layer from Phase P2/P5.
+citations:
+  max_excerpt_chars:
+    reference_only: 300     # public documents with no published terms: short quotes only
+    team_authored: 1000     # synthetic documents; the SYNTHETIC label must stay attached
+  label_synthetic: true
