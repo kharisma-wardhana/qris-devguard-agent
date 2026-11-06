@@ -3,28 +3,39 @@
 
 ## Stack
 
-- **Language:** Python, `requires-python = ">=3.11"` *(`pyproject.toml`, `uv.lock`)*. There is no `.python-version` pin.
-- **Package manager:** uv, which is implied by the `uv.lock` file and the `[dependency-groups]` table in `pyproject.toml`.
+- **Language:** Python, `requires-python = ">=3.11"` *(`pyproject.toml`, `uv.lock`)*. There is no `.python-version` pin. CI uses whatever Python `astral-sh/setup-uv@v5` resolves.
+- **Package manager:** uv, which is implied by the `uv.lock` file and the `[dependency-groups]` table in `pyproject.toml`. CI installs with `uv sync --locked`.
+- **Shell:** bash, used for the Claude Code hook scripts in `.claude/hooks/`.
 - **Planned, not yet in any manifest:** FastAPI/Pydantic, LangGraph, vLLM, Qdrant, PostgreSQL, the MCP Python SDK and Langfuse. These are listed in `docs/QRIS_DevGuard_AI_PRD_TRD.md` §9, and their versions are unresolved.
 
 ## Key libraries
 
 - **jsonschema 4.26.0** *(`uv.lock`)*: validates the source manifest against `knowledge_base/manifests/source.schema.json` (Draft 2020-12).
-- **PyYAML 6.0.3** *(`uv.lock`)*: loads the YAML manifest and config files.
+- **PyYAML 6.0.3** *(`uv.lock`)*: loads the manifest and config files. An unquoted full date such as `2024-09-15` loads as a date object, not a string; see `REVIEW.md` § Bugs.
 
 ## Dev tooling
 
 - **Test runner:** pytest 9.2.0 *(`uv.lock`)*, in the `dev` dependency group. It is configured in `pyproject.toml` `[tool.pytest.ini_options]` with `testpaths = ["tests"]`.
+- **CI:** GitHub Actions.
+  - `.github/workflows/ci.yml` (`test` job) runs on every push to `main` and on every PR.
+  - `.github/workflows/agent-config-eval.yml` (`eval` job, `continue-on-error: true`) runs on PRs that touch `CLAUDE.md`, `.claude/**`, `skills/**` or the workflows.
+- **Claude Code agent configuration:**
+  - `.claude/settings.json` turns on a `PreToolUse` Bash hook, `.claude/hooks/deploy-gate.sh`.
+  - The same file sets a credential read deny-list and asks before `git push`, `curl` and `wget`.
+  - `.claude/hooks/eval.sh` checks the hook's decisions.
+- **Code review checklist:** `REVIEW.md`.
 - **Linter, formatter, type checker:** none configured.
-- **CI:** none. There is no `.github/workflows` or other CI file.
 
 ## Commands
 
 | Command | Source |
 |---|---|
-| — | None found. No `[project.scripts]`, Makefile, justfile, Taskfile or CI workflow exists yet. |
+| `uv sync --locked` | `.github/workflows/ci.yml`, `.github/workflows/agent-config-eval.yml` |
+| `uv run pytest` | `.github/workflows/ci.yml`, `.github/workflows/agent-config-eval.yml` |
+| `uv run python scripts/check_sources.py` | `.github/workflows/ci.yml`, `.github/workflows/agent-config-eval.yml` |
+| `bash .claude/hooks/eval.sh` | `.github/workflows/agent-config-eval.yml` |
 
-`README.md` documents `uv` commands for installing, testing and checking the manifest. They aren't backed by any scripts block or CI file, so they aren't listed here. A planned `Makefile` is described in TRD §24.
+There is still no Makefile or `[project.scripts]`. A Makefile is planned in TRD §24.
 
 ## Configuration & environment
 
@@ -42,23 +53,31 @@ Variables are listed in `.env.example`. Only key names and their purpose are giv
 | `MCP_AUTH_SECRET` | MCP server authentication |
 | `MEMORY_TTL_DAYS`, `CHECKPOINT_TTL_DAYS` | Retention for memory and checkpoints |
 
-No code reads these variables yet.
+No code reads these variables yet. The CI workflows use no secrets and run with `permissions: contents: read`.
 
 Policy config lives in two files:
-- `configs/security.yaml`: roles and tools, redaction rules, egress and limits.
+- `configs/security.yaml`: roles and tools, redaction rules, egress, limits and citation excerpt caps (`reference_only` 300 and `team_authored` 1000 characters).
 - `configs/eval_thresholds.yaml`: the release gates.
 
 ## Constraints
 
 - **Public showcase, synthetic data only.**
-  - Nothing confidential may appear anywhere: no internal data, real credentials or unpublished documents. *(user, per `docs/product.md`)*
+  - Nothing confidential may appear anywhere. *(user, per `docs/product.md`)*
+  - Public ASPI/SNAP documents are reference-only. They stay under the git-ignored `knowledge_base/sources/`, enforced by `scripts/check_sources.py` and `tests/unit/test_repo_hygiene.py`.
   - `.gitignore` blocks `.env*` (except `.env.example`), `*.pem`, `*.key`, `*.p12`, `knowledge_base/fixtures/signatures/keys/` and `knowledge_base/sources/*`.
+- **The hooks need Python.** `deploy-gate.sh` parses its input with `python3` or `python`, not `jq`, which is not installed on the dev machine. If no Python is found, the hook asks for approval instead of allowing the command.
+- **`tests/unit/test_repo_hygiene.py` needs `git`** on the PATH, because it runs `git ls-files`.
 - **GPU required for model serving.** vLLM runs on a RunPod GPU pod. The GPU SKU is chosen by benchmark and not yet fixed (TRD §20.3).
 - **Sandbox only.** `environment_allowlist: [sandbox]` and the egress allowlist in `configs/security.yaml` forbid production hosts.
 
 ## Scan coverage
 
-- 18 files were inventoried after excluding `.git/`, `.venv/`, `__pycache__/` and `.pytest_cache/`. All 18 were read.
+- 38 files were inventoried after excluding `.git/`, `.venv/`, `__pycache__/` and `.pytest_cache/`. All 38 were read.
 - `uv.lock` was searched for specific packages rather than read in full.
 - `.env.example` was read for key names only.
 - No credential files exist in the repo.
+
+## Removed since last scan
+
+- "CI: none." The repo now has GitHub Actions; see Dev tooling.
+- "Commands: none found." The commands now come from the CI workflows; see Commands.
