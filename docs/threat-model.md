@@ -63,9 +63,13 @@ No connection exists to any bank, ASPI, merchant or production host.
 | T13 | Direct access to vLLM, Qdrant or Postgres (S, I) | B6 | Private networking; vLLM key plus proxy, since `--api-key` does not cover every endpoint | Port exposure check (P1/P7) |
 | T14 | Error responses leak stack traces or environment (I) | B1, B3 | Stable error envelope `code/message/correlation_id` | Tool exception tests (P7) |
 | T15 | Poisoned source enters the corpus (T) | B2 | Only `approved` manifest entries are ingested; checksum; maintainer publish step | Ingestion validation (P2) |
+| T16 | A public document with no published licence is redistributed through the public repo, an answer or a LinkedIn screenshot (I) | B2, repo | `reference_only` basis; files kept under the git-ignored `knowledge_base/sources/`; checker rejects a reference-only `local_path` outside it; citation excerpts capped at 300 characters (`configs/security.yaml`) | `tests/unit/test_repo_hygiene.py` (P0); checker rule (f) unit test (P0); excerpt-cap test in the citation layer (P2/P5) |
+| T17 | A synthetic document is mistaken for an official ASPI/BI specification (S) | B2, repo | `synthetic-` ID prefix + `team_authored` basis + title marker, all enforced by the checker; marker on the document's first line; SYNTHETIC label kept on every citation | Checker rules (a)–(c) and `tests/unit/test_synthetic_docs.py` (P0); citation-label test (P5) |
 
 ## 4. Residual risks and assumptions
 
 - Langfuse Cloud is acceptable only because all data is synthetic. Real data would require self-hosting.
 - A RunPod pod may need an exposed port. In that case it must sit behind an authenticated reverse proxy with an allowlist.
 - Human review of citation support is sampled, not exhaustive.
+- **No separation of duties.** One person (the capstone author) signs all four P0 roles and acts as both KB maintainer and approver. The `kb_maintainer` exclusion from `approver_roles` in `configs/security.yaml` is enforced per account, not per person. This is accepted for the capstone and must change before any multi-person use.
+- **Reference-only use is a risk you accept, not a licence.** The ASPI portal and its usage guide publish no terms either way (checked 2026-11-06). If terms appear later, they take precedence and the manifest entries must be re-reviewed.
