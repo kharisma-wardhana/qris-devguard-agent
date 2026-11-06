@@ -14,6 +14,7 @@
 - `tests/integration/test_healthcheck_cli.py`: new. Runs the CLI as a subprocess against closed ports.
 - `docker-compose.yml`: new. The local stack: PostgreSQL, Qdrant and Langfuse v4 (web, worker, ClickHouse, Redis, MinIO).
 - `deploy/postgres/init-databases.sh`: new. Creates the `langfuse` database and user next to `devguard`.
+- `deploy/clickhouse/memory.xml`: new. ClickHouse server memory cap (added in step 6, replacing container memory limits).
 - `.env.example`: edit. New keys, `LANGFUSE_HOST` and `VLLM_BASE_URL` set to local, SSH placeholders, Langfuse headless-init keys.
 - `scripts/init_env.py`: new. Creates `.env` from `.env.example` with random secrets. Refuses to overwrite an existing `.env`.
 - `tests/unit/test_init_env.py`: new.
@@ -32,16 +33,17 @@
 
 1. **Model config and pod bootstrap script.** `configs/model.yaml`, `deploy/runpod/bootstrap_vllm.sh`, `tests/unit/test_bootstrap_vllm.py`, `.gitattributes`. Spec AC #9, #10.
 2. **Health-check CLI.** `pyproject.toml`, `uv.lock`, `scripts/healthcheck.py`, `tests/unit/test_healthcheck.py`, `tests/integration/test_healthcheck_cli.py`. Spec AC #6, #7, #8.
-3. **Local stack definition and env.** `docker-compose.yml`, `deploy/postgres/init-databases.sh`, `.env.example`, `scripts/init_env.py`, `tests/unit/test_init_env.py`, `configs/security.yaml`, `tests/unit/test_compose.py`, `tests/unit/test_repo_hygiene.py`. Spec AC #2, #3, #4, #5. The Langfuse and MinIO versions are pinned here, read from their release pages.
+3. **Local stack definition and env.** `docker-compose.yml`, `deploy/postgres/init-databases.sh`, `.env.example`, `scripts/init_env.py`, `tests/unit/test_init_env.py`, `configs/security.yaml`, `tests/unit/test_compose.py`, `tests/unit/test_repo_hygiene.py`. Spec AC #2, #3, #5 (AC #4 moved to step 6). The Langfuse and MinIO versions are pinned here, read from their release pages.
 4. **Threat model.** `docs/threat-model.md`. Spec AC #13.
 5. **Tunnel helper and runbook.** `scripts/tunnel.sh`, `docs/runpod-deployment.md`, `README.md`. Spec AC #12.
-6. **Local stack bring-up.** No new files.
+6. **Application-level memory caps** (added 2026-11-06 after the first bring-up attempt failed with `crun: open memory.max`). Files: `docker-compose.yml` (remove `mem_limit`, add `NODE_OPTIONS` and Redis `--maxmemory`, mount the ClickHouse config), `deploy/clickhouse/memory.xml`, `tests/unit/test_compose.py`, `docs/runpod-deployment.md` (memory note). Spec AC #4.
+7. **Local stack bring-up.** No new files.
    - Run `uv run python scripts/init_env.py`, then `podman compose up -d`.
    - Paste `podman compose ps` and the health-check output. Expect `postgres`, `qdrant`, `langfuse_health` and `langfuse_trace` PASS, and the three vLLM checks FAIL, because no pod is running yet.
    - Spec AC #1.
    - I run this locally, after asking first, because it pulls about 3 GB of images.
-7. **Live GPU run (user).** You create the pod, bootstrap, tunnel and run the health check, then terminate the pod. I record the measured values in `docs/runpod-deployment.md`. Spec AC #11.
-8. **`CLAUDE.md` merge.** Appends to `## Commands` and `## Test scope`. Agent configuration.
+8. **Live GPU run (user).** You create the pod, bootstrap, tunnel and run the health check, then terminate the pod. I record the measured values in `docs/runpod-deployment.md`. Spec AC #11.
+9. **`CLAUDE.md` merge.** Appends to `## Commands` and `## Test scope`. Agent configuration.
 
 ## Test coverage
 
@@ -64,12 +66,13 @@ Not matched: UI (none) and accounts/roles (no application auth in P1; Langfuse's
   - Regression: `tests/unit/test_repo_hygiene.py` keeps its existing tests unchanged, and the full suite passes after the `security.yaml` edit.
 - **Step 4:** documentation only. Spec AC #13 is checked at Phase 4 by quoting the changed rows.
 - **Step 5:** `scripts/tunnel.sh` passes `bash -n`, and its tunnel target is `127.0.0.1:8080`. That's a unit check in `tests/unit/test_bootstrap_vllm.py`'s companion section. The runbook is checked at Phase 4 against AC #12.
-- **Steps 6–7:** pasted output from real runs. These are the evidence for AC #1 and #11.
-- **Step 8:** covered by the existing `agent-config-eval` workflow.
+- **Step 6:** unit tests in `tests/unit/test_compose.py` for the caps and for the absence of `mem_limit`. The earlier memory-limit test is replaced, not kept, because the spec criterion it checked changed.
+- **Steps 7–8:** pasted output from real runs. These are the evidence for AC #1 and #11.
+- **Step 9:** covered by the existing `agent-config-eval` workflow.
 
 ## Agent configuration changes
 
-- **`CLAUDE.md` (step 8):**
+- **`CLAUDE.md` (step 9):**
   - Append to `## Commands`: `uv run python scripts/init_env.py`, `podman compose up -d`, `bash scripts/tunnel.sh` and `uv run python scripts/healthcheck.py`.
   - Append to `## Test scope`: the database row.
   - No other section changes. I'll show the diff and wait for `approve write`.
