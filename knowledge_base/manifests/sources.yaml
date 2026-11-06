@@ -1,85 +1,95 @@
-# Source inventory (Phase P0). Schema: source.schema.json. Check with: uv run python scripts/check_sources.py
+# Source inventory. Schema: source.schema.json. Check with: uv run python scripts/check_sources.py
 #
-# Only entries with approval_status: approved may be ingested (P2).
-# Promoting an entry to `approved` requires:
-#   - a real source_url (no example.* placeholders)
-#   - document_version and effective_date
-#   - permission.basis other than `unconfirmed`, with evidence
+# Only entries with approval_status: approved may be ingested (Phase P2).
 #
-# The checksum is filled in at ingestion time. Do not guess versions or dates; leave them null until confirmed.
+# permission.basis:
+#   reference_only - public document with no published terms. Kept locally under
+#                    knowledge_base/sources/ (git-ignored), never committed, and
+#                    cited only in short excerpts (configs/security.yaml).
+#   team_authored  - synthetic document written by the capstone team. Committed
+#                    under knowledge_base/synthetic/. Its ID starts with "synthetic-"
+#                    and its title carries the SYNTHETIC marker.
+#
+# Do not guess versions or dates; leave them null until confirmed.
+# Decisions: docs/scope-and-source-inventory/spec.md
 
-manifest_version: 0.1.0
+manifest_version: 0.2.0
 
 sources:
   - document_id: snap-technical-security-standard
-    title: SNAP (Standar Nasional Open API Pembayaran) technical and security standard
+    title: SNAP Standar Teknis dan Keamanan
     publisher: ASPI / Bank Indonesia
     kind: specification
-    source_url: https://apidevportal.aspi-indonesia.or.id/
-    document_version: null
-    effective_date: null
-    language: [id, en]
-    data_owner: kb_maintainer
-    permission: { basis: unconfirmed, evidence: null }
-    approval_status: candidate
-    checksum_sha256: null
-    notes: Covers access-token (SHA256withRSA) and transactional (HMAC_SHA512) signature construction, headers and timestamp format. Confirm the exact document and revision on the ASPI developer portal and check its terms of use.
-
-  - document_id: snap-qris-mpm-service-spec
-    title: SNAP QRIS MPM service specification (generate QR, query payment)
-    publisher: ASPI / Bank Indonesia
-    kind: specification
-    source_url: https://apidevportal.aspi-indonesia.or.id/
-    document_version: null
-    effective_date: null
-    language: [id, en]
-    data_owner: kb_maintainer
-    permission: { basis: unconfirmed, evidence: null }
-    approval_status: candidate
-    checksum_sha256: null
-    notes: Source of request/response schemas for the MVP endpoints in docs/scope.md §1.1. Replace the portal root URL with the specific page once confirmed.
-
-  - document_id: snap-response-codes
-    title: SNAP response code reference
-    publisher: ASPI / Bank Indonesia
-    kind: response_codes
-    source_url: https://apidevportal.aspi-indonesia.or.id/
-    document_version: null
-    effective_date: null
-    language: [id, en]
-    data_owner: kb_maintainer
-    permission: { basis: unconfirmed, evidence: null }
-    approval_status: candidate
-    checksum_sha256: null
-    notes: Seeds the exact-match table used by lookup_response_code. Codes must be copied from the source, never inferred.
-
-  - document_id: qris-national-standard
-    title: QRIS national QR code payment standard
-    publisher: Bank Indonesia
-    kind: specification
-    source_url: null
-    document_version: null
-    effective_date: null
+    source_url: https://apidevportal.aspi-indonesia.or.id/docs/standar-teknis-keamanan
+    local_path: knowledge_base/sources/snap-standar-teknis-keamanan-1.0.2.pdf
+    document_version: 1.0.2
+    effective_date: 2024-09
     language: [id]
     data_owner: kb_maintainer
-    permission: { basis: unconfirmed, evidence: null }
-    approval_status: candidate
+    permission:
+      basis: reference_only
+      evidence: >-
+        No terms of use, licence or redistribution terms found on the portal (home, Info, Direktori
+        Publikasi, API Services, Keamanan, Sign In, Transfer Debit) or in Pedoman Pengelolaan Developer
+        Site (Jan 2026 v1.0). Checked by Kharisma Wardhana, 2026-11-06. Version 1.0.2 (September 2024)
+        confirmed on the PDF cover.
+    approval_status: approved
     checksum_sha256: null
-    notes: Optional background for QR payload content. Only include it if a publicly usable version is identified.
+    notes: Source for access-token-b2b (SHA256withRSA, service code 73, v1.0; also shown on /api-services/keamanan).
 
-  - document_id: internal-qris-troubleshooting-sop
-    title: Internal QRIS troubleshooting SOP excerpts
+  - document_id: snap-data-technical-spec
+    title: SNAP Standar Data dan Spesifikasi Teknis
+    publisher: ASPI / Bank Indonesia
+    kind: response_codes
+    source_url: https://apidevportal.aspi-indonesia.or.id/docs/standar-data-spesifikasi-teknis
+    local_path: knowledge_base/sources/snap-standar-data-spesifikasi-teknis-1.0.2.pdf
+    document_version: 1.0.2
+    effective_date: 2024-09
+    language: [id]
+    data_owner: kb_maintainer
+    permission:
+      basis: reference_only
+      evidence: >-
+        No terms of use, licence or redistribution terms found on the portal or in Pedoman Pengelolaan
+        Developer Site (Jan 2026 v1.0). Checked by Kharisma Wardhana, 2026-11-06. Version 1.0.2
+        (September 2024) per the portal homepage and Info page; this PDF's cover was not separately checked.
+    approval_status: approved
+    checksum_sha256: null
+    notes: Source for the SNAP response-code structure and list (part 6, Response Code). Re-check the cover version at ingestion (P2).
+
+  - document_id: synthetic-qris-mpm-service-spec
+    title: QRIS MPM Service Specification (SYNTHETIC — not an official ASPI/BI document)
+    publisher: Capstone project team
+    kind: specification
+    source_url: null
+    local_path: knowledge_base/synthetic/synthetic-qris-mpm-service-spec.md
+    document_version: 0.1.0
+    effective_date: 2026-11
+    language: [en]
+    data_owner: kb_maintainer
+    permission:
+      basis: team_authored
+      evidence: Authored by Kharisma Wardhana for the capstone, 2026-11-06. All values synthetic.
+    approval_status: approved
+    checksum_sha256: null
+    notes: Source for qr-mpm-generate (service 47) and qr-mpm-query (service 51). Replaces the unconfirmed public MPM source.
+
+  - document_id: synthetic-qris-troubleshooting-sop
+    title: QRIS Integration Troubleshooting SOP (SYNTHETIC — not an official ASPI/BI document)
     publisher: Capstone project team
     kind: internal_sop
     source_url: null
-    document_version: null
-    effective_date: null
-    language: [id, en]
+    local_path: knowledge_base/synthetic/synthetic-qris-troubleshooting-sop.md
+    document_version: 0.1.0
+    effective_date: 2026-11
+    language: [en]
     data_owner: team_lead
-    permission: { basis: unconfirmed, evidence: null }
-    approval_status: candidate
+    permission:
+      basis: team_authored
+      evidence: Authored by Kharisma Wardhana for the capstone, 2026-11-06. No internal procedure reproduced.
+    approval_status: approved
     checksum_sha256: null
-    notes: Only excerpts approved for capstone use. Feeds skills/qris-integration-troubleshooting.
+    notes: Retrievable form of skills/qris-integration-troubleshooting/SKILL.md.
 
   - document_id: synthetic-test-fixtures
     title: Payload and test-signature fixtures (SYNTHETIC — not an official ASPI/BI document)
@@ -93,4 +103,4 @@ sources:
     permission: { basis: team_authored, evidence: Authored by the capstone team; synthetic data only }
     approval_status: candidate
     checksum_sha256: null
-    notes: Created in Phase P4. Key material is stored outside git.
+    notes: Created in Phase P4. Key material stays outside git.
