@@ -7,10 +7,11 @@ A self-hosted agentic assistant for diagnosing **sandbox** QRIS/SNAP API integra
 - Threat model: [`docs/threat-model.md`](docs/threat-model.md)
 - SOP skill: [`skills/qris-integration-troubleshooting/SKILL.md`](skills/qris-integration-troubleshooting/SKILL.md)
 - Source inventory: [`knowledge_base/manifests/sources.yaml`](knowledge_base/manifests/sources.yaml)
+- Running the stack (local services + vLLM on RunPod): [`docs/runpod-deployment.md`](docs/runpod-deployment.md)
 
 ## Status
 
-Phase P0 (scope and source inventory) is drafted. Team sign-off and source permission confirmation are still pending (`docs/scope.md` §5).
+Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is in progress: see `docs/p1-infrastructure/`.
 
 ## Development
 
@@ -18,4 +19,7 @@ Phase P0 (scope and source inventory) is drafted. Team sign-off and source permi
 uv sync                                   # install deps (.venv)
 uv run pytest                             # all tests
 uv run python scripts/check_sources.py    # validate the source manifest
+uv run python scripts/init_env.py         # once: create .env with random secrets
+podman compose up -d                      # local PostgreSQL, Qdrant, Langfuse
+uv run python scripts/healthcheck.py      # PASS/FAIL per service
 ```

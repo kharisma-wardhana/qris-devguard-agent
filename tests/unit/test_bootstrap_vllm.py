@@ -104,6 +104,28 @@ def test_dry_run_prints_pinned_command_without_key(tmp_path):
     assert "--api-key" not in out
 
 
+# --- scripts/tunnel.sh (plan step 5) ---------------------------------------
+
+TUNNEL = ROOT / "scripts" / "tunnel.sh"
+
+
+def test_tunnel_script_parses_and_targets_vllm_loopback():
+    assert subprocess.run([BASH, "-n", str(TUNNEL)]).returncode == 0
+    text = TUNNEL.read_text(encoding="utf-8")
+    port = CONFIG["vllm"]["port"]
+    assert f'VLLM_PORT="{port}"' in text
+    assert '-L "127.0.0.1:${VLLM_PORT}:127.0.0.1:${VLLM_PORT}"' in text
+
+
+def test_tunnel_refuses_placeholder_host(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("RUNPOD_SSH_HOST=set-me\nRUNPOD_SSH_PORT=set-me\nRUNPOD_SSH_KEY_PATH=~/.ssh/x\n", encoding="utf-8")
+    result = subprocess.run([BASH, str(TUNNEL)], env={**os.environ, "ENV_FILE": str(env_file)},
+                            capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode != 0
+    assert "RUNPOD_SSH_HOST is not set" in result.stderr
+
+
 def test_no_secret_values_in_script():
     text = SCRIPT.read_text(encoding="utf-8")
     assert not re.search(r"(sk-|hf_)[A-Za-z0-9]{10,}", text)

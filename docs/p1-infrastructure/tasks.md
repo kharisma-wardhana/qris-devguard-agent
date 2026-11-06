@@ -6,7 +6,7 @@
 - [x] 2. Health-check CLI — spec AC: #6, #7, #8
 - [x] 3. Local stack definition and env — spec AC: #2, #3, #4, #5
 - [x] 4. Threat model — spec AC: #13
-- [ ] 5. Tunnel helper and runbook — spec AC: #12
+- [x] 5. Tunnel helper and runbook — spec AC: #12
 - [ ] 6. Local stack bring-up — spec AC: #1
 - [ ] 7. Live GPU run (user) — spec AC: #11
 - [ ] 8. CLAUDE.md merge — agent configuration
