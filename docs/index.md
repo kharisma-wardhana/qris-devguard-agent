@@ -6,4 +6,4 @@
 - [Structure](structure.md) — layout, conventions, architecture
 
 ## Features
-- [scope-and-source-inventory](scope-and-source-inventory/intent.md) — Phase P0 sign-off and publicly safe source list
+- [scope-and-source-inventory](scope-and-source-inventory/intent.md) — Phase P0 sign-off and publicly safe source list ([spec](scope-and-source-inventory/spec.md))
