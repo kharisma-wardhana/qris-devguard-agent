@@ -1,0 +1,63 @@
+# Security boundaries fixed in Phase P0 (docs/scope.md §2–3, docs/threat-model.md).
+# They are enforced in code from Phase P4/P7 onward. Changing this file changes the threat model; review both together.
+
+environment_allowlist: [sandbox]
+
+# Outbound hosts the application may contact. Anything else is denied (T9).
+egress_allowlist:
+  - vllm
+  - qdrant
+  - postgres
+  - cloud.langfuse.com
+
+# Risk classes (TRD §15.1)
+risk_policy:
+  low: auto_execute
+  medium: draft_only
+  high: approval_required
+  prohibited: hard_deny
+
+tools:
+  search_qris_spec:        { risk: low,  roles: [developer, support_engineer, kb_maintainer, admin] }
+  validate_request_payload: { risk: low,  roles: [developer, support_engineer, admin] }
+  validate_test_signature: { risk: low,  roles: [developer, support_engineer, admin] }
+  lookup_response_code:    { risk: low,  roles: [developer, support_engineer, kb_maintainer, admin] }
+  create_support_ticket:   { risk: high, roles: [developer, support_engineer, admin] }
+
+# Who may approve high-risk actions. kb_maintainer is excluded for separation of duties.
+approver_roles: [support_engineer, admin]
+approval_ttl_minutes: 30
+
+# Actions that must never exist as tools
+prohibited_actions:
+  - payment
+  - refund
+  - reversal
+  - settlement
+  - merchant_activation
+  - production_api_call
+  - production_credential_operation
+
+# Redaction runs before DB persistence, checkpoint serialisation and Langfuse export (TRD §19.2).
+# Matching is case-insensitive on field names.
+redact_fields:
+  - authorization
+  - access_token
+  - accesstoken
+  - client_secret
+  - clientsecret
+  - private_key
+  - privatekey
+  - secret
+  - password
+  - signature
+  - x-signature
+  - x-client-key
+
+redact_patterns:
+  pem_block: "-----BEGIN [A-Z ]*PRIVATE KEY-----"
+  bearer_token: "(?i)bearer\\s+[A-Za-z0-9._~+/=-]{16,}"
+
+limits:
+  max_message_chars: 8000
+  max_payload_bytes: 32768

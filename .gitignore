@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Secrets: never commit (TRD §19.1)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+knowledge_base/fixtures/signatures/keys/
+
+# Source documents whose licence forbids redistribution
+knowledge_base/sources/*
+!knowledge_base/sources/.gitkeep
+
+# Generated reports
+evals/reports/*
+!evals/reports/.gitkeep

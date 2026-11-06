@@ -1,0 +1,18 @@
+[project]
+name = "qris-devguard-ai"
+version = "0.1.0"
+description = "Self-hosted agentic assistant for diagnosing sandbox QRIS/SNAP API integration issues"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "jsonschema>=4.23",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

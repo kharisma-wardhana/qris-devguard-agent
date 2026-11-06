@@ -1,0 +1,96 @@
+# Source inventory (Phase P0). Schema: source.schema.json. Check with: uv run python scripts/check_sources.py
+#
+# Only entries with approval_status: approved may be ingested (P2).
+# Promoting an entry to `approved` requires:
+#   - a real source_url (no example.* placeholders)
+#   - document_version and effective_date
+#   - permission.basis other than `unconfirmed`, with evidence
+#
+# The checksum is filled in at ingestion time. Do not guess versions or dates; leave them null until confirmed.
+
+manifest_version: 0.1.0
+
+sources:
+  - document_id: snap-technical-security-standard
+    title: SNAP (Standar Nasional Open API Pembayaran) technical and security standard
+    publisher: ASPI / Bank Indonesia
+    kind: specification
+    source_url: https://apidevportal.aspi-indonesia.or.id/
+    document_version: null
+    effective_date: null
+    language: [id, en]
+    data_owner: kb_maintainer
+    permission: { basis: unconfirmed, evidence: null }
+    approval_status: candidate
+    checksum_sha256: null
+    notes: Covers access-token (SHA256withRSA) and transactional (HMAC_SHA512) signature construction, headers and timestamp format. Confirm the exact document and revision on the ASPI developer portal and check its terms of use.
+
+  - document_id: snap-qris-mpm-service-spec
+    title: SNAP QRIS MPM service specification (generate QR, query payment)
+    publisher: ASPI / Bank Indonesia
+    kind: specification
+    source_url: https://apidevportal.aspi-indonesia.or.id/
+    document_version: null
+    effective_date: null
+    language: [id, en]
+    data_owner: kb_maintainer
+    permission: { basis: unconfirmed, evidence: null }
+    approval_status: candidate
+    checksum_sha256: null
+    notes: Source of request/response schemas for the MVP endpoints in docs/scope.md §1.1. Replace the portal root URL with the specific page once confirmed.
+
+  - document_id: snap-response-codes
+    title: SNAP response code reference
+    publisher: ASPI / Bank Indonesia
+    kind: response_codes
+    source_url: https://apidevportal.aspi-indonesia.or.id/
+    document_version: null
+    effective_date: null
+    language: [id, en]
+    data_owner: kb_maintainer
+    permission: { basis: unconfirmed, evidence: null }
+    approval_status: candidate
+    checksum_sha256: null
+    notes: Seeds the exact-match table used by lookup_response_code. Codes must be copied from the source, never inferred.
+
+  - document_id: qris-national-standard
+    title: QRIS national QR code payment standard
+    publisher: Bank Indonesia
+    kind: specification
+    source_url: null
+    document_version: null
+    effective_date: null
+    language: [id]
+    data_owner: kb_maintainer
+    permission: { basis: unconfirmed, evidence: null }
+    approval_status: candidate
+    checksum_sha256: null
+    notes: Optional background for QR payload content. Only include it if a publicly usable version is identified.
+
+  - document_id: internal-qris-troubleshooting-sop
+    title: Internal QRIS troubleshooting SOP excerpts
+    publisher: Capstone project team
+    kind: internal_sop
+    source_url: null
+    document_version: null
+    effective_date: null
+    language: [id, en]
+    data_owner: team_lead
+    permission: { basis: unconfirmed, evidence: null }
+    approval_status: candidate
+    checksum_sha256: null
+    notes: Only excerpts approved for capstone use. Feeds skills/qris-integration-troubleshooting.
+
+  - document_id: synthetic-test-fixtures
+    title: Synthetic payload and test-signature fixtures
+    publisher: Capstone project team
+    kind: fixture_set
+    source_url: null
+    document_version: null
+    effective_date: null
+    language: [en]
+    data_owner: validator_owner
+    permission: { basis: team_authored, evidence: Authored by the capstone team; synthetic data only }
+    approval_status: candidate
+    checksum_sha256: null
+    notes: Created in Phase P4. Key material is stored outside git.
