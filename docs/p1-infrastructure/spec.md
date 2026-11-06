@@ -17,10 +17,10 @@ A developer session runs in this order. Each step is one command, documented in 
    2. installs the pinned vLLM version into its own virtual environment;
    3. downloads the pinned model revision;
    4. starts vLLM bound to `127.0.0.1:8080` inside the pod, with the API key required.
-4. **Open the tunnel.** Locally, `ssh -N -L 8080:127.0.0.1:8080 …` forwards the pod's port 8080 to `localhost:8080`, using connection details read from `.env`. The pod exposes nothing to the internet except SSH (key-only).
+4. **Open the tunnel.** Locally, `ssh -N -L 8080:127.0.0.1:8080 …` forwards the pod's port 8080 to `127.0.0.1:8080` on the developer machine, using connection details read from `.env`. The pod exposes nothing to the internet except SSH (key-only).
 5. **Run the health check.** One local command checks every service and prints one PASS/FAIL line each:
    - `vllm_health`, `vllm_models` and `vllm_chat` (a short non-thinking completion; records time-to-first-token and total latency);
-   - `postgres`, `qdrant`, `langfuse_health`, and `langfuse_trace` (sends one test trace and confirms it was accepted).
+   - `postgres`, `qdrant`, `langfuse_health`, and `langfuse_trace` (sends one test span to Langfuse's OpenTelemetry endpoint and confirms HTTP 200).
 
    It exits 0 only when every check passes. It never prints API keys, passwords or the SSH target. Each run appends one JSON line of results to the git-ignored eval reports folder.
 6. **End the session.** The user stops the tunnel and **terminates** the pod. Nothing is left running or billing on RunPod.
@@ -45,12 +45,12 @@ Follows `docs/tech.md` and `docs/structure.md`: Python with uv and pytest, polic
 | **Langfuse v4 self-hosted**, following its official compose file: one exact version ≥ 4.75.0, chosen and pinned at build time. The optional AI-gateway service is left out. Langfuse telemetry is off | Langfuse self-hosting is v4 now. The compose file requires a version newer than 4.75.0. The AI gateway isn't needed and costs memory |
 | **One PostgreSQL 17 instance** with two databases, `devguard` and `langfuse`, each with its own user | Saves one PostgreSQL container on a machine where Podman has about 16.5 GB |
 | **Memory caps set inside each heavy service, not as container limits:** ClickHouse `max_server_memory_usage` 4 GiB (config file), Langfuse web and worker Node heap `--max-old-space-size=1536` each, Redis `--maxmemory 256mb`. PostgreSQL, Qdrant and MinIO keep their small defaults. The WSL VM's own memory limit (about 16.5 GB) is the outer bound | Rootless Podman on this machine has no cgroup controllers delegated (`controllers=[]`), so `mem_limit` makes containers fail to start (`crun: open memory.max`; found at step 6, 2026-11-06). Application-level caps work without cgroups and leave the user's other Podman projects untouched. User choice over switching Podman to rootful |
-| **Health-check CLI** using `httpx` and `psycopg` as the only new runtime dependencies. Qdrant and Langfuse are checked over their REST APIs; the test trace goes through Langfuse's public ingestion API | Two small, widely used libraries; no Qdrant or Langfuse SDK needed just for checks |
+| **Health-check CLI** using `httpx` and `psycopg` as the only new runtime dependencies. Qdrant and Langfuse are checked over their REST APIs. The test trace is one OTLP/HTTP JSON span sent to Langfuse v4's `/api/public/otel/v1/traces`. Response bodies are never printed, because Langfuse echoes the public key | Two small, widely used libraries; no Qdrant, Langfuse or OpenTelemetry SDK needed just for checks. Langfuse v4 rejects `trace-create` on the legacy `/api/public/ingestion` API ("only accepts score events"); found at bring-up, 2026-11-06 |
 
 **Changes to earlier decisions, each flagged:**
 - **Egress allowlist (`scope-and-source-inventory`, `configs/security.yaml`):** `cloud.langfuse.com` is replaced with the local Langfuse host. `docs/threat-model.md` must change in the same commit, as `REVIEW.md` § Security requires.
-- **`.env.example`:** `LANGFUSE_HOST` changes from the Cloud URL to `http://localhost:3000`.
-- **`VLLM_BASE_URL`** changes from `http://vllm:8000/v1` to `http://localhost:8080/v1`, which is the tunnel's local end. Port 8080 was chosen by the user during step 1, replacing vLLM's default 8000.
+- **`.env.example`:** `LANGFUSE_HOST` changes from the Cloud URL to `http://127.0.0.1:3000`. All local URLs use `127.0.0.1`, not `localhost`: on Windows, `localhost` tries IPv6 `::1` first, and because the services listen only on IPv4 loopback, every connection waited about 2 s per attempt (found at bring-up).
+- **`VLLM_BASE_URL`** changes from `http://vllm:8000/v1` to `http://127.0.0.1:8080/v1`, which is the tunnel's local end. Port 8080 was chosen by the user during step 1, replacing vLLM's default 8000.
 - **TRD §20.2's illustrative launch** binds to `0.0.0.0`. This spec binds to `127.0.0.1`, because the tunnel replaces public exposure.
 
 ## Data
@@ -83,6 +83,8 @@ Follows `docs/tech.md` and `docs/structure.md`: Python with uv and pytest, polic
    - Every password or secret in the compose file comes from an environment variable.
    - Every such variable has an entry in `.env.example` whose value contains `replace-me`.
    - No tracked file contains an IPv4 address other than `127.0.0.1` and `0.0.0.0`, or a `*.ssh.runpod.io` user string.
+
+   - No secret appears on a container's command line or in its health-check command, where `podman ps` would show it. Redis reads its password from an environment variable at start (found at bring-up, when `podman compose ps` showed the start of `--requirepass`).
 
    Each of these is checked by a unit test.
 6. **The health-check CLI's verdict is correct.**

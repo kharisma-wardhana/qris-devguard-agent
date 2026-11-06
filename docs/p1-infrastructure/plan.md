@@ -37,13 +37,14 @@
 4. **Threat model.** `docs/threat-model.md`. Spec AC #13.
 5. **Tunnel helper and runbook.** `scripts/tunnel.sh`, `docs/runpod-deployment.md`, `README.md`. Spec AC #12.
 6. **Application-level memory caps** (added 2026-11-06 after the first bring-up attempt failed with `crun: open memory.max`). Files: `docker-compose.yml` (remove `mem_limit`, add `NODE_OPTIONS` and Redis `--maxmemory`, mount the ClickHouse config), `deploy/clickhouse/memory.xml`, `tests/unit/test_compose.py`, `docs/runpod-deployment.md` (memory note). Spec AC #4.
-7. **Local stack bring-up.** No new files.
+7. **Bring-up fixes** (added 2026-11-06 after the first bring-up). Files: `scripts/healthcheck.py` and `tests/unit/test_healthcheck.py` (OTLP trace), `docker-compose.yml` and `tests/unit/test_compose.py` (Redis password from environment, not command line), `.env.example` (`127.0.0.1` URLs). Spec AC #5, #6. **User action afterwards:** in your `.env`, change `localhost` to `127.0.0.1` in `DATABASE_URL`, `QDRANT_URL`, `LANGFUSE_HOST` and `VLLM_BASE_URL`; optionally rotate `REDIS_AUTH`. I can't read or edit `.env`.
+8. **Local stack bring-up.** No new files.
    - Run `uv run python scripts/init_env.py`, then `podman compose up -d`.
    - Paste `podman compose ps` and the health-check output. Expect `postgres`, `qdrant`, `langfuse_health` and `langfuse_trace` PASS, and the three vLLM checks FAIL, because no pod is running yet.
    - Spec AC #1.
    - I run this locally, after asking first, because it pulls about 3 GB of images.
-8. **Live GPU run (user).** You create the pod, bootstrap, tunnel and run the health check, then terminate the pod. I record the measured values in `docs/runpod-deployment.md`. Spec AC #11.
-9. **`CLAUDE.md` merge.** Appends to `## Commands` and `## Test scope`. Agent configuration.
+9. **Live GPU run (user).** You create the pod, bootstrap, tunnel and run the health check, then terminate the pod. I record the measured values in `docs/runpod-deployment.md`. Spec AC #11.
+10. **`CLAUDE.md` merge.** Appends to `## Commands` and `## Test scope`. Agent configuration.
 
 ## Test coverage
 
@@ -66,13 +67,14 @@ Not matched: UI (none) and accounts/roles (no application auth in P1; Langfuse's
   - Regression: `tests/unit/test_repo_hygiene.py` keeps its existing tests unchanged, and the full suite passes after the `security.yaml` edit.
 - **Step 4:** documentation only. Spec AC #13 is checked at Phase 4 by quoting the changed rows.
 - **Step 5:** `scripts/tunnel.sh` passes `bash -n`, and its tunnel target is `127.0.0.1:8080`. That's a unit check in `tests/unit/test_bootstrap_vllm.py`'s companion section. The runbook is checked at Phase 4 against AC #12.
+- **Step 7:** unit tests: the OTLP request shape and basic auth (replacing the ingestion-endpoint test, whose behaviour the spec no longer requires); no `${REDIS_AUTH` on any `command:` or `healthcheck:`; every local URL in `.env.example` uses `127.0.0.1`. Regression: all other tests unchanged.
 - **Step 6:** unit tests in `tests/unit/test_compose.py` for the caps and for the absence of `mem_limit`. The earlier memory-limit test is replaced, not kept, because the spec criterion it checked changed.
-- **Steps 7–8:** pasted output from real runs. These are the evidence for AC #1 and #11.
-- **Step 9:** covered by the existing `agent-config-eval` workflow.
+- **Steps 8–9:** pasted output from real runs. These are the evidence for AC #1 and #11.
+- **Step 10:** covered by the existing `agent-config-eval` workflow.
 
 ## Agent configuration changes
 
-- **`CLAUDE.md` (step 9):**
+- **`CLAUDE.md` (step 10):**
   - Append to `## Commands`: `uv run python scripts/init_env.py`, `podman compose up -d`, `bash scripts/tunnel.sh` and `uv run python scripts/healthcheck.py`.
   - Append to `## Test scope`: the database row.
   - No other section changes. I'll show the diff and wait for `approve write`.
