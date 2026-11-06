@@ -4,7 +4,7 @@
 
 - [x] 1. Model config and pod bootstrap script — spec AC: #9, #10
 - [x] 2. Health-check CLI — spec AC: #6, #7, #8
-- [ ] 3. Local stack definition and env — spec AC: #2, #3, #4, #5
+- [x] 3. Local stack definition and env — spec AC: #2, #3, #4, #5
 - [ ] 4. Threat model — spec AC: #13
 - [ ] 5. Tunnel helper and runbook — spec AC: #12
 - [ ] 6. Local stack bring-up — spec AC: #1

@@ -1,0 +1,180 @@
+# Local service stack for QRIS DevGuard AI (docs/p1-infrastructure/spec.md).
+#   uv run python scripts/init_env.py   # once: creates .env with random secrets
+#   podman compose up -d
+#   uv run python scripts/healthcheck.py
+#
+# Rules (tests/unit/test_compose.py): every port bound to 127.0.0.1, every image pinned,
+# every container memory-limited (total <= 12 GiB), every secret read from .env.
+# Note: the ":?" hints below contain no spaces, because podman-compose splits `command:` before interpolating.
+# Adapted from Langfuse's official docker-compose.yml (v4); AI gateway omitted.
+
+x-langfuse-env: &langfuse-env
+  NEXTAUTH_URL: http://localhost:3000
+  DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:?run_scripts/init_env.py}@postgres:5432/langfuse
+  SALT: ${SALT:?run_scripts/init_env.py}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?run_scripts/init_env.py}
+  TELEMETRY_ENABLED: "false"
+  LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?run_scripts/init_env.py}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?run_scripts/init_env.py}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?run_scripts/init_env.py}
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${REDIS_AUTH:?run_scripts/init_env.py}
+
+services:
+  postgres:
+    image: docker.io/library/postgres:17.11
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devguard
+      POSTGRES_DB: devguard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run_scripts/init_env.py}
+      LANGFUSE_DB_PASSWORD: ${LANGFUSE_DB_PASSWORD:?run_scripts/init_env.py}
+    volumes:
+      - devguard_postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    ports:
+      - 127.0.0.1:5432:5432
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devguard -d devguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  qdrant:
+    image: docker.io/qdrant/qdrant:v1.19.2
+    restart: unless-stopped
+    volumes:
+      - devguard_qdrant_data:/qdrant/storage
+    ports:
+      - 127.0.0.1:6333:6333
+      - 127.0.0.1:6334:6334
+    mem_limit: 1536m
+
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:26.3.62.3
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?run_scripts/init_env.py}
+    volumes:
+      - devguard_clickhouse_data:/var/lib/clickhouse
+      - devguard_clickhouse_logs:/var/log/clickhouse-server
+    ports:
+      - 127.0.0.1:8123:8123
+      - 127.0.0.1:9000:9000
+    mem_limit: 4g
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    # Chainguard publishes only :latest for free, so this is pinned by digest
+    # (MinIO RELEASE.2026-10-23T20-06-51Z, includes `mc`; read 2026-11-06).
+    image: cgr.dev/chainguard/minio@sha256:053a21cc9dcf3db9f997b5f77f5b5b2973a754631e5369d27aea6341e151d790
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run_scripts/init_env.py}
+    volumes:
+      - devguard_minio_data:/data
+    ports:
+      - 127.0.0.1:9090:9000
+      - 127.0.0.1:9091:9001
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: docker.io/library/redis:7.4.12
+    restart: unless-stopped
+    command: >
+      --requirepass ${REDIS_AUTH:?run_scripts/init_env.py}
+      --maxmemory-policy noeviction
+    volumes:
+      - devguard_redis_data:/data
+    ports:
+      - 127.0.0.1:6379:6379
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_AUTH:?run_scripts/init_env.py}", "--no-auth-warning", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  langfuse-worker:
+    image: docker.io/langfuse/langfuse-worker:4.76.0
+    restart: unless-stopped
+    depends_on: &langfuse-deps
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment:
+      <<: *langfuse-env
+    ports:
+      - 127.0.0.1:3030:3030
+    mem_limit: 1536m
+
+  langfuse-web:
+    image: docker.io/langfuse/langfuse:4.76.0
+    restart: unless-stopped
+    depends_on: *langfuse-deps
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?run_scripts/init_env.py}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
+      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://minio:9000
+      # Headless init: org, project, API keys and admin user exist on first start.
+      LANGFUSE_INIT_ORG_ID: devguard-org
+      LANGFUSE_INIT_ORG_NAME: QRIS DevGuard
+      LANGFUSE_INIT_PROJECT_ID: devguard
+      LANGFUSE_INIT_PROJECT_NAME: devguard
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:?run_scripts/init_env.py}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:?run_scripts/init_env.py}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:?run_scripts/init_env.py}
+      LANGFUSE_INIT_USER_NAME: devguard-admin
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:?run_scripts/init_env.py}
+    ports:
+      - 127.0.0.1:3000:3000
+    mem_limit: 1536m
+
+volumes:
+  devguard_postgres_data:
+  devguard_qdrant_data:
+  devguard_clickhouse_data:
+  devguard_clickhouse_logs:
+  devguard_minio_data:
+  devguard_redis_data:
