@@ -25,6 +25,9 @@ What sets it apart is that it showcases agentic-AI techniques within a bounded s
 - The SOP troubleshooting skill outline. *(inferred from `skills/qris-integration-troubleshooting/SKILL.md`)*
 - The security policy as config: the role/tool matrix, redaction fields, egress allowlist and prohibited actions. *(inferred from `configs/security.yaml`)*
 - The release-gate thresholds. *(inferred from `configs/eval_thresholds.yaml`)*
+- An approved source list that is safe to show publicly. It has 2 public SNAP standards (v1.0.2), used reference-only, plus 2 synthetic team-written documents labelled "SYNTHETIC — not an official ASPI/BI document". *(inferred from `knowledge_base/manifests/sources.yaml`, `knowledge_base/synthetic/`)*
+- A synthetic QRIS MPM service spec for Generate QR and Query Payment, which the MVP validators will target. *(inferred from `knowledge_base/synthetic/synthetic-qris-mpm-service-spec.md`)*
+- Phase P0 is signed off, covering scope, source inventory, threat model and SOP. *(inferred from `docs/scope.md` §5)*
 
 **Required components** from the course brief, all still to be built. *(confirmed by user)*
 1. vLLM model serving
@@ -42,6 +45,7 @@ What sets it apart is that it showcases agentic-AI techniques within a bounded s
   - **Repo:** a README for rebuilding the system from scratch on RunPod, including the GPU type.
   - **Report:** at most 5 pages, with the use case, an architecture diagram and measured numbers. The numbers required are TTFT/TPOT, recall before and after reranking, 4 consecutive agent runs plus a crash/resume test, MCP attack-test results, the eval-gate outcome, and Langfuse dashboard and alert screenshots.
 - No confidential data may be exposed anywhere in the repo, traces or report, because the project will be shown publicly. *(confirmed by user)*
+- Deadlines: P0 sign-off by 2026-11-10, phases P1–P9 done by 2026-11-20, capstone submission on 2026-12-05. *(confirmed by user)*
 
 ## Non-goals
 

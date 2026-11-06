@@ -6,10 +6,17 @@
 ```text
 .
 ├── CLAUDE.md, README.md        agent guidance and project entry doc
+├── REVIEW.md                   PR review checklist (passes, severity, exclusions)
 ├── pyproject.toml, uv.lock     Python project and resolved deps
 ├── .env.example                environment key names (placeholders only)
+├── .claude/
+│   ├── settings.json           hook wiring + credential deny-list
+│   └── hooks/                  deploy-gate.sh (PreToolUse), eval.sh (hook self-test)
+├── .github/
+│   └── workflows/              ci.yml (tests), agent-config-eval.yml (agent config eval)
 ├── configs/                    policy-as-config: security.yaml, eval_thresholds.yaml
-├── docs/                       PRD/TRD, Phase P0 scope, threat model, these foundation docs
+├── docs/                       PRD/TRD, P0 scope + threat model, foundation docs, index
+│   └── scope-and-source-inventory/   feature chain: intent, spec, plan, tasks, deploy-tools
 ├── evals/
 │   └── reports/                eval output (git-ignored except .gitkeep)
 ├── knowledge_base/
@@ -28,37 +35,50 @@ There is no `app/` package yet. The planned layout is `app/{api,agent,rag,mcp_se
 
 ## Naming conventions
 
-- **Python files:** snake_case (2 of 2: `check_sources.py`, `test_check_sources.py`).
-- **Test files:** the `test_` prefix, mirroring the module name (1 of 1).
-- **Top-level directories:** snake_case or single words (7 of 7: `configs`, `docs`, `evals`, `knowledge_base`, `scripts`, `skills`, `tests`).
-- **Skill directory:** kebab-case (1 of 1: `qris-integration-troubleshooting`).
-- **YAML and JSON keys:** snake_case (every key in `sources.yaml`, `security.yaml` and `eval_thresholds.yaml`, except the tool-name keys, which are also snake_case).
-- **Document IDs in the manifest:** kebab-case, enforced by the schema regex `^[a-z0-9][a-z0-9-]{2,63}$` (6 of 6).
-- **Docs filenames:** lowercase kebab-case for 2 of 3 files (`scope.md`, `threat-model.md`). The exception is listed under Deviations.
+- **Python files:** snake_case (5 of 5).
+- **Test files:** the `test_` prefix (4 of 4). Three name the thing they test: `test_check_sources.py`, `test_check_sources_cli.py` and `test_synthetic_docs.py`. The fourth, `test_repo_hygiene.py`, names a concern instead.
+- **Shell scripts:** kebab-case (`deploy-gate.sh`) or single words (`eval.sh`) (2 of 2).
+- **Workflows:** kebab-case or single words (2 of 2: `ci.yml`, `agent-config-eval.yml`). Each one's `name:` matches its filename.
+- **Top-level directories:** snake_case or single words (7 of 7 visible: `configs`, `docs`, `evals`, `knowledge_base`, `scripts`, `skills`, `tests`), plus the dot-directories `.claude` and `.github`.
+- **Feature and skill directories:** kebab-case (2 of 2: `docs/scope-and-source-inventory`, `skills/qris-integration-troubleshooting`).
+- **Synthetic document files:** named exactly after their manifest `document_id` (2 of 2).
+- **YAML and JSON keys:** snake_case, across every key in `sources.yaml`, `security.yaml`, `eval_thresholds.yaml` and `source.schema.json`.
+- **Document IDs in the manifest:** kebab-case, enforced by the schema regex `^[a-z0-9][a-z0-9-]{2,63}$` (5 of 5). Synthetic ones carry the prefix `synthetic-` (3 of 3).
+- **Docs filenames:** lowercase kebab-case for 11 of 12 Markdown files under `docs/`. The exception is listed under Deviations.
 
 ## Import patterns
 
-Only 2 Python files exist, so there isn't a sample large enough to call any pattern a convention.
+The sample is all 5 Python files across 3 directories (`scripts/`, `tests/unit/`, `tests/integration/`). That's fewer than 10 files, so treat these as observations rather than conventions.
 
-- `scripts/check_sources.py` imports the standard library first, then third-party packages (`yaml`, `jsonschema`), using absolute imports.
-- `tests/unit/test_check_sources.py` adds `scripts/` to `sys.path` and imports `check_sources` as a top-level module, because there is no installable package yet.
+- Imports are absolute, with the standard library before third-party packages, in 5 of 5 files. The most common imports are `yaml` and `pathlib.Path` (5 files each), then `sys` (3), `subprocess` (2) and `pytest` (2).
+- Every test finds the repo root with `Path(__file__).resolve().parents[2]` (4 of 4).
+- Only 1 of 4 test files imports project code: `tests/unit/test_check_sources.py` adds `scripts/` to `sys.path`. The others test by reading files or running the script as a subprocess.
 - There are no barrel files and no `__init__.py`.
 
 ## Architectural decisions
 
 - **Policy lives in config, not code.**
-  - Role/tool permissions, risk classes, redaction fields, the egress allowlist and limits are in `configs/security.yaml`.
+  - Role/tool permissions, risk classes, redaction fields, the egress allowlist, limits and citation excerpt caps are in `configs/security.yaml`.
   - The release-gate thresholds are in `configs/eval_thresholds.yaml`.
-  - Code added in later phases is expected to read these files rather than hard-code the values.
-- **The source manifest is the gate for ingestion.** Only entries with `approval_status: approved` may be ingested. Provenance is enforced by `scripts/check_sources.py` on top of the JSON Schema.
+- **The source manifest is the gate for ingestion.** Only `approved` entries may be ingested. `scripts/check_sources.py` adds rules on top of the JSON Schema: provenance, synthetic labelling, and the `reference_only` vs `team_authored` storage split.
+- **Two storage areas.**
+  - Licensed or unlicensed public documents live only in the git-ignored `knowledge_base/sources/`.
+  - Team-authored synthetic documents live in the committed `knowledge_base/synthetic/`.
+  - The checker and `tests/unit/test_repo_hygiene.py` enforce the split.
 - **Skills are procedures, not sources of truth.** `SKILL.md` defines the diagnostic sequence. Protocol rules must come from cited, retrieved specs.
+- **Agent safeguards are a separate layer.**
+  - `.claude/settings.json` hooks and permissions are defence in depth around the coding agent, not part of the product.
+  - Hooks fail closed: on any error they emit `ask`, and they never use `set -e`.
+  - Every installed hook has a pair of assertions in `.claude/hooks/eval.sh`.
+- **Features are documented as a chain.** Each feature has its own `docs/<feature-name>/` folder with intent → spec → plan → tasks, linked from `docs/index.md`.
 - **Intended layering:** the API gateway calls the LangGraph worker, which calls MCP tools, which call deterministic validators and the sandbox DB. This layering is specified in the TRD and in `docs/threat-model.md` §2 but is not yet present in code.
 
 ## Deviations
 
 - `docs/QRIS_DevGuard_AI_PRD_TRD.md` uses mixed case with underscores, while the other docs use lowercase kebab-case. TRD §24 also names this file `docs/PRD_TRD.md`, which doesn't match the actual filename.
-- The tests import from `scripts/` through `sys.path` manipulation instead of through an installed package.
+- `tests/unit/test_check_sources.py` imports from `scripts/` through `sys.path` manipulation instead of through an installed package.
+- `docs/scope.md` and `docs/threat-model.md` are Phase P0 deliverables, but they sit at the `docs/` root rather than in the `docs/scope-and-source-inventory/` feature folder. The folder's spec and plan refer to them at their root paths.
 
 ## Dead or vestigial code
 
-None. The user confirmed that nothing is dead, and every file has a purpose.
+None. The user confirmed at the first scan that nothing is dead, and this re-scan found no file without a purpose or reference.
