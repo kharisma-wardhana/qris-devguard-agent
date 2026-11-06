@@ -14,11 +14,13 @@
 │   └── reports/                eval output (git-ignored except .gitkeep)
 ├── knowledge_base/
 │   ├── manifests/              source inventory (sources.yaml) + JSON Schema
-│   └── sources/                approved source documents (git-ignored)
+│   ├── sources/                reference-only public documents (git-ignored)
+│   └── synthetic/              committed synthetic documents (SYNTHETIC-labelled)
 ├── scripts/                    standalone CLI scripts (check_sources.py)
 ├── skills/
 │   └── qris-integration-troubleshooting/   SOP skill (SKILL.md)
 └── tests/
+    ├── integration/            CLI entry-point tests (subprocess)
     └── unit/                   pytest unit tests
 ```
 

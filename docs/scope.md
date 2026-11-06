@@ -5,7 +5,7 @@ Status: draft, pending team sign-off · Source: `docs/QRIS_DevGuard_AI_PRD_TRD.m
 Phase P0 exit criteria (TRD §27):
 
 - [x] **No production connectivity.** See §3 and `docs/threat-model.md` §2.
-- [ ] **Data owners and source permissions identified.** See §4 and `knowledge_base/manifests/sources.yaml`.
+- [x] **Data owners and source permissions identified.** See §4 and `knowledge_base/manifests/sources.yaml`. There are 4 approved sources: 2 reference-only public SNAP standards (v1.0.2) and 2 synthetic team-authored documents. See `docs/scope-and-source-inventory/spec.md`.
 
 The criteria are met when every row in §5 has an owner sign-off and `uv run python scripts/check_sources.py` passes.
 
@@ -28,9 +28,11 @@ Validators and schemas will initially cover only the endpoints below. Each one m
 
 | Endpoint ID (internal) | Purpose | Signature profile | Confirmed in source |
 |---|---|---|---|
-| `access-token-b2b` | Obtain B2B access token | SHA256withRSA | [ ] |
-| `qr-mpm-generate` | Generate QRIS MPM | HMAC_SHA512 | [ ] |
-| `qr-mpm-query` | Query payment status | HMAC_SHA512 | [ ] |
+| `access-token-b2b` | Obtain B2B access token | SHA256withRSA | [x] `snap-technical-security-standard` (public, reference-only; service code 73, v1.0) |
+| `qr-mpm-generate` | Generate QRIS MPM | HMAC_SHA512 | [x] `synthetic-qris-mpm-service-spec` §2 (SYNTHETIC; service code 47) |
+| `qr-mpm-query` | Query payment status | HMAC_SHA512 | [x] `synthetic-qris-mpm-service-spec` §3 (SYNTHETIC; service code 51) |
+
+The two MPM endpoints come from a synthetic spec because the ASPI portal has no QRIS MPM page, and its CPM page could not be read (checked 2026-11-06).
 
 The endpoint IDs are internal identifiers. Exact paths, field lists and canonical string formats come from the approved sources, not from this document.
 
@@ -56,13 +58,18 @@ The endpoint IDs are internal identifiers. Exact paths, field lists and canonica
 
 **Inputs that are never accepted:** production private keys, live HMAC secrets, access tokens, merchant credentials, customer personal data and production logs. Inputs that contain these are rejected or redacted at `sanitize_input` before persistence or tracing.
 
+**Source documents:**
+- **Public ASPI/SNAP documents are reference-only.** The portal publishes no terms of use. These documents are kept locally under the git-ignored `knowledge_base/sources/` and are never committed. They are quoted only in short cited excerpts (at most 300 characters; `configs/security.yaml`).
+- **Synthetic documents are committed** under `knowledge_base/synthetic/`. They are labelled "SYNTHETIC — not an official ASPI/BI document", and they must not use ASPI or Bank Indonesia logos or wording that suggests endorsement.
+
 **Network:** the only outbound targets allowed are the configured vLLM, Qdrant, PostgreSQL and Langfuse hosts (`configs/security.yaml`). No bank, ASPI or merchant production hosts are configured anywhere.
 
 ## 4. Data owners
 
 | Data asset | Owner (role) | Storage | Retention |
 |---|---|---|---|
-| Approved specification sources | Knowledge base maintainer | `knowledge_base/sources/` (access-controlled, not committed if licence forbids) | Until superseded |
+| Reference-only public sources (SNAP standards) | Knowledge base maintainer | `knowledge_base/sources/` (git-ignored, never committed) | Until superseded |
+| Synthetic specification and SOP | Knowledge base maintainer / team lead | `knowledge_base/synthetic/` (committed) | Versioned in git |
 | Source manifest | Knowledge base maintainer | `knowledge_base/manifests/sources.yaml` (committed) | Versioned in git |
 | Internal SOP excerpts | Capstone team lead | `skills/qris-integration-troubleshooting/references/` | Versioned in git |
 | Synthetic payload fixtures | Capstone team (validator owner) | `knowledge_base/fixtures/payloads/` (committed) | Versioned in git |
