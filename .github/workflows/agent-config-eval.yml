@@ -23,4 +23,4 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest
       - run: uv run python scripts/check_sources.py
-      # Add `bash .claude/hooks/eval.sh` here when the first hook is installed.
+      - run: bash .claude/hooks/eval.sh
