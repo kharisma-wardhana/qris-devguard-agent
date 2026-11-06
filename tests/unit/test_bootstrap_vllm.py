@@ -1,0 +1,110 @@
+"""Pod bootstrap script: safe failure, loopback bind, agreement with configs/model.yaml (spec AC #9, #10)."""
+
+import os
+import re
+import shutil
+import stat
+import subprocess
+from pathlib import Path
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "deploy" / "runpod" / "bootstrap_vllm.sh"
+CONFIG = yaml.safe_load((ROOT / "configs" / "model.yaml").read_text(encoding="utf-8"))
+SENTINEL_KEY = "sentinel-vllm-key-7f3a9c"
+BASH = shutil.which("bash")
+
+pytestmark = pytest.mark.skipif(BASH is None, reason="bash not available")
+
+
+def script_var(name: str) -> str:
+    match = re.search(rf'^{name}="([^"]*)"', SCRIPT.read_text(encoding="utf-8"), re.M)
+    assert match, f"{name} not set in bootstrap script"
+    return match.group(1)
+
+
+def make_stub_nvidia_smi(tmp_path: Path, driver: str) -> Path:
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    stub = bindir / "nvidia-smi"
+    stub.write_text(f"#!/usr/bin/env bash\necho '{driver}'\n", encoding="utf-8", newline="\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    return bindir
+
+
+def run(tmp_path, driver="580.95.05", key=SENTINEL_KEY, dry_run=True):
+    env = {k: v for k, v in os.environ.items() if k != "VLLM_API_KEY"}
+    env["PATH"] = str(make_stub_nvidia_smi(tmp_path, driver)) + os.pathsep + env["PATH"]
+    if key is not None:
+        env["VLLM_API_KEY"] = key
+    if dry_run:
+        env["BOOTSTRAP_DRY_RUN"] = "1"
+    return subprocess.run([BASH, str(SCRIPT)], env=env, capture_output=True, text=True, encoding="utf-8")
+
+
+def test_script_parses():
+    assert subprocess.run([BASH, "-n", str(SCRIPT)]).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "var, expected",
+    [
+        ("MODEL_ID", CONFIG["model"]["id"]),
+        ("MODEL_REVISION", CONFIG["model"]["revision"]),
+        ("SERVED_NAME", CONFIG["model"]["served_name"]),
+        ("VLLM_VERSION", CONFIG["vllm"]["version"]),
+        ("HOST", CONFIG["vllm"]["host"]),
+        ("PORT", str(CONFIG["vllm"]["port"])),
+        ("MAX_MODEL_LEN", str(CONFIG["vllm"]["max_model_len"])),
+        ("GPU_MEMORY_UTILIZATION", f'{CONFIG["vllm"]["gpu_memory_utilization"]:.2f}'),
+        ("MAX_NUM_SEQS", str(CONFIG["vllm"]["max_num_seqs"])),
+        ("REASONING_PARSER", CONFIG["vllm"]["reasoning_parser"]),
+        ("TOOL_CALL_PARSER", CONFIG["vllm"]["tool_call_parser"]),
+        ("MIN_DRIVER_MAJOR", str(CONFIG["vllm"]["min_driver_major"])),
+    ],
+)
+def test_script_matches_model_config(var, expected):
+    assert script_var(var) == expected
+
+
+def test_binds_loopback_only():
+    assert CONFIG["vllm"]["host"] == "127.0.0.1"
+    assert "0.0.0.0" not in SCRIPT.read_text(encoding="utf-8")
+
+
+def test_missing_api_key_fails_fast(tmp_path):
+    result = run(tmp_path, key=None)
+    assert result.returncode != 0
+    assert "VLLM_API_KEY is not set" in result.stderr
+
+
+def test_old_driver_fails_fast(tmp_path):
+    result = run(tmp_path, driver="575.57.08")
+    assert result.returncode != 0
+    assert "older than 580" in result.stderr
+
+
+def test_unreadable_driver_fails(tmp_path):
+    result = run(tmp_path, driver="N/A")
+    assert result.returncode != 0
+    assert "could not read the NVIDIA driver version" in result.stderr
+
+
+def test_dry_run_prints_pinned_command_without_key(tmp_path):
+    result = run(tmp_path)
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    assert f"vllm=={CONFIG['vllm']['version']}" in out
+    assert f"--revision {CONFIG['model']['revision']}" in out
+    assert "--host 127.0.0.1" in out
+    assert "--enable-auto-tool-choice" in out
+    assert SENTINEL_KEY not in out + result.stderr
+    assert "--api-key" not in out
+
+
+def test_no_secret_values_in_script():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert not re.search(r"(sk-|hf_)[A-Za-z0-9]{10,}", text)
+    assert "VLLM_API_KEY=" not in text.replace('"${VLLM_API_KEY:-}"', "")

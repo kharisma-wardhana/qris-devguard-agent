@@ -8,6 +8,7 @@
 - `configs/model.yaml`: new. vLLM and model settings (spec AC #9).
 - `deploy/runpod/bootstrap_vllm.sh`: new. Pod-side driver check, vLLM install, model download and serve.
 - `tests/unit/test_bootstrap_vllm.py`: new. Static checks, stubbed-run checks and config agreement.
+- `.gitattributes`: new. Forces LF line endings for `*.sh`, so scripts don't break on Windows checkouts. Added during step 1.
 - `scripts/healthcheck.py`: new. The 7-check health CLI.
 - `tests/unit/test_healthcheck.py`: new. Mocked HTTP and DB tests: verdicts, request shape, secret hiding.
 - `tests/integration/test_healthcheck_cli.py`: new. Runs the CLI as a subprocess against closed ports.
@@ -29,7 +30,7 @@
 
 ## Work sequence
 
-1. **Model config and pod bootstrap script.** `configs/model.yaml`, `deploy/runpod/bootstrap_vllm.sh`, `tests/unit/test_bootstrap_vllm.py`. Spec AC #9, #10.
+1. **Model config and pod bootstrap script.** `configs/model.yaml`, `deploy/runpod/bootstrap_vllm.sh`, `tests/unit/test_bootstrap_vllm.py`, `.gitattributes`. Spec AC #9, #10.
 2. **Health-check CLI.** `pyproject.toml`, `uv.lock`, `scripts/healthcheck.py`, `tests/unit/test_healthcheck.py`, `tests/integration/test_healthcheck_cli.py`. Spec AC #6, #7, #8.
 3. **Local stack definition and env.** `docker-compose.yml`, `deploy/postgres/init-databases.sh`, `.env.example`, `scripts/init_env.py`, `tests/unit/test_init_env.py`, `configs/security.yaml`, `tests/unit/test_compose.py`, `tests/unit/test_repo_hygiene.py`. Spec AC #2, #3, #4, #5. The Langfuse and MinIO versions are pinned here, read from their release pages.
 4. **Threat model.** `docs/threat-model.md`. Spec AC #13.
