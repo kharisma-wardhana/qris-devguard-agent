@@ -1,0 +1,84 @@
+# Plan: Qwen3-8B is served by vLLM on one RunPod GPU, and the local PostgreSQL, Qdrant and Langfuse stack can reach it with health checks passing
+*Author: Kharisma Wardhana. Stage: Build. Written: 2026-11-06. Via /aspec:make-it-simple-v2.*
+*Implements: docs/p1-infrastructure/spec.md*
+
+## Affected files
+
+- `pyproject.toml`, `uv.lock`: edit. Adds `httpx` and `psycopg[binary]`.
+- `configs/model.yaml`: new. vLLM and model settings (spec AC #9).
+- `deploy/runpod/bootstrap_vllm.sh`: new. Pod-side driver check, vLLM install, model download and serve.
+- `tests/unit/test_bootstrap_vllm.py`: new. Static checks, stubbed-run checks and config agreement.
+- `scripts/healthcheck.py`: new. The 7-check health CLI.
+- `tests/unit/test_healthcheck.py`: new. Mocked HTTP and DB tests: verdicts, request shape, secret hiding.
+- `tests/integration/test_healthcheck_cli.py`: new. Runs the CLI as a subprocess against closed ports.
+- `docker-compose.yml`: new. The local stack: PostgreSQL, Qdrant and Langfuse v4 (web, worker, ClickHouse, Redis, MinIO).
+- `deploy/postgres/init-databases.sh`: new. Creates the `langfuse` database and user next to `devguard`.
+- `.env.example`: edit. New keys, `LANGFUSE_HOST` and `VLLM_BASE_URL` set to local, SSH placeholders, Langfuse headless-init keys.
+- `scripts/init_env.py`: new. Creates `.env` from `.env.example` with random secrets. Refuses to overwrite an existing `.env`.
+- `tests/unit/test_init_env.py`: new.
+- `configs/security.yaml`: edit. In `egress_allowlist`, replaces `cloud.langfuse.com` with `localhost`.
+- `tests/unit/test_compose.py`: new. Loopback ports, pinned images, memory limits, secrets only from environment variables.
+- `tests/unit/test_repo_hygiene.py`: edit. Adds a check for IPv4 literals and `ssh.runpod.io` user strings in tracked files.
+- `docs/threat-model.md`: edit. T13 control, a new T18 for pod SSH exposure, the egress note.
+- `scripts/tunnel.sh`: new. Opens the SSH tunnel using `RUNPOD_SSH_*` from `.env`.
+- `docs/runpod-deployment.md`: new. Session runbook, cost estimate, measured values.
+- `README.md`: edit. Links the runbook.
+- `CLAUDE.md`: merge. Agent configuration, below.
+- `docs/p1-infrastructure/tasks.md`: new.
+- `docs/index.md`: edit. Links the plan and tasks.
+
+## Work sequence
+
+1. **Model config and pod bootstrap script.** `configs/model.yaml`, `deploy/runpod/bootstrap_vllm.sh`, `tests/unit/test_bootstrap_vllm.py`. Spec AC #9, #10.
+2. **Health-check CLI.** `pyproject.toml`, `uv.lock`, `scripts/healthcheck.py`, `tests/unit/test_healthcheck.py`, `tests/integration/test_healthcheck_cli.py`. Spec AC #6, #7, #8.
+3. **Local stack definition and env.** `docker-compose.yml`, `deploy/postgres/init-databases.sh`, `.env.example`, `scripts/init_env.py`, `tests/unit/test_init_env.py`, `configs/security.yaml`, `tests/unit/test_compose.py`, `tests/unit/test_repo_hygiene.py`. Spec AC #2, #3, #4, #5. The Langfuse and MinIO versions are pinned here, read from their release pages.
+4. **Threat model.** `docs/threat-model.md`. Spec AC #13.
+5. **Tunnel helper and runbook.** `scripts/tunnel.sh`, `docs/runpod-deployment.md`, `README.md`. Spec AC #12.
+6. **Local stack bring-up.** No new files.
+   - Run `uv run python scripts/init_env.py`, then `podman compose up -d`.
+   - Paste `podman compose ps` and the health-check output. Expect `postgres`, `qdrant`, `langfuse_health` and `langfuse_trace` PASS, and the three vLLM checks FAIL, because no pod is running yet.
+   - Spec AC #1.
+   - I run this locally, after asking first, because it pulls about 3 GB of images.
+7. **Live GPU run (user).** You create the pod, bootstrap, tunnel and run the health check, then terminate the pod. I record the measured values in `docs/runpod-deployment.md`. Spec AC #11.
+8. **`CLAUDE.md` merge.** Appends to `## Commands` and `## Test scope`. Agent configuration.
+
+## Test coverage
+
+These rows from `test-scope-by-stage.md` matched:
+- **Backend service / script only.** It applies to steps 1, 2, 3 and 5.
+- **Phase 0 detected an existing project.** It applies to steps 3 and 4.
+- **Any database.** It matched because the project now has PostgreSQL. P1 creates databases but no schema and no queries on stored data, so no regression test is owed yet. The row is recorded in `CLAUDE.md` for later phases.
+
+Not matched: UI (none) and accounts/roles (no application auth in P1; Langfuse's login is third-party).
+
+- **Step 1:**
+  - Unit tests: `bash -n`, the bind address is `127.0.0.1`, no secrets, and config agreement.
+  - Integration test at the entry point: run the script with a stubbed `nvidia-smi` and stubbed `pip`/`uv`/`vllm` on `PATH`. Expect a non-zero exit and a clear message when `VLLM_API_KEY` is unset, and when the driver is below 580.
+- **Step 2:**
+  - Unit tests with `httpx.MockTransport` and an injected DB connector: all-pass, each single failure, timeouts, the request body, TTFT recorded, and sentinel secrets absent from stdout, stderr and the JSON line.
+  - Integration test: the CLI as a subprocess against closed `127.0.0.1` ports. Expect exit 1, 7 FAIL lines, and no sentinel values in the output.
+- **Step 3:**
+  - Unit tests on the parsed compose file and on `.env.example`.
+  - Integration test for `scripts/init_env.py` as a subprocess in a temp directory: it creates `.env`, replaces every `replace-me`, refuses to overwrite, and prints no secret.
+  - Regression: `tests/unit/test_repo_hygiene.py` keeps its existing tests unchanged, and the full suite passes after the `security.yaml` edit.
+- **Step 4:** documentation only. Spec AC #13 is checked at Phase 4 by quoting the changed rows.
+- **Step 5:** `scripts/tunnel.sh` passes `bash -n`, and its tunnel target is `127.0.0.1:8000`. That's a unit check in `tests/unit/test_bootstrap_vllm.py`'s companion section. The runbook is checked at Phase 4 against AC #12.
+- **Steps 6–7:** pasted output from real runs. These are the evidence for AC #1 and #11.
+- **Step 8:** covered by the existing `agent-config-eval` workflow.
+
+## Agent configuration changes
+
+- **`CLAUDE.md` (step 8):**
+  - Append to `## Commands`: `uv run python scripts/init_env.py`, `podman compose up -d`, `bash scripts/tunnel.sh` and `uv run python scripts/healthcheck.py`.
+  - Append to `## Test scope`: the database row.
+  - No other section changes. I'll show the diff and wait for `approve write`.
+- **Hooks:** none added. Verified in Phase 0: `eval.sh` passes 4/4. The existing deploy gate already asks before `ssh` and `runpodctl`, so `scripts/tunnel.sh` and pod work will prompt you. That's intended.
+- **`.claude/settings.json`:** unchanged. The `.env` read deny already covers the new secrets.
+- **CI:** no new job. `ci.yml` runs the new tests, and `agent-config-eval` is verified present, exactly once.
+- **Subagents:** none.
+
+## Rollback
+
+- **Code:** all changes are on `feature/p1-infrastructure`. Drop the branch or revert its commits.
+- **Local stack:** `podman compose down -v` removes the containers and volumes.
+- **RunPod:** terminate the pod. Nothing persists after termination.
