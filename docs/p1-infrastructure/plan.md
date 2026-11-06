@@ -63,7 +63,7 @@ Not matched: UI (none) and accounts/roles (no application auth in P1; Langfuse's
   - Integration test for `scripts/init_env.py` as a subprocess in a temp directory: it creates `.env`, replaces every `replace-me`, refuses to overwrite, and prints no secret.
   - Regression: `tests/unit/test_repo_hygiene.py` keeps its existing tests unchanged, and the full suite passes after the `security.yaml` edit.
 - **Step 4:** documentation only. Spec AC #13 is checked at Phase 4 by quoting the changed rows.
-- **Step 5:** `scripts/tunnel.sh` passes `bash -n`, and its tunnel target is `127.0.0.1:8000`. That's a unit check in `tests/unit/test_bootstrap_vllm.py`'s companion section. The runbook is checked at Phase 4 against AC #12.
+- **Step 5:** `scripts/tunnel.sh` passes `bash -n`, and its tunnel target is `127.0.0.1:8080`. That's a unit check in `tests/unit/test_bootstrap_vllm.py`'s companion section. The runbook is checked at Phase 4 against AC #12.
 - **Steps 6–7:** pasted output from real runs. These are the evidence for AC #1 and #11.
 - **Step 8:** covered by the existing `agent-config-eval` workflow.
 

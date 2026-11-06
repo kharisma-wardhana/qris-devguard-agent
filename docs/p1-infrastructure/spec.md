@@ -16,8 +16,8 @@ A developer session runs in this order. Each step is one command, documented in 
    1. checks the NVIDIA driver and stops with a clear message if it's below what the vLLM build needs, before spending time on downloads;
    2. installs the pinned vLLM version into its own virtual environment;
    3. downloads the pinned model revision;
-   4. starts vLLM bound to `127.0.0.1:8000` inside the pod, with the API key required.
-4. **Open the tunnel.** Locally, `ssh -N -L 8000:127.0.0.1:8000 …` forwards the pod's port 8000 to `localhost:8000`, using connection details read from `.env`. The pod exposes nothing to the internet except SSH (key-only).
+   4. starts vLLM bound to `127.0.0.1:8080` inside the pod, with the API key required.
+4. **Open the tunnel.** Locally, `ssh -N -L 8080:127.0.0.1:8080 …` forwards the pod's port 8080 to `localhost:8080`, using connection details read from `.env`. The pod exposes nothing to the internet except SSH (key-only).
 5. **Run the health check.** One local command checks every service and prints one PASS/FAIL line each:
    - `vllm_health`, `vllm_models` and `vllm_chat` (a short non-thinking completion; records time-to-first-token and total latency);
    - `postgres`, `qdrant`, `langfuse_health`, and `langfuse_trace` (sends one test trace and confirms it was accepted).
@@ -50,7 +50,7 @@ Follows `docs/tech.md` and `docs/structure.md`: Python with uv and pytest, polic
 **Changes to earlier decisions, each flagged:**
 - **Egress allowlist (`scope-and-source-inventory`, `configs/security.yaml`):** `cloud.langfuse.com` is replaced with the local Langfuse host. `docs/threat-model.md` must change in the same commit, as `REVIEW.md` § Security requires.
 - **`.env.example`:** `LANGFUSE_HOST` changes from the Cloud URL to `http://localhost:3000`.
-- **`VLLM_BASE_URL`** changes from `http://vllm:8000/v1` to `http://localhost:8000/v1`, which is the tunnel's local end.
+- **`VLLM_BASE_URL`** changes from `http://vllm:8000/v1` to `http://localhost:8080/v1`, which is the tunnel's local end. Port 8080 was chosen by the user during step 1, replacing vLLM's default 8000.
 - **TRD §20.2's illustrative launch** binds to `0.0.0.0`. This spec binds to `127.0.0.1`, because the tunnel replaces public exposure.
 
 ## Data

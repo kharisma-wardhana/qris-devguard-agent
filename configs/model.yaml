@@ -13,7 +13,7 @@ model:
 vllm:
   version: "0.32.0"          # latest stable on 2026-11-06; release notes list SM120 support
   host: 127.0.0.1            # reached only through the SSH tunnel
-  port: 8000
+  port: 8080                 # user choice (2026-11-06), instead of vLLM's default 8000
   max_model_len: 16384
   gpu_memory_utilization: 0.90
   max_num_seqs: 8
