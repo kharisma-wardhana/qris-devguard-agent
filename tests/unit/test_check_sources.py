@@ -79,3 +79,72 @@ def test_unknown_field_rejected_by_schema():
     src = {**APPROVED, "private_key": "nope"}
     errors = check_manifest(manifest(src), SCHEMA)
     assert any(e.startswith("schema:") for e in errors), errors
+
+
+# --- Synthetic / storage rules (spec AC #3) --------------------------------
+
+MARKER = "(SYNTHETIC — not an official ASPI/BI document)"
+
+SYNTHETIC = {
+    **APPROVED,
+    "document_id": "synthetic-mpm-spec",
+    "title": f"MPM spec {MARKER}",
+    "publisher": "Capstone project team",
+    "source_url": None,
+    "local_path": "knowledge_base/synthetic/mpm.md",
+    "permission": {"basis": "team_authored", "evidence": "Authored by K. Wardhana, 2026-11-06"},
+}
+
+REFERENCE = {
+    **APPROVED,
+    "permission": {"basis": "reference_only", "evidence": "No published terms found; checked 2026-11-06"},
+    "local_path": "knowledge_base/sources/snap.pdf",
+}
+
+
+@pytest.fixture
+def repo(tmp_path):
+    (tmp_path / "knowledge_base" / "synthetic").mkdir(parents=True)
+    (tmp_path / "knowledge_base" / "synthetic" / "mpm.md").write_text("# x", encoding="utf-8")
+    return tmp_path
+
+
+def errors_for(src, root):
+    return check_manifest(manifest(src), SCHEMA, root=root)
+
+
+def test_valid_synthetic_and_reference_sources_pass(repo):
+    assert check_manifest(manifest(SYNTHETIC, REFERENCE), SCHEMA, root=repo) == []
+
+
+@pytest.mark.parametrize(
+    "case, src, expected",
+    [
+        ("a", {**SYNTHETIC, "permission": {"basis": "public_terms", "evidence": "x"}}, "requires permission.basis team_authored"),
+        ("b", {**SYNTHETIC, "document_id": "mpm-spec"}, "requires document_id prefix"),
+        ("c", {**SYNTHETIC, "title": "MPM spec"}, "title must contain"),
+        ("d-missing", {**SYNTHETIC, "local_path": None}, "requires local_path"),
+        ("d-absent", {**SYNTHETIC, "local_path": "knowledge_base/synthetic/nope.md"}, "does not exist"),
+        ("e", {**SYNTHETIC, "local_path": "knowledge_base/sources/mpm.md"}, "must be committed"),
+        ("f", {**REFERENCE, "local_path": "knowledge_base/synthetic/snap.pdf"}, "must be under knowledge_base/sources/"),
+        ("g-url", {**REFERENCE, "source_url": None}, "requires source_url"),
+        ("g-evidence", {**REFERENCE, "permission": {"basis": "reference_only", "evidence": None}}, "permission.evidence"),
+        ("traversal", {**SYNTHETIC, "local_path": "knowledge_base/../secrets.md"}, "must not contain '..'"),
+    ],
+)
+def test_synthetic_and_storage_rules(repo, case, src, expected):
+    errors = errors_for(src, repo)
+    assert any(expected in e for e in errors), (case, errors)
+
+
+# --- effective_date formats (spec AC #4) -----------------------------------
+
+@pytest.mark.parametrize("value", ["2024-09", "2024-09-15"])
+def test_effective_date_accepted(value):
+    assert check_manifest(manifest({**APPROVED, "effective_date": value}), SCHEMA) == []
+
+
+@pytest.mark.parametrize("value", ["2024-9", "09-2024", "2024-09-15T00:00", "2024-13"])
+def test_effective_date_rejected(value):
+    errors = check_manifest(manifest({**APPROVED, "effective_date": value}), SCHEMA)
+    assert any(e.startswith("schema:") and "effective_date" in e for e in errors), errors

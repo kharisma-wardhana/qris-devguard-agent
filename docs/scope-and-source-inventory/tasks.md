@@ -2,7 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Build. Written: 2026-11-06. Via /aspec:make-it-simple-v2.*
 *Implements: docs/scope-and-source-inventory/plan.md*
 
-- [ ] 1. Schema and checker rules — spec AC: #3, #4, #11
+- [x] 1. Schema and checker rules — spec AC: #3, #4, #11
 - [ ] 2. Synthetic documents — spec AC: #5, #6
 - [ ] 3. User check, then final manifest — spec AC: #1, #2
 - [ ] 4. Excerpt limit and repo hygiene — spec AC: #9, #10

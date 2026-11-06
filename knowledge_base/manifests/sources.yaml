@@ -82,7 +82,7 @@ sources:
     notes: Only excerpts approved for capstone use. Feeds skills/qris-integration-troubleshooting.
 
   - document_id: synthetic-test-fixtures
-    title: Synthetic payload and test-signature fixtures
+    title: Payload and test-signature fixtures (SYNTHETIC — not an official ASPI/BI document)
     publisher: Capstone project team
     kind: fixture_set
     source_url: null
