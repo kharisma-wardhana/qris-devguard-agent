@@ -85,7 +85,9 @@ The named people for each role are recorded in §5 during sign-off.
 
 | Item | Role | Name | Date |
 |---|---|---|---|
-| Use case and boundaries (§1, §3) | Team lead | | |
-| Source inventory and permissions | KB maintainer | | |
-| Threat model | Security reviewer | | |
-| SOP skill outline | Support engineer | | |
+| Use case and boundaries (§1, §3) | Team lead | Kharisma Wardhana | 2026-11-06 |
+| Source inventory and permissions | KB maintainer | Kharisma Wardhana | 2026-11-06 |
+| Threat model | Security reviewer | Kharisma Wardhana | 2026-11-06 |
+| SOP skill outline | Support engineer | Kharisma Wardhana | 2026-11-06 |
+
+One person holds all four roles for the capstone. See the residual risks in `docs/threat-model.md` §4.

@@ -8,5 +8,5 @@
 - [x] 4. Excerpt limit and repo hygiene — spec AC: #9, #10
 - [x] 5. Threat model — spec AC: #8
 - [x] 6. Scope doc and structure map — spec AC: #7 (partial)
-- [ ] 7. User sign-off — spec AC: #7
+- [x] 7. User sign-off — spec AC: #7
 - [ ] 8. CLAUDE.md merge — agent configuration
