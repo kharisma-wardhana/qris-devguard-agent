@@ -4,7 +4,8 @@
 #   uv run python scripts/healthcheck.py
 #
 # Rules (tests/unit/test_compose.py): every port bound to 127.0.0.1, every image pinned,
-# every container memory-limited (total <= 12 GiB), every secret read from .env.
+# heavy services memory-capped from inside (ClickHouse config, Node heap, Redis maxmemory; total <= 8 GiB;
+# no mem_limit: rootless Podman here has no cgroup controllers), every secret read from .env.
 # Note: the ":?" hints below contain no spaces, because podman-compose splits `command:` before interpolating.
 # Adapted from Langfuse's official docker-compose.yml (v4); AI gateway omitted.
 
@@ -53,7 +54,6 @@ services:
       - ./deploy/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
     ports:
       - 127.0.0.1:5432:5432
-    mem_limit: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U devguard -d devguard"]
       interval: 5s
@@ -68,7 +68,6 @@ services:
     ports:
       - 127.0.0.1:6333:6333
       - 127.0.0.1:6334:6334
-    mem_limit: 1536m
 
   clickhouse:
     image: docker.io/clickhouse/clickhouse-server:26.3.62.3
@@ -81,10 +80,10 @@ services:
     volumes:
       - devguard_clickhouse_data:/var/lib/clickhouse
       - devguard_clickhouse_logs:/var/log/clickhouse-server
+      - ./deploy/clickhouse/memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
     ports:
       - 127.0.0.1:8123:8123
       - 127.0.0.1:9000:9000
-    mem_limit: 4g
     healthcheck:
       test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
       interval: 5s
@@ -106,7 +105,6 @@ services:
     ports:
       - 127.0.0.1:9090:9000
       - 127.0.0.1:9091:9001
-    mem_limit: 512m
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 2s
@@ -118,12 +116,12 @@ services:
     restart: unless-stopped
     command: >
       --requirepass ${REDIS_AUTH:?run_scripts/init_env.py}
+      --maxmemory 256mb
       --maxmemory-policy noeviction
     volumes:
       - devguard_redis_data:/data
     ports:
       - 127.0.0.1:6379:6379
-    mem_limit: 256m
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_AUTH:?run_scripts/init_env.py}", "--no-auth-warning", "ping"]
       interval: 3s
@@ -144,9 +142,9 @@ services:
         condition: service_healthy
     environment:
       <<: *langfuse-env
+      NODE_OPTIONS: --max-old-space-size=1536
     ports:
       - 127.0.0.1:3030:3030
-    mem_limit: 1536m
 
   langfuse-web:
     image: docker.io/langfuse/langfuse:4.76.0
@@ -154,6 +152,7 @@ services:
     depends_on: *langfuse-deps
     environment:
       <<: *langfuse-env
+      NODE_OPTIONS: --max-old-space-size=1536
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?run_scripts/init_env.py}
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
       LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://minio:9000
@@ -169,7 +168,6 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:?run_scripts/init_env.py}
     ports:
       - 127.0.0.1:3000:3000
-    mem_limit: 1536m
 
 volumes:
   devguard_postgres_data:

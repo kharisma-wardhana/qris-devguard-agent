@@ -7,7 +7,7 @@
 - [x] 3. Local stack definition and env — spec AC: #2, #3, #5 (its original #4 check was superseded by step 6)
 - [x] 4. Threat model — spec AC: #13
 - [x] 5. Tunnel helper and runbook — spec AC: #12
-- [ ] 6. Application-level memory caps — spec AC: #4
+- [x] 6. Application-level memory caps — spec AC: #4
 - [ ] 7. Local stack bring-up — spec AC: #1
 - [ ] 8. Live GPU run (user) — spec AC: #11
 - [ ] 9. CLAUDE.md merge — agent configuration

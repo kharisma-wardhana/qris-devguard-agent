@@ -19,7 +19,7 @@ Never commit real values. `tests/unit/test_repo_hygiene.py` fails if an IP addre
    - This fills every secret with a random value and never prints them.
    - Set `RUNPOD_SSH_KEY_PATH` to the private key whose public half is in RunPod → Settings → SSH Public Keys.
 2. **Add the vLLM API key to RunPod.** In RunPod → Secrets, create a secret named `VLLM_API_KEY` with the same value as `VLLM_API_KEY` in your `.env`. Copy it from the file in your editor; don't echo it in a terminal.
-3. **Check the Podman VM's memory:** `podman info --format '{{.Host.MemTotal}}'`. It should be at least about 16 GB. The stack's container limits total 10.25 GB.
+3. **Check the Podman VM's memory:** `podman info --format '{{.Host.MemTotal}}'`. It should be at least about 16 GB. Rootless Podman here can't enforce container memory limits, so ClickHouse, Langfuse and Redis cap themselves (about 7.25 GiB together; see `docker-compose.yml`), and the VM's own limit is the outer bound.
 
 ## Each session
 

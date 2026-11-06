@@ -1,6 +1,7 @@
 """docker-compose.yml: loopback ports, pinned images, memory caps, secrets only from .env (spec AC #1-#5)."""
 
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -43,10 +44,39 @@ def test_image_pinned(name):
     assert "@sha256:" in image or re.search(r":[\w.-]*\d[\w.-]*$", image), f"{name}: {image}"
 
 
-def test_memory_limits_present_and_total_within_budget():
-    limits = {name: s.get("mem_limit") for name, s in SERVICES.items()}
-    assert all(limits.values()), limits
-    assert sum(to_mib(v) for v in limits.values()) <= 12 * 1024
+@pytest.mark.parametrize("name", sorted(SERVICES))
+def test_no_container_memory_limits(name):
+    """Rootless Podman here has no cgroup controllers; these keys stop containers from starting."""
+    service = SERVICES[name]
+    assert not {"mem_limit", "mem_reservation", "memswap_limit", "deploy"} & set(service), name
+
+
+def _clickhouse_cap_mib() -> float:
+    mounts = SERVICES["clickhouse"]["volumes"]
+    mount = next(m for m in mounts if m.endswith("/etc/clickhouse-server/config.d/memory.xml:ro"))
+    xml = ET.parse(ROOT / mount.split(":")[0].removeprefix("./")).getroot()
+    return int(xml.findtext("max_server_memory_usage")) / 2**20
+
+
+def _node_heap_mib(name: str) -> float:
+    options = SERVICES[name]["environment"]["NODE_OPTIONS"]
+    return float(re.search(r"--max-old-space-size=(\d+)", options).group(1))
+
+
+def _redis_cap_mib() -> float:
+    return to_mib(re.search(r"--maxmemory (\d+[mg])b", str(SERVICES["redis"]["command"])).group(1))
+
+
+def test_heavy_services_are_capped_from_inside():
+    assert _clickhouse_cap_mib() <= 4 * 1024
+    assert _node_heap_mib("langfuse-web") <= 1536
+    assert _node_heap_mib("langfuse-worker") <= 1536
+    assert _redis_cap_mib() > 0
+
+
+def test_service_caps_total_within_budget():
+    total = _clickhouse_cap_mib() + _node_heap_mib("langfuse-web") + _node_heap_mib("langfuse-worker") + _redis_cap_mib()
+    assert total <= 8 * 1024, total
 
 
 @pytest.mark.parametrize("name", sorted(SERVICES))
