@@ -1,0 +1,26 @@
+name: agent-config-eval
+on:
+  pull_request:
+    paths:
+      - 'CLAUDE.md'
+      - '.claude/**'
+      - 'skills/**'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true      # flip to false once it has passed a few times
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run pytest
+      - run: uv run python scripts/check_sources.py
+      # Add `bash .claude/hooks/eval.sh` here when the first hook is installed.

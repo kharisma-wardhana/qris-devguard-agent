@@ -10,4 +10,4 @@
 - [x] 6. Scope doc and structure map — spec AC: #7 (partial)
 - [x] 7. User sign-off — spec AC: #7
 - [x] 8. CLAUDE.md merge — agent configuration
-- [ ] 9. GitHub Actions CI — spec AC: #1, #11
+- [x] 9. GitHub Actions CI — spec AC: #1, #11
