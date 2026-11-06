@@ -114,16 +114,19 @@ services:
   redis:
     image: docker.io/library/redis:7.4.12
     restart: unless-stopped
-    command: >
-      --requirepass ${REDIS_AUTH:?run_scripts/init_env.py}
-      --maxmemory 256mb
-      --maxmemory-policy noeviction
+    # The password reaches redis-server through a config file written at start, so it never
+    # appears in `podman ps`, `podman top` or the process list. "$$" defers expansion to the container.
+    environment:
+      REDIS_AUTH: ${REDIS_AUTH:?run_scripts/init_env.py}
+    entrypoint: ["sh", "-c"]
+    command:
+      - umask 077 && echo "requirepass $$REDIS_AUTH" > /tmp/redis-auth.conf && exec redis-server /tmp/redis-auth.conf --maxmemory 256mb --maxmemory-policy noeviction
     volumes:
       - devguard_redis_data:/data
     ports:
       - 127.0.0.1:6379:6379
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_AUTH:?run_scripts/init_env.py}", "--no-auth-warning", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_AUTH\" redis-cli ping | grep -q PONG"]
       interval: 3s
       timeout: 10s
       retries: 10

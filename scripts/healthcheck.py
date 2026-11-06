@@ -15,7 +15,6 @@ import json
 import os
 import sys
 import time
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -141,16 +140,19 @@ def run_checks(cfg: dict[str, str], client: httpx.Client, pg_connect: Callable, 
         return _status("langfuse_health", client.get(f"{lf}/api/public/health", timeout=timeout))
 
     def langfuse_trace():
-        now = datetime.now(timezone.utc).isoformat()
-        event = {"id": str(uuid.uuid4()), "timestamp": now, "type": "trace-create",
-                 "body": {"id": str(uuid.uuid4()), "timestamp": now, "name": "devguard-healthcheck",
-                          "tags": ["healthcheck"], "metadata": {"source": "scripts/healthcheck.py"}}}
-        r = client.post(f"{lf}/api/public/ingestion", json={"batch": [event]},
+        # Langfuse v4 accepts traces only over OpenTelemetry; one OTLP/HTTP JSON span is enough.
+        # The response body is never printed: Langfuse echoes the public key in it.
+        now = time.time_ns()
+        span = {"traceId": os.urandom(16).hex(), "spanId": os.urandom(8).hex(), "name": "devguard-healthcheck",
+                "kind": 1, "startTimeUnixNano": str(now - 1_000_000), "endTimeUnixNano": str(now),
+                "attributes": [{"key": "langfuse.trace.name", "value": {"stringValue": "devguard-healthcheck"}},
+                               {"key": "langfuse.trace.tags", "value": {"arrayValue": {"values": [{"stringValue": "healthcheck"}]}}}]}
+        payload = {"resourceSpans": [{
+            "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "devguard-healthcheck"}}]},
+            "scopeSpans": [{"scope": {"name": "devguard.healthcheck"}, "spans": [span]}]}]}
+        r = client.post(f"{lf}/api/public/otel/v1/traces", json=payload,
                         auth=(cfg.get("LANGFUSE_PUBLIC_KEY", ""), cfg.get("LANGFUSE_SECRET_KEY", "")), timeout=timeout)
-        if r.status_code not in (200, 201, 207):
-            return Result("langfuse_trace", False, detail=f"HTTP {r.status_code}")
-        errors = r.json().get("errors", []) if r.content else []
-        return Result("langfuse_trace", not errors, detail="" if not errors else "ingestion rejected")
+        return _status("langfuse_trace", r)
 
     fns = [vllm_health, vllm_models, vllm_chat, postgres, qdrant, langfuse_health, langfuse_trace]
     return [_timed(fn, name) for fn, name in zip(fns, CHECKS)]

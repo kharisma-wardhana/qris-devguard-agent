@@ -8,7 +8,7 @@
 - [x] 4. Threat model — spec AC: #13
 - [x] 5. Tunnel helper and runbook — spec AC: #12
 - [x] 6. Application-level memory caps — spec AC: #4
-- [ ] 7. Bring-up fixes — spec AC: #5, #6
+- [x] 7. Bring-up fixes — spec AC: #5, #6
 - [ ] 8. Local stack bring-up — spec AC: #1
 - [ ] 9. Live GPU run (user) — spec AC: #11
 - [ ] 10. CLAUDE.md merge — agent configuration

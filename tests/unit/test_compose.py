@@ -95,8 +95,25 @@ def test_every_referenced_variable_is_in_env_example_as_placeholder():
             assert EXAMPLE[var] == "replace-me", var
 
 
-def test_redis_password_not_hardcoded():
-    assert "${REDIS_AUTH" in str(SERVICES["redis"]["command"])
+@pytest.mark.parametrize("name", sorted(SERVICES))
+def test_no_secret_interpolated_into_command_lines(name):
+    """Compose-time ${SECRET} in command/entrypoint/healthcheck ends up in `podman ps` (p1 spec AC #5)."""
+    service = SERVICES[name]
+    argv_text = " ".join(str(service.get(k, "")) for k in ("command", "entrypoint"))
+    argv_text += " " + str((service.get("healthcheck") or {}).get("test", ""))
+    for var in re.findall(r"\$\{([A-Z_]+)", argv_text):
+        assert not SECRET_NAME.search(var), f"{name}: ${{{var}}} is expanded onto a command line"
+
+
+def test_redis_reads_password_from_env_inside_container():
+    command = str(SERVICES["redis"]["command"])
+    assert "$$REDIS_AUTH" in command and "--requirepass" not in command
+    assert SERVICES["redis"]["environment"]["REDIS_AUTH"].startswith("${REDIS_AUTH:?")
+
+
+@pytest.mark.parametrize("key", ["DATABASE_URL", "QDRANT_URL", "LANGFUSE_HOST", "VLLM_BASE_URL"])
+def test_local_urls_use_ipv4_loopback(key):
+    assert "127.0.0.1" in EXAMPLE[key] and "localhost" not in EXAMPLE[key]
 
 
 def test_langfuse_telemetry_off():

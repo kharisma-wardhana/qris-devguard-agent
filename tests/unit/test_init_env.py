@@ -31,7 +31,7 @@ def test_creates_env_with_every_placeholder_filled(tmp_path):
     assert re.fullmatch(r"[0-9a-f]{64}", env["ENCRYPTION_KEY"])
     assert env["LANGFUSE_PUBLIC_KEY"].startswith("pk-lf-")
     assert env["LANGFUSE_SECRET_KEY"].startswith("sk-lf-")
-    assert f"devguard:{env['POSTGRES_PASSWORD']}@localhost" in env["DATABASE_URL"]
+    assert f"devguard:{env['POSTGRES_PASSWORD']}@127.0.0.1" in env["DATABASE_URL"]
     assert env["RUNPOD_SSH_HOST"] == "set-me"  # user-provided values are untouched
     generated = [v for k, v in env.items() if k in ("POSTGRES_PASSWORD", "REDIS_AUTH", "VLLM_API_KEY", "SALT")]
     assert len(set(generated)) == len(generated)  # independent secrets

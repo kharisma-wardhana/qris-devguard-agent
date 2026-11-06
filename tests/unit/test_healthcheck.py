@@ -52,8 +52,9 @@ class Services:
                 200, content=SSE, headers={"content-type": "text/event-stream"})),
             "/readyz": ("qdrant", lambda: httpx.Response(200, text="all shards are ready")),
             "/api/public/health": ("langfuse_health", lambda: httpx.Response(200, json={"status": "OK"})),
-            "/api/public/ingestion": ("langfuse_trace", lambda: httpx.Response(
-                207, json={"successes": [{"id": "x", "status": 201}], "errors": []})),
+            # Real Langfuse echoes the public key in this body; the CLI must never print it.
+            "/api/public/otel/v1/traces": ("langfuse_trace", lambda: httpx.Response(
+                200, json={"name": "otel-ingestion-job", "publicKey": SECRETS["LANGFUSE_PUBLIC_KEY"]})),
         }
         check, ok = routes[path]
         if check == self.fail:
@@ -142,11 +143,14 @@ def test_chat_request_uses_non_thinking_probe(env, tmp_path, capsys):
     assert isinstance(record["ttft_ms"], float) and isinstance(record["total_ms"], float)
 
 
-def test_langfuse_trace_uses_basic_auth(env, tmp_path, capsys):
+def test_langfuse_trace_is_one_otlp_span_with_basic_auth(env, tmp_path, capsys):
     _, _, _, services = run(tmp_path, capsys)
-    ingest = next(r for r in services.requests if r.url.path == "/api/public/ingestion")
-    assert ingest.headers["authorization"].startswith("Basic ")
-    assert json.loads(ingest.content)["batch"][0]["type"] == "trace-create"
+    otel = next(r for r in services.requests if r.url.path == "/api/public/otel/v1/traces")
+    assert otel.headers["authorization"].startswith("Basic ")
+    spans = json.loads(otel.content)["resourceSpans"][0]["scopeSpans"][0]["spans"]
+    assert len(spans) == 1 and spans[0]["name"] == "devguard-healthcheck"
+    assert len(spans[0]["traceId"]) == 32 and len(spans[0]["spanId"]) == 16
+    assert not any(r.url.path == "/api/public/ingestion" for r in services.requests)
 
 
 def test_no_secrets_in_any_output_on_success(env, tmp_path, capsys):
