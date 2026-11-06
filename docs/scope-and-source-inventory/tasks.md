@@ -3,7 +3,7 @@
 *Implements: docs/scope-and-source-inventory/plan.md*
 
 - [x] 1. Schema and checker rules — spec AC: #3, #4, #11
-- [ ] 2. Synthetic documents — spec AC: #5, #6
+- [x] 2. Synthetic documents — spec AC: #5, #6
 - [ ] 3. User check, then final manifest — spec AC: #1, #2
 - [ ] 4. Excerpt limit and repo hygiene — spec AC: #9, #10
 - [ ] 5. Threat model — spec AC: #8
