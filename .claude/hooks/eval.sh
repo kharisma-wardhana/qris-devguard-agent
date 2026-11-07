@@ -54,7 +54,12 @@ quiet "deploy-gate allows reading tunnel.sh" .claude/hooks/deploy-gate.sh \
 
 if [ -f .claude/monitoring/control_band.py ]; then
   ran=$((ran + 1))
-  python3 .claude/monitoring/control_band.py --self-check || fail=1
+  PY=""
+  for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c "import statistics" >/dev/null 2>&1; then PY="$c"; break; fi
+  done
+  if [ -z "$PY" ]; then echo "FAIL - control band: no working Python found"; fail=1
+  else "$PY" .claude/monitoring/control_band.py --self-check || fail=1; fi
 fi
 
 if [ "$ran" -eq 0 ]; then
