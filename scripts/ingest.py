@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report-dir", type=Path, default=DEFAULT_REPORTS)
     add_backend_args(parser)
     args = parser.parse_args(argv)
+    sys.stdout.reconfigure(encoding="utf-8")       # Windows consoles default to cp1252
 
     from app.rag.embedding import EmbedStackMissing
     from app.rag.ingest import ingest, write_report

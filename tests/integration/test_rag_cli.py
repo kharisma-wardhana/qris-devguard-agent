@@ -95,3 +95,32 @@ def test_ingest_cli_missing_source_file_fails(tmp_path):
     assert result.returncode == 1
     assert "failed" in result.stdout and "file not found" in result.stdout
     assert "Traceback" not in result.stderr
+
+
+# --- search.py (step 7) --------------------------------------------------------
+
+def test_search_cli_after_ingest(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    backend = ["--test-backends", "--qdrant-path", str(tmp_path / "qdrant")]
+    result = run("search.py", "4094700 duplicate partnerReferenceNo", "--limit", "5", *backend, env_extra=TEST_ENV)
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert 1 <= len(lines) <= 5 and lines[0].split()[1] == "CIT-000001"
+    as_json = run("search.py", "X-TIMESTAMP", "--json", "--limit", "2", *backend, env_extra=TEST_ENV)
+    assert as_json.returncode == 0
+    import json
+    first = json.loads(as_json.stdout.splitlines()[0])
+    assert {"citation_id", "chunk_id", "document_version", "quote_or_excerpt", "untrusted"} <= set(first)
+
+
+def test_search_cli_missing_query_shows_usage():
+    result = run("search.py")
+    assert result.returncode == 2 and "usage:" in result.stderr
+
+
+def test_search_cli_without_collection_is_one_line(tmp_path):
+    backend = ["--test-backends", "--qdrant-path", str(tmp_path / "empty")]
+    result = run("search.py", "anything", *backend, env_extra=TEST_ENV)
+    assert result.returncode == 1
+    assert result.stderr.strip().startswith("error: collection") and "Traceback" not in result.stderr
