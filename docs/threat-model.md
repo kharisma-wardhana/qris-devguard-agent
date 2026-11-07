@@ -42,7 +42,7 @@ No connection exists to any bank, ASPI, merchant or production host.
 | B3 | LLM → MCP tools | Tool name and arguments | Allowlist, strict Pydantic schemas, identity binding |
 | B4 | MCP → sandbox ticket table | Write action | Approval token bound to the exact payload, idempotency key |
 | B5 | App → Langfuse | Traces and scores | Redaction before export; synthetic data only |
-| B6 | App → vLLM pod | Prompts | Private network or authenticated proxy; prompt logging disabled |
+| B6 | App → vLLM pod | Prompts | SSH tunnel to vLLM bound to the pod's `127.0.0.1:8080`; no HTTP port exposed; API key; request logging off (p1-infrastructure) |
 
 ## 3. Threats and controls
 
@@ -60,15 +60,16 @@ No connection exists to any bank, ASPI, merchant or production host.
 | T10 | SQL or path injection via tool arguments (T) | B3 | Typed arguments, ID regex allowlists, parameterised queries | Argument injection tests (P7) |
 | T11 | Cross-user access to a thread, memory or approval (I) | B1, B3 | Every lookup scoped by `owner_id`; thread ownership checked | Thread substitution test (P7) |
 | T12 | DoS or cost exhaustion on the GPU pod (D) | B1, B6 | Rate limits, token budgets, timeouts, concurrency caps | Burst test (P7) |
-| T13 | Direct access to vLLM, Qdrant or Postgres (S, I) | B6 | Private networking; vLLM key plus proxy, since `--api-key` does not cover every endpoint | Port exposure check (P1/P7) |
+| T13 | Direct access to vLLM, Qdrant or Postgres (S, I) | B6 | vLLM listens only on the pod's loopback and is reached through an SSH tunnel; the pod exposes no HTTP port, so `/health`, `/metrics` and `/tokenize` (not covered by `--api-key`) are unreachable from the internet; API key kept as a second layer. Local services publish ports on `127.0.0.1` only | `tests/unit/test_compose.py` loopback-port test; `tests/unit/test_bootstrap_vllm.py` bind test (P1); port exposure check on the live pod (P1 live run) |
 | T14 | Error responses leak stack traces or environment (I) | B1, B3 | Stable error envelope `code/message/correlation_id` | Tool exception tests (P7) |
 | T15 | Poisoned source enters the corpus (T) | B2 | Only `approved` manifest entries are ingested; checksum; maintainer publish step | Ingestion validation (P2) |
 | T16 | A public document with no published licence is redistributed through the public repo, an answer or a LinkedIn screenshot (I) | B2, repo | `reference_only` basis; files kept under the git-ignored `knowledge_base/sources/`; checker rejects a reference-only `local_path` outside it; citation excerpts capped at 300 characters (`configs/security.yaml`) | `tests/unit/test_repo_hygiene.py` (P0); checker rule (f) unit test (P0); excerpt-cap test in the citation layer (P2/P5) |
 | T17 | A synthetic document is mistaken for an official ASPI/BI specification (S) | B2, repo | `synthetic-` ID prefix + `team_authored` basis + title marker, all enforced by the checker; marker on the document's first line; SYNTHETIC label kept on every citation | Checker rules (a)–(c) and `tests/unit/test_synthetic_docs.py` (P0); citation-label test (P5) |
+| T18 | The GPU pod's public SSH port is attacked, or the bootstrap script fetched onto the pod is tampered with (S, T, E) | Pod | Key-only root login (RunPod PyTorch template); pod terminated after every session, so the port exists only while working; bootstrap script fetched by pinned commit SHA and pinned `vllm==0.32.0`; no secrets in the script (vLLM reads `VLLM_API_KEY` from a RunPod secret); pod IP, port and SSH user kept out of git | `tests/unit/test_repo_hygiene.py` IP/SSH-target test and `tests/unit/test_bootstrap_vllm.py` (P1); runbook terminate step (P1) |
 
 ## 4. Residual risks and assumptions
 
-- Langfuse Cloud is acceptable only because all data is synthetic. Real data would require self-hosting.
+- Langfuse is self-hosted on the developer machine with telemetry off (p1-infrastructure), so traces never leave it. The P0 egress allowlist entry for Langfuse Cloud was replaced with `localhost` in `configs/security.yaml`.
 - A RunPod pod may need an exposed port. In that case it must sit behind an authenticated reverse proxy with an allowlist.
 - Human review of citation support is sampled, not exhaustive.
 - **No separation of duties.** One person (the capstone author) signs all four P0 roles and acts as both KB maintainer and approver. The `kb_maintainer` exclusion from `approver_roles` in `configs/security.yaml` is enforced per account, not per person. This is accepted for the capstone and must change before any multi-person use.

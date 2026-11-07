@@ -23,7 +23,8 @@ import json, re, sys
 DANGER = (r"kubectl|helm +|terraform +(-[^ ]+ +)*(apply|destroy)|aws +|gcloud +|az +"
           r"|flyctl +deploy|vercel +--prod|netlify +deploy|firebase +deploy|serverless +deploy"
           r"|docker +push|npm +publish|uv +publish|gh +release +create|alembic +upgrade"
-          r"|prisma +migrate +deploy|ssh +|scp +|rsync +|make +deploy|runpodctl|psql +")
+          r"|prisma +migrate +deploy|ssh +|scp +|rsync +|make +deploy|runpodctl|psql +"
+          r"|(^|[;&|] *)(bash +|sh +)?\S*(scripts/tunnel|bootstrap_vllm)\.sh")
 
 def emit(decision, reason):
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",

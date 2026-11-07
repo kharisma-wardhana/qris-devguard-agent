@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!-- Server-wide memory cap for ClickHouse (p1-infrastructure spec AC #4).
+     Rootless Podman on the dev machine cannot apply container memory limits,
+     so the cap is set inside ClickHouse. 4 GiB = 4294967296 bytes. -->
+<clickhouse>
+    <max_server_memory_usage>4294967296</max_server_memory_usage>
+</clickhouse>

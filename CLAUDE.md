@@ -23,6 +23,10 @@ uv sync                                                  # install deps into .ve
 uv run pytest                                            # all tests
 uv run pytest tests/unit/test_check_sources.py::test_duplicate_document_id_rejected   # single test
 uv run python scripts/check_sources.py                   # validate source manifest (P0 exit check)
+uv run python scripts/init_env.py                        # create .env with random secrets (refuses to overwrite)
+podman compose up -d                                     # local PostgreSQL, Qdrant, Langfuse
+bash scripts/tunnel.sh                                   # SSH tunnel to the RunPod vLLM on 127.0.0.1:8080
+uv run python scripts/healthcheck.py                     # 7 PASS/FAIL checks; appends to evals/reports/healthcheck.jsonl
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -94,6 +98,7 @@ All documentation lives under `docs/`, and `docs/index.md` is the table of conte
 ## Test scope
 - Scripts and CLI entry points: add an integration test that runs the real entry point as a subprocess (`tests/integration/`), in addition to unit tests.
 - Changes to existing behaviour: add a regression test, and keep the existing tests passing unchanged.
+- Database (PostgreSQL): add a regression test whenever a step changes the schema or an existing query or behaviour around stored data.
 
 Run `uv run pytest` before reporting a task complete, and paste the output.
 

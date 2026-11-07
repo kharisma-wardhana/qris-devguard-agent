@@ -46,10 +46,20 @@ acts  "deploy-gate asks on bad input"   .claude/hooks/deploy-gate.sh \
       'not json'
 quiet "deploy-gate allows tests"        .claude/hooks/deploy-gate.sh \
       '{"tool_input":{"command":"uv run pytest"}}'
+acts  "deploy-gate asks on tunnel.sh"   .claude/hooks/deploy-gate.sh \
+      '"permissionDecision":"ask"' \
+      '{"tool_input":{"command":"bash scripts/tunnel.sh"}}'
+quiet "deploy-gate allows reading tunnel.sh" .claude/hooks/deploy-gate.sh \
+      '{"tool_input":{"command":"cat scripts/tunnel.sh"}}'
 
 if [ -f .claude/monitoring/control_band.py ]; then
   ran=$((ran + 1))
-  python3 .claude/monitoring/control_band.py --self-check || fail=1
+  PY=""
+  for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c "import statistics" >/dev/null 2>&1; then PY="$c"; break; fi
+  done
+  if [ -z "$PY" ]; then echo "FAIL - control band: no working Python found"; fail=1
+  else "$PY" .claude/monitoring/control_band.py --self-check || fail=1; fi
 fi
 
 if [ "$ran" -eq 0 ]; then

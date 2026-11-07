@@ -1,0 +1,19 @@
+name: security-scan
+on:
+  schedule:
+    - cron: "17 3 * * 1"      # Mondays 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true   # non-blocking on first install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv export --locked --format requirements-txt --no-hashes --no-emit-project > requirements-audit.txt
+      - run: uvx --from pip-audit==2.9.0 pip-audit -r requirements-audit.txt --no-deps --disable-pip --progress-spinner off

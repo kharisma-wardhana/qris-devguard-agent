@@ -8,7 +8,7 @@ egress_allowlist:
   - vllm
   - qdrant
   - postgres
-  - cloud.langfuse.com
+  - localhost            # self-hosted Langfuse (p1-infrastructure); was cloud.langfuse.com
 
 # Risk classes (TRD §15.1)
 risk_policy:

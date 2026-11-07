@@ -1,0 +1,36 @@
+# vLLM serving configuration (docs/p1-infrastructure/spec.md).
+# deploy/runpod/bootstrap_vllm.sh must use the same values; tests/unit/test_bootstrap_vllm.py checks it.
+# Measured values from real runs are recorded in docs/runpod-deployment.md.
+
+model:
+  id: Qwen/Qwen3-8B-FP8
+  revision: 220b46e3b2180893580a4454f21f22d3ebb187d3   # main @ 2025-07-26
+  served_name: qwen3-8b
+  license: apache-2.0
+  quantization: fp8          # block-wise FP8, block size 128 (from the checkpoint)
+  native_context: 32768
+
+vllm:
+  version: "0.32.0"          # latest stable on 2026-11-06; release notes list SM120 support
+  host: 127.0.0.1            # reached only through the SSH tunnel
+  port: 8080                 # user choice (2026-11-06), instead of vLLM's default 8000
+  max_model_len: 16384
+  gpu_memory_utilization: 0.90
+  max_num_seqs: 8
+  reasoning_parser: qwen3
+  tool_call_parser: hermes
+  min_driver_major: 580      # default wheels are built for CUDA 13.0
+
+# Health-check probe: Qwen3 non-thinking mode settings from the model card.
+probe:
+  enable_thinking: false
+  temperature: 0.7
+  top_p: 0.8
+  max_tokens: 32
+
+gpu:
+  provider: runpod
+  template: RunPod PyTorch (official, SSH enabled)
+  sku: RTX PRO 4000
+  vram_gb: 24
+  hourly_usd: 0.57
