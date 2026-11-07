@@ -109,7 +109,7 @@ The measured startup time from the first live run is recorded below.
 | Item | Value |
 |---|---|
 | Date | 2026-11-07 |
-| GPU / host driver / CUDA | **NVIDIA RTX A5000** (24 GB, Ampere), not the planned RTX PRO 4000 / 595.91.07 / CUDA not captured |
+| GPU / host driver / CUDA | **NVIDIA RTX A5000** (24 GB, Ampere), not the planned RTX PRO 4000, which wasn't available at the time / 595.91.07 / CUDA not captured |
 | vLLM version | 0.32.0 |
 | Model / revision | Qwen/Qwen3-8B-FP8 @ `220b46e` |
 | Max model len / GPU memory utilization | 16384 / 0.90 |
@@ -117,7 +117,7 @@ The measured startup time from the first live run is recorded below.
 | GPU memory used after load | 21,735 MiB of 24,564 MiB |
 | Health check | 7/7 PASS |
 | vllm_chat time-to-first-token / total | 693.7 ms / 693.9 ms |
-| Session cost (RunPod billing) | *pending: read from RunPod billing* |
+| Session cost (RunPod billing) | **$0.11** for all of P1, both start attempts included (wallet $19.68 → $19.57) |
 
 **GPU note:** the A5000 has no native FP8, so vLLM ran the FP8 checkpoint through a fallback kernel. It served correctly, but the A5000's latency and price per hour aren't the RTX PRO 4000 figures this runbook's cost table assumes. Pick the GPU deliberately for P9 benchmarks, and record which one ran.
 

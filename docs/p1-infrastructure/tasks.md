@@ -10,6 +10,6 @@
 - [x] 6. Application-level memory caps — spec AC: #4
 - [x] 7. Bring-up fixes — spec AC: #5, #6
 - [x] 8. Local stack bring-up — spec AC: #1
-- [ ] 9. Live GPU run (user) — spec AC: #11
+- [x] 9. Live GPU run (user) — spec AC: #11
 - [x] 10. CLAUDE.md merge — agent configuration
 - [x] 11. Bootstrap fixes from the live run — spec AC: #10, #11
