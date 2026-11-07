@@ -15,7 +15,7 @@
 - `docker-compose.yml`: new. The local stack: PostgreSQL, Qdrant and Langfuse v4 (web, worker, ClickHouse, Redis, MinIO).
 - `deploy/postgres/init-databases.sh`: new. Creates the `langfuse` database and user next to `devguard`.
 - `deploy/clickhouse/memory.xml`: new. ClickHouse server memory cap (added in step 6, replacing container memory limits).
-- `.env.example`: edit. New keys, `LANGFUSE_HOST` and `VLLM_BASE_URL` set to local, SSH placeholders, Langfuse headless-init keys.
+- `.env.example`: edit. New keys (step 12 adds the optional `DEVGUARD_GPU_LABEL`), `LANGFUSE_HOST` and `VLLM_BASE_URL` set to local, SSH placeholders, Langfuse headless-init keys.
 - `scripts/init_env.py`: new. Creates `.env` from `.env.example` with random secrets. Refuses to overwrite an existing `.env`.
 - `tests/unit/test_init_env.py`: new.
 - `configs/security.yaml`: edit. In `egress_allowlist`, replaces `cloud.langfuse.com` with `localhost`.
@@ -46,6 +46,7 @@
 9. **Live GPU run (user).** You create the pod, bootstrap, tunnel and run the health check, then terminate the pod. I record the measured values in `docs/runpod-deployment.md`. Spec AC #11.
 10. **`CLAUDE.md` merge.** Appends to `## Commands` and `## Test scope`. Agent configuration.
 11. **Bootstrap fixes from the live run** (added 2026-11-07, after the first live start failed with `FileNotFoundError: 'ninja'` while FlashInfer JIT-compiled its sampler). Files: `deploy/runpod/bootstrap_vllm.sh`, `tests/unit/test_bootstrap_vllm.py`, `docs/runpod-deployment.md`. The script puts the venv's `bin/` on `PATH` and makes sure `ninja` is there before serving. On a failed start it prints the log from the first `ERROR` line, not only the last 40 lines (the 40-line tail hid the cause). Spec AC #10, #11.
+12. **GPU label on health-check runs** (added 2026-11-07 in Phase 6). RunPod hands out whichever GPU is free, and the first live run got an RTX A5000 instead of the RTX PRO 4000; a GPU switch would look like latency drift to the control band. Files: `scripts/healthcheck.py` (reads an optional `DEVGUARD_GPU_LABEL`, such as `rtx-a5000`, from the environment or `.env`, and writes it as `gpu` in each JSON line; a value that isn't a short lowercase slug is dropped with a warning, so the field can't carry free text), `tests/unit/test_healthcheck.py`, `.env.example`. Feeds the Phase 6 producer, which builds windows per GPU. Spec AC #6 (report contents).
 
 ## Test coverage
 
@@ -71,6 +72,7 @@ Not matched: UI (none) and accounts/roles (no application auth in P1; Langfuse's
 - **Step 7:** unit tests: the OTLP request shape and basic auth (replacing the ingestion-endpoint test, whose behaviour the spec no longer requires); no `${REDIS_AUTH` on any `command:` or `healthcheck:`; every local URL in `.env.example` uses `127.0.0.1`. Regression: all other tests unchanged.
 - **Step 6:** unit tests in `tests/unit/test_compose.py` for the caps and for the absence of `mem_limit`. The earlier memory-limit test is replaced, not kept, because the spec criterion it checked changed.
 - **Step 11:** stubbed-run tests: with `ninja` only in the venv's `bin/`, a stub `vllm` that needs `ninja` on `PATH` starts and the script reports ready (regression for the live failure); a stub `vllm` that logs an early `ERROR` line followed by 60 lines of noise and exits makes the script print that `ERROR` line. The poll interval becomes `VLLM_POLL_S` (default 10) so these tests run in seconds. Regression: all existing bootstrap tests unchanged.
+- **Step 12:** unit tests: the label is written to the JSON line; no label gives `"gpu": null`; an invalid label (spaces, uppercase, over 32 characters) is dropped with a warning on stderr and the run still completes. Regression: all existing health-check tests unchanged.
 - **Steps 8–9:** pasted output from real runs. These are the evidence for AC #1 and #11.
 - **Step 10:** covered by the existing `agent-config-eval` workflow.
 

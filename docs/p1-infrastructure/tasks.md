@@ -13,3 +13,4 @@
 - [x] 9. Live GPU run (user) — spec AC: #11
 - [x] 10. CLAUDE.md merge — agent configuration
 - [x] 11. Bootstrap fixes from the live run — spec AC: #10, #11
+- [ ] 12. GPU label on health-check runs — spec AC: #6
