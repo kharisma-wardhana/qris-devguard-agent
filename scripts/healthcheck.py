@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 MODEL_CONFIG = ROOT / "configs" / "model.yaml"
 DEFAULT_REPORT = ROOT / "evals" / "reports" / "healthcheck.jsonl"
+GPU_LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")  # e.g. rtx-a5000; never free text
 CHECKS = ("vllm_health", "vllm_models", "vllm_chat", "postgres", "qdrant", "langfuse_health", "langfuse_trace")
 PROBE_PROMPT = "Reply with the single word: ready."
 
@@ -158,11 +160,23 @@ def run_checks(cfg: dict[str, str], client: httpx.Client, pg_connect: Callable, 
     return [_timed(fn, name) for fn, name in zip(fns, CHECKS)]
 
 
-def write_report(path: Path, results: list[Result], served: str) -> None:
+def gpu_label(cfg: dict[str, str]) -> str | None:
+    """Optional DEVGUARD_GPU_LABEL (e.g. rtx-a5000), so the control band can keep per-GPU windows."""
+    value = cfg.get("DEVGUARD_GPU_LABEL", "")
+    if not value:
+        return None
+    if GPU_LABEL_RE.fullmatch(value):
+        return value
+    print("warning: DEVGUARD_GPU_LABEL ignored: use a short lowercase slug such as rtx-a5000", file=sys.stderr)
+    return None
+
+
+def write_report(path: Path, results: list[Result], served: str, gpu: str | None = None) -> None:
     chat = next(r for r in results if r.check == "vllm_chat")
     record = {
         "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model": served,
+        "gpu": gpu,
         "all_pass": all(r.ok for r in results),
         "ttft_ms": chat.extra.get("ttft_ms"),
         "total_ms": chat.extra.get("total_ms"),
@@ -199,7 +213,7 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
         print(line)
 
     served = yaml.safe_load(MODEL_CONFIG.read_text(encoding="utf-8"))["model"]["served_name"]
-    write_report(args.report, results, served)
+    write_report(args.report, results, served, gpu_label(cfg))
     passed = sum(r.ok for r in results)
     print(f"{passed}/{len(results)} checks passed")
     return 0 if passed == len(results) else 1

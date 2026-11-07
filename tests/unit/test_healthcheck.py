@@ -167,3 +167,27 @@ def test_env_file_is_read_but_environment_wins(tmp_path, monkeypatch):
     cfg = healthcheck.settings(env_file)
     assert cfg["QDRANT_URL"] == "http://from-env:6333"
     assert cfg["APP_ENV"] == "dev"
+
+
+# --- step 12: GPU label for per-GPU control-band windows --------------------
+
+def test_gpu_label_written_to_report(env, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("DEVGUARD_GPU_LABEL", "rtx-a5000")
+    _, _, report, _ = run(tmp_path, capsys)
+    assert json.loads(report)["gpu"] == "rtx-a5000"
+
+
+def test_no_gpu_label_gives_null(env, tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("DEVGUARD_GPU_LABEL", raising=False)
+    _, _, report, _ = run(tmp_path, capsys)
+    assert json.loads(report)["gpu"] is None
+
+
+@pytest.mark.parametrize("bad", ["RTX A5000", "rtx a5000", "x" * 33, "rtx-a5000; rm -rf /", "-lead"])
+def test_invalid_gpu_label_dropped_with_warning(env, tmp_path, capsys, monkeypatch, bad):
+    monkeypatch.setenv("DEVGUARD_GPU_LABEL", bad)
+    code, out, report, _ = run(tmp_path, capsys)
+    assert code == 0
+    assert json.loads(report)["gpu"] is None
+    assert "DEVGUARD_GPU_LABEL ignored" in out.err
+    assert bad not in out.out + report
