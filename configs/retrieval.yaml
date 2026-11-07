@@ -1,0 +1,37 @@
+# Knowledge pipeline and retrieval settings (docs/p2-knowledge-pipeline/spec.md).
+# Retrieval parameters live here, not in code (CLAUDE.md). Values are a first
+# configuration; P3 tunes them against evals/datasets/retrieval_golden.yaml.
+
+collection: qris_kb_v1
+
+qdrant:
+  url_env: QDRANT_URL                 # read from the environment / .env
+  default_url: http://127.0.0.1:6333
+
+embedding:
+  model_id: BAAI/bge-m3
+  revision: 5617a9f61b028005a4858fdac845db406aefb181   # pinned; MIT licence
+  dimension: 1024
+  max_seq_length: 1024                # tokens; above chunking.max_tokens, below the model's 8192
+  batch_size: 8
+
+chunking:
+  target_tokens: 600                  # TRD §12.2: 400-800
+  max_tokens: 800
+  overlap_tokens: 80                  # TRD §12.2: 60-100; only inside a long section
+  chars_per_token: 4                  # estimate: tokens = characters / 4
+
+sparse:                               # project BM25 encoder; Qdrant applies IDF
+  k1: 1.2
+  b: 0.75
+
+search:
+  dense_prefetch: 30                  # TRD §12.3: 20-30 candidates
+  sparse_prefetch: 30
+  limit: 20
+
+ingest:
+  max_file_mb: 50
+  types:
+    .pdf: application/pdf
+    .md: text/markdown

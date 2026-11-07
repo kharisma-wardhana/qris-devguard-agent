@@ -2,7 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Build. Written: 2026-11-07. Via /aspec:make-it-simple-v2.*
 *Implements: docs/p2-knowledge-pipeline/plan.md*
 
-- [ ] 1. Dependencies and config — spec AC: #7, #15
+- [x] 1. Dependencies and config — spec AC: #7, #15
 - [ ] 2. Manifest selection and file checks — spec AC: #1
 - [ ] 3. Extraction and chunking — spec AC: #2, #4
 - [ ] 4. Sparse BM25 encoder — spec AC: #5

@@ -9,6 +9,17 @@ dependencies = [
     "jsonschema>=4.23",
     "httpx>=0.28.1",
     "psycopg[binary]>=3.3.8",
+    "qdrant-client==1.19.1",
+    "pdfplumber==0.11.10",
+]
+
+[project.optional-dependencies]
+# Embedding stack for real ingestion/search on the developer machine (CPU only).
+# Never installed in CI; tests use a deterministic fake embedder.
+embed = [
+    "sentence-transformers==6.2.0",
+    "torch==2.15.0",
+    "truststore>=0.10",
 ]
 
 [dependency-groups]
@@ -16,5 +27,14 @@ dev = [
     "pytest>=8.3",
 ]
 
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
