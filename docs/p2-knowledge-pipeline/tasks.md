@@ -4,7 +4,7 @@
 
 - [x] 1. Dependencies and config — spec AC: #7, #15
 - [x] 2. Manifest selection and file checks — spec AC: #1
-- [ ] 3. Extraction and chunking — spec AC: #2, #4
+- [x] 3. Extraction and chunking — spec AC: #2, #4
 - [ ] 4. Sparse BM25 encoder — spec AC: #5
 - [ ] 5. Embedders and model fetch — spec AC: #15
 - [ ] 6. Store and ingestion pipeline — spec AC: #1, #3, #4, #10

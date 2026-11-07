@@ -20,6 +20,10 @@ chunking:
   max_tokens: 800
   overlap_tokens: 80                  # TRD §12.2: 60-100; only inside a long section
   chars_per_token: 4                  # estimate: tokens = characters / 4
+  # PDF section headings: a line that starts with a section number and a title.
+  # Checked against the real ASPI PDFs in plan step 10; group 1 = number, group 2 = title.
+  # Month names are excluded so dates ("12 Mei 2024") are not read as headings.
+  pdf_heading_pattern: '^(\d{1,2}(?:\.\d{1,2}){0,3})\.?\s+(?!(?:Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember|January|February|March|May|June|July|August|October|December)\b)([A-Z][^.!?]{2,90})$'
 
 sparse:                               # project BM25 encoder; Qdrant applies IDF
   k1: 1.2
