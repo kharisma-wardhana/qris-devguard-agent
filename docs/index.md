@@ -7,4 +7,4 @@
 
 ## Features
 - [scope-and-source-inventory](scope-and-source-inventory/intent.md) — Phase P0 sign-off and publicly safe source list ([spec](scope-and-source-inventory/spec.md), [plan](scope-and-source-inventory/plan.md), [tasks](scope-and-source-inventory/tasks.md), [deploy tools](scope-and-source-inventory/deploy-tools.md))
-- [p1-infrastructure](p1-infrastructure/intent.md) — Qwen3-8B on vLLM (RunPod) plus local PostgreSQL, Qdrant and Langfuse with health checks ([spec](p1-infrastructure/spec.md), [plan](p1-infrastructure/plan.md), [tasks](p1-infrastructure/tasks.md), [deploy tools](p1-infrastructure/deploy-tools.md))
+- [p1-infrastructure](p1-infrastructure/intent.md) — Qwen3-8B on vLLM (RunPod) plus local PostgreSQL, Qdrant and Langfuse with health checks ([spec](p1-infrastructure/spec.md), [plan](p1-infrastructure/plan.md), [tasks](p1-infrastructure/tasks.md), [deploy tools](p1-infrastructure/deploy-tools.md), [monitoring](p1-infrastructure/monitoring.md))
