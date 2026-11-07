@@ -1,0 +1,18 @@
+# Two-query sample for testing the retrieval-eval harness (p2 plan step 8).
+# The real 30-query set is evals/datasets/retrieval_golden.yaml (plan step 11).
+dataset_version: sample-0.1.0
+queries:
+  - id: s01
+    language: en
+    query: what does response code 4094700 mean for QR generation
+    gold:
+      - { document_id: synthetic-qris-mpm-service-spec, section_id: 2.response-codes }
+    reviewed_by: test-fixture
+    reviewed_at: "2026-11-07"
+  - id: s02
+    language: id
+    query: urutan langkah diagnosis masalah integrasi QRIS
+    gold:
+      - { document_id: synthetic-qris-troubleshooting-sop, section_id: "2" }
+    reviewed_by: test-fixture
+    reviewed_at: "2026-11-07"

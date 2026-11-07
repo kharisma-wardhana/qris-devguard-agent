@@ -124,3 +124,32 @@ def test_search_cli_without_collection_is_one_line(tmp_path):
     result = run("search.py", "anything", *backend, env_extra=TEST_ENV)
     assert result.returncode == 1
     assert result.stderr.strip().startswith("error: collection") and "Traceback" not in result.stderr
+
+
+# --- eval_retrieval.py (step 8) ------------------------------------------------
+
+SAMPLE_GOLDEN = ROOT / "tests" / "fixtures" / "rag" / "golden_sample.yaml"
+
+
+def test_eval_cli_on_sample(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    result = run("eval_retrieval.py", "--golden", str(SAMPLE_GOLDEN), "--report-dir", str(tmp_path / "reports"),
+                 "--test-backends", "--qdrant-path", str(tmp_path / "qdrant"), env_extra=TEST_ENV)
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = {line.split()[0] for line in result.stdout.splitlines()}
+    assert {"hybrid", "dense", "sparse"} <= rows
+    assert "queries: 2" in result.stdout
+    report = next((tmp_path / "reports").glob("retrieval-*.json")).read_text(encoding="utf-8")
+    assert "first_hit_rank" in report and "X-TIMESTAMP" not in report
+
+
+def test_eval_cli_rejects_gold_section_missing_from_corpus(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(SAMPLE_GOLDEN.read_text(encoding="utf-8").replace("2.response-codes", "9.nowhere"), encoding="utf-8")
+    result = run("eval_retrieval.py", "--golden", str(bad), "--report-dir", str(tmp_path / "reports"),
+                 "--test-backends", "--qdrant-path", str(tmp_path / "qdrant"), env_extra=TEST_ENV)
+    assert result.returncode == 1
+    assert "gold sections not in the corpus: s01:synthetic-qris-mpm-service-spec#9.nowhere" in result.stderr
