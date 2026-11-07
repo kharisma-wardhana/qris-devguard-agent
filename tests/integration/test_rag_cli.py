@@ -32,3 +32,66 @@ def test_fetch_models_without_embed_stack_fails_with_one_line(tmp_path):
     assert result.returncode == 2
     assert result.stderr.strip() == "error: embedding stack not installed: run `uv sync --extra embed`"
     assert "Traceback" not in result.stderr
+
+
+# --- ingest.py (step 6) --------------------------------------------------------
+
+TEST_ENV = {"DEVGUARD_TEST_BACKENDS": "1"}
+
+
+def synthetic_corpus(tmp_path: Path) -> Path:
+    import shutil
+
+    import yaml
+
+    real = yaml.safe_load((ROOT / "knowledge_base" / "manifests" / "sources.yaml").read_text(encoding="utf-8"))
+    keep = [e for e in real["sources"] if e["document_id"].startswith("synthetic-qris-")]
+    syn = tmp_path / "knowledge_base" / "synthetic"
+    syn.mkdir(parents=True)
+    for e in keep:
+        shutil.copy(ROOT / e["local_path"], syn)
+    manifest = tmp_path / "sources.yaml"
+    manifest.write_text(yaml.safe_dump({"sources": keep}, allow_unicode=True), encoding="utf-8")
+    return manifest
+
+
+def ingest_args(tmp_path: Path, manifest: Path) -> list[str]:
+    return ["--manifest", str(manifest), "--root", str(tmp_path), "--report-dir", str(tmp_path / "reports"),
+            "--test-backends", "--qdrant-path", str(tmp_path / "qdrant")]
+
+
+def test_ingest_cli_with_test_backends(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    first = run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV)
+    assert first.returncode == 0, first.stdout + first.stderr
+    lines = [l for l in first.stdout.splitlines() if l.startswith(("ingested", "unchanged"))]
+    assert len(lines) == 2 and all(l.startswith("ingested") for l in lines)
+    assert "truncated=n/a" in first.stdout              # fake embedder has no tokenizer
+    second = run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV)
+    assert second.returncode == 0
+    assert sum(l.startswith("unchanged") for l in second.stdout.splitlines()) == 2
+    assert len(list((tmp_path / "reports").glob("ingest-*.json"))) >= 1
+
+
+def test_ingest_cli_refuses_test_backends_without_env(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    env = {"DEVGUARD_TEST_BACKENDS": ""}
+    result = run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=env)
+    assert result.returncode != 0
+    assert "for tests only" in result.stderr
+
+
+def test_ingest_cli_missing_manifest_is_one_line(tmp_path):
+    result = run("ingest.py", "--manifest", str(tmp_path / "absent.yaml"), env_extra=TEST_ENV)
+    assert result.returncode == 1
+    assert result.stderr.strip().startswith("error: manifest not found")
+    assert "Traceback" not in result.stderr
+
+
+def test_ingest_cli_missing_source_file_fails(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    next((tmp_path / "knowledge_base" / "synthetic").glob("*.md")).unlink()
+    result = run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV)
+    assert result.returncode == 1
+    assert "failed" in result.stdout and "file not found" in result.stdout
+    assert "Traceback" not in result.stderr
