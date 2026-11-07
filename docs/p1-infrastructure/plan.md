@@ -81,6 +81,7 @@ Not matched: UI (none) and accounts/roles (no application auth in P1; Langfuse's
   - Append to `## Test scope`: the database row.
   - No other section changes. I'll show the diff and wait for `approve write`.
 - **Hooks:** none added. Verified in Phase 0: `eval.sh` passes 4/4. The existing deploy gate already asks before `ssh` and `runpodctl`, so `scripts/tunnel.sh` and pod work will prompt you. That's intended.
+  - *Correction, 2026-11-07 (Phase 5):* the claim that `scripts/tunnel.sh` prompts was wrong. The hook sees only the command string, and the `ssh` call is inside the script. `deploy-gate.sh` now also asks before *running* `scripts/tunnel.sh` or `bootstrap_vllm.sh`, but not before reading them, and `eval.sh` has a pair for it.
 - **`.claude/settings.json`:** unchanged. The `.env` read deny already covers the new secrets.
 - **CI:** no new job. `ci.yml` runs the new tests, and `agent-config-eval` is verified present, exactly once.
 - **Subagents:** none.

@@ -46,6 +46,11 @@ acts  "deploy-gate asks on bad input"   .claude/hooks/deploy-gate.sh \
       'not json'
 quiet "deploy-gate allows tests"        .claude/hooks/deploy-gate.sh \
       '{"tool_input":{"command":"uv run pytest"}}'
+acts  "deploy-gate asks on tunnel.sh"   .claude/hooks/deploy-gate.sh \
+      '"permissionDecision":"ask"' \
+      '{"tool_input":{"command":"bash scripts/tunnel.sh"}}'
+quiet "deploy-gate allows reading tunnel.sh" .claude/hooks/deploy-gate.sh \
+      '{"tool_input":{"command":"cat scripts/tunnel.sh"}}'
 
 if [ -f .claude/monitoring/control_band.py ]; then
   ran=$((ran + 1))
