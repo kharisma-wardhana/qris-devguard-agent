@@ -28,6 +28,8 @@ chunking:
 sparse:                               # project BM25 encoder; Qdrant applies IDF
   k1: 1.2
   b: 0.75
+  avg_doc_len: 300                    # terms per chunk; fixed so re-ingesting one document doesn't
+                                      # shift others' weights. Each ingest run records the measured average.
 
 search:
   dense_prefetch: 30                  # TRD §12.3: 20-30 candidates
