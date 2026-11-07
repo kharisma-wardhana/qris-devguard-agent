@@ -11,4 +11,4 @@
 - [x] 7. Bring-up fixes — spec AC: #5, #6
 - [x] 8. Local stack bring-up — spec AC: #1
 - [ ] 9. Live GPU run (user) — spec AC: #11
-- [ ] 10. CLAUDE.md merge — agent configuration
+- [x] 10. CLAUDE.md merge — agent configuration
