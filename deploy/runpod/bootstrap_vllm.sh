@@ -27,6 +27,7 @@ MIN_DRIVER_MAJOR="580"
 VENV="${VLLM_VENV:-/root/vllm-venv}"
 LOG="${VLLM_LOG:-/root/vllm.log}"
 READY_TIMEOUT_S="${VLLM_READY_TIMEOUT_S:-900}"
+POLL_S="${VLLM_POLL_S:-10}"
 
 die () { echo "bootstrap: ERROR: $*" >&2; exit 1; }
 say () { echo "bootstrap: $*"; }
@@ -69,17 +70,34 @@ command -v uv >/dev/null 2>&1 || python3 -m pip install --quiet --upgrade uv
 say "installing vllm==${VLLM_VERSION} (a few minutes)"
 VIRTUAL_ENV="$VENV" uv pip install --quiet "vllm==${VLLM_VERSION}" --torch-backend=auto
 
+# FlashInfer JIT-compiles kernels on first use and needs ninja on PATH
+# (first live run died with FileNotFoundError: 'ninja').
+export PATH="${VENV}/bin:${PATH}"
+command -v ninja >/dev/null 2>&1 || VIRTUAL_ENV="$VENV" uv pip install --quiet ninja
+command -v ninja >/dev/null 2>&1 || die "ninja not found in ${VENV}/bin after install."
+
 # 3. Serve. vLLM reads VLLM_API_KEY from the environment; weights download on first start.
 say "starting vLLM on ${HOST}:${PORT}; log: ${LOG}"
 nohup "${VENV}/bin/vllm" "${SERVE_ARGS[@]}" >"$LOG" 2>&1 &
 pid=$!
 
-# 4. Wait until healthy, or fail with the log tail.
+# 4. Wait until healthy, or fail showing the root cause.
+# The last lines of the log are only the API server's own traceback; the
+# engine's real error is the first ERROR block, so print from there.
+show_log () {
+  first="$(grep -n -m1 'ERROR' "$LOG" 2>/dev/null | cut -d: -f1 || true)"
+  if [ -n "$first" ]; then
+    echo "bootstrap: log from the first ERROR line (${LOG}:${first}):" >&2
+    sed -n "${first},$((first + 100))p" "$LOG" | grep -v '^[[:space:]]*\^' >&2
+  fi
+  echo "bootstrap: last 20 lines of ${LOG}:" >&2
+  tail -n 20 "$LOG" >&2
+}
 waited=0
 until curl -fsS "http://${HOST}:${PORT}/health" >/dev/null 2>&1; do
-  kill -0 "$pid" 2>/dev/null || { tail -n 40 "$LOG" >&2; die "vLLM exited during startup."; }
-  [ "$waited" -ge "$READY_TIMEOUT_S" ] && { tail -n 40 "$LOG" >&2; die "vLLM not healthy after ${READY_TIMEOUT_S}s."; }
-  sleep 10; waited=$((waited + 10))
+  kill -0 "$pid" 2>/dev/null || { show_log; die "vLLM exited during startup."; }
+  [ "$waited" -ge "$READY_TIMEOUT_S" ] && { show_log; die "vLLM not healthy after ${READY_TIMEOUT_S}s."; }
+  sleep "$POLL_S"; waited=$((waited + POLL_S))
 done
 say "vLLM ready after ~${waited}s (pid ${pid})"
 nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total --format=csv

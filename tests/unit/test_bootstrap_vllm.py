@@ -130,3 +130,61 @@ def test_no_secret_values_in_script():
     text = SCRIPT.read_text(encoding="utf-8")
     assert not re.search(r"(sk-|hf_)[A-Za-z0-9]{10,}", text)
     assert "VLLM_API_KEY=" not in text.replace('"${VLLM_API_KEY:-}"', "")
+
+
+# --- step 11: fixes from the first live run ---------------------------------
+
+def _stub(path: Path, body: str) -> None:
+    path.write_text("#!/usr/bin/env bash\n" + body + "\n", encoding="utf-8", newline="\n")
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+
+def bash_path(path: Path) -> str:
+    """Path as bash sees it; on Windows (Git Bash) 'C:/x' must be '/c/x' or it breaks PATH at the colon."""
+    posix = path.as_posix()
+    if os.name == "nt" and len(posix) > 1 and posix[1] == ":":
+        return "/" + posix[0].lower() + posix[2:]
+    return posix
+
+
+def run_full(tmp_path, vllm_body: str):
+    """Run the real (non-dry) script with stubbed nvidia-smi, uv, curl, and a stub venv."""
+    bindir = make_stub_nvidia_smi(tmp_path, "595.91.07")
+    venv = tmp_path / "venv"
+    (venv / "bin").mkdir(parents=True)
+    _stub(venv / "bin" / "python", "exit 0")
+    _stub(venv / "bin" / "ninja", "exit 0")
+    _stub(venv / "bin" / "vllm", vllm_body)
+    _stub(bindir / "uv", "exit 0")
+    _stub(bindir / "curl", f'[ -f "{venv.as_posix()}/healthy" ]')
+    # ninja must be reachable ONLY through the venv, as on the pod.
+    path = os.pathsep.join(p for p in os.environ["PATH"].split(os.pathsep) if not (Path(p) / "ninja").exists()
+                           and not (Path(p) / "ninja.exe").exists())
+    env = {**os.environ, "PATH": str(bindir) + os.pathsep + path, "VLLM_API_KEY": SENTINEL_KEY,
+           "VLLM_VENV": bash_path(venv), "VLLM_LOG": (tmp_path / "vllm.log").as_posix(),
+           "VLLM_POLL_S": "1", "VLLM_READY_TIMEOUT_S": "20"}
+    env.pop("BOOTSTRAP_DRY_RUN", None)
+    return subprocess.run([BASH, str(SCRIPT)], env=env, capture_output=True, text=True, encoding="utf-8",
+                          timeout=60), venv
+
+
+def test_vllm_finds_ninja_from_venv(tmp_path):
+    """Regression: the live start died with FileNotFoundError 'ninja' (FlashInfer JIT)."""
+    marker = (tmp_path / "venv" / "healthy").as_posix()
+    body = ('command -v ninja >/dev/null || { echo "ERROR FileNotFoundError: ninja"; exit 1; }\n'
+            f'touch "{marker}"; sleep 3')
+    result, _ = run_full(tmp_path, body)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "vLLM ready" in result.stdout
+
+
+def test_failed_start_prints_first_error_block(tmp_path):
+    body = ('for i in 1 2 3; do echo "INFO loading $i"; done\n'
+            'echo "ERROR root-cause-marker: something broke"\n'
+            'for i in $(seq 1 60); do echo "noise line $i"; done\n'
+            'exit 1')
+    result, _ = run_full(tmp_path, body)
+    assert result.returncode != 0
+    assert "root-cause-marker" in result.stderr
+    assert "vLLM exited during startup" in result.stderr
+    assert SENTINEL_KEY not in result.stdout + result.stderr

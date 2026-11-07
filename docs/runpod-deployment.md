@@ -104,23 +104,26 @@ The measured startup time from the first live run is recorded below.
 
 ## Measured values (P1 live run)
 
-*To be filled from the first successful run (`docs/p1-infrastructure` spec AC #11).*
+*From the first successful run, 2026-11-07 (`docs/p1-infrastructure` spec AC #11).*
 
 | Item | Value |
 |---|---|
-| Date | — |
-| GPU / host driver / CUDA | — |
+| Date | 2026-11-07 |
+| GPU / host driver / CUDA | **NVIDIA RTX A5000** (24 GB, Ampere), not the planned RTX PRO 4000 / 595.91.07 / CUDA not captured |
 | vLLM version | 0.32.0 |
 | Model / revision | Qwen/Qwen3-8B-FP8 @ `220b46e` |
 | Max model len / GPU memory utilization | 16384 / 0.90 |
-| Startup time (bootstrap start → healthy) | — |
-| GPU memory used after load | — |
-| Health check | — |
-| vllm_chat time-to-first-token / total | — |
-| Session cost (RunPod billing) | — |
+| Startup time (bootstrap start → healthy) | about 110 s on the retry, with vLLM installed and weights cached. The from-scratch time wasn't captured, because the first start failed (see Troubleshooting, `ninja`) |
+| GPU memory used after load | 21,735 MiB of 24,564 MiB |
+| Health check | 7/7 PASS |
+| vllm_chat time-to-first-token / total | 693.7 ms / 693.9 ms |
+| Session cost (RunPod billing) | *pending: read from RunPod billing* |
+
+**GPU note:** the A5000 has no native FP8, so vLLM ran the FP8 checkpoint through a fallback kernel. It served correctly, but the A5000's latency and price per hour aren't the RTX PRO 4000 figures this runbook's cost table assumes. Pick the GPU deliberately for P9 benchmarks, and record which one ran.
 
 ## Troubleshooting
 
+- **`FileNotFoundError: [Errno 2] No such file or directory: 'ninja'`, then `Engine core initialization failed`:** FlashInfer compiles its sampler on first use and needs `ninja` on `PATH`. Fixed in the bootstrap script (P1 step 11), which now puts the venv's `bin/` on `PATH`. With an older copy of the script, run `export PATH=/root/vllm-venv/bin:$PATH` and rerun it. On a failed start the script now prints the log from the first `ERROR` line, which is where the real cause is.
 - **`langfuse_trace` FAIL with HTTP 401:** the project keys didn't match. Langfuse's headless init only runs on the first start, so if you regenerated `.env` after that, run `podman compose down -v`, then `up -d`. This deletes local data.
 - **ClickHouse restarting or OOM-killed:** raise the Podman VM memory. Set `memory=24GB` in `%UserProfile%\.wslconfig`, then run `wsl --shutdown`.
 - **Tunnel says "address already in use":** something on your machine already uses port 8080. Stop it, or change the port in `configs/model.yaml`, `scripts/tunnel.sh`, `deploy/runpod/bootstrap_vllm.sh` and `.env` together. The tests check that they agree.
