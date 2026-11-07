@@ -45,6 +45,7 @@
    - I run this locally, after asking first, because it pulls about 3 GB of images.
 9. **Live GPU run (user).** You create the pod, bootstrap, tunnel and run the health check, then terminate the pod. I record the measured values in `docs/runpod-deployment.md`. Spec AC #11.
 10. **`CLAUDE.md` merge.** Appends to `## Commands` and `## Test scope`. Agent configuration.
+11. **Bootstrap fixes from the live run** (added 2026-11-07, after the first live start failed with `FileNotFoundError: 'ninja'` while FlashInfer JIT-compiled its sampler). Files: `deploy/runpod/bootstrap_vllm.sh`, `tests/unit/test_bootstrap_vllm.py`, `docs/runpod-deployment.md`. The script puts the venv's `bin/` on `PATH` and makes sure `ninja` is there before serving. On a failed start it prints the log from the first `ERROR` line, not only the last 40 lines (the 40-line tail hid the cause). Spec AC #10, #11.
 
 ## Test coverage
 
@@ -69,6 +70,7 @@ Not matched: UI (none) and accounts/roles (no application auth in P1; Langfuse's
 - **Step 5:** `scripts/tunnel.sh` passes `bash -n`, and its tunnel target is `127.0.0.1:8080`. That's a unit check in `tests/unit/test_bootstrap_vllm.py`'s companion section. The runbook is checked at Phase 4 against AC #12.
 - **Step 7:** unit tests: the OTLP request shape and basic auth (replacing the ingestion-endpoint test, whose behaviour the spec no longer requires); no `${REDIS_AUTH` on any `command:` or `healthcheck:`; every local URL in `.env.example` uses `127.0.0.1`. Regression: all other tests unchanged.
 - **Step 6:** unit tests in `tests/unit/test_compose.py` for the caps and for the absence of `mem_limit`. The earlier memory-limit test is replaced, not kept, because the spec criterion it checked changed.
+- **Step 11:** stubbed-run tests: with `ninja` only in the venv's `bin/`, a stub `vllm` that needs `ninja` on `PATH` starts and the script reports ready (regression for the live failure); a stub `vllm` that logs an early `ERROR` line followed by 60 lines of noise and exits makes the script print that `ERROR` line. The poll interval becomes `VLLM_POLL_S` (default 10) so these tests run in seconds. Regression: all existing bootstrap tests unchanged.
 - **Steps 8–9:** pasted output from real runs. These are the evidence for AC #1 and #11.
 - **Step 10:** covered by the existing `agent-config-eval` workflow.
 
