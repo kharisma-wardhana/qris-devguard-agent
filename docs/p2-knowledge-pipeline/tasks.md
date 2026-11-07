@@ -10,7 +10,7 @@
 - [x] 6. Store and ingestion pipeline — spec AC: #1, #3, #4, #10
 - [x] 7. Hybrid search and citation validator — spec AC: #6, #7, #8, #9, #10
 - [x] 8. Retrieval metrics and eval CLI — spec AC: #11, #13
-- [ ] 9. Threat model and steering docs — spec flagged concerns
+- [x] 9. Threat model and steering docs — spec flagged concerns
 - [ ] 10. Real corpus (you, then me) — spec AC: #12, #14
 - [ ] 11. The 30-query retrieval set — spec AC: #11
 - [ ] 12. Measured retrieval report — spec AC: #13
