@@ -6,7 +6,7 @@
 - [x] 2. Manifest selection and file checks — spec AC: #1
 - [x] 3. Extraction and chunking — spec AC: #2, #4
 - [x] 4. Sparse BM25 encoder — spec AC: #5
-- [ ] 5. Embedders and model fetch — spec AC: #15
+- [x] 5. Embedders and model fetch — spec AC: #15
 - [ ] 6. Store and ingestion pipeline — spec AC: #1, #3, #4, #10
 - [ ] 7. Hybrid search and citation validator — spec AC: #6, #7, #8, #9, #10
 - [ ] 8. Retrieval metrics and eval CLI — spec AC: #11, #13

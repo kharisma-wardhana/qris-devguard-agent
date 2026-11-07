@@ -24,7 +24,7 @@
 - `scripts/fetch_models.py`: new. Downloads the pinned BGE-M3 using `truststore`.
 - `scripts/ingest.py`, `scripts/search.py`, `scripts/eval_retrieval.py`: new CLIs.
 - `evals/datasets/retrieval_golden.yaml`: new. The 30 labelled queries.
-- `tests/unit/test_rag_config.py`, `test_rag_manifest.py`, `test_rag_chunking.py`, `test_rag_sparse.py`, `test_rag_store_ingest.py`, `test_rag_search.py`, `test_rag_citations.py`, `test_rag_metrics.py`, `test_retrieval_golden.py`, `test_licence_hygiene.py`: new.
+- `tests/unit/test_rag_config.py`, `test_rag_manifest.py`, `test_rag_chunking.py`, `test_rag_sparse.py`, `test_rag_embedding.py` (step 5; added during the build), `test_rag_store_ingest.py`, `test_rag_search.py`, `test_rag_citations.py`, `test_rag_metrics.py`, `test_retrieval_golden.py`, `test_licence_hygiene.py`: new.
 - `tests/fixtures/rag/`: new. Small synthetic Markdown inputs, including two versions of one document for the conflict test.
 - `tests/integration/test_rag_cli.py`: new. Runs `ingest.py`, `search.py`, `eval_retrieval.py` and `fetch_models.py` as subprocesses.
 - `knowledge_base/manifests/sources.yaml`: edit. Fills in `checksum_sha256` for the 4 ingested sources, and corrects a cover version or date only if you find a mismatch (with evidence).
@@ -42,7 +42,7 @@
 2. **Manifest selection and file checks.** `app/rag/manifest.py`, `tests/unit/test_rag_manifest.py`. Spec AC #1.
 3. **Extraction and chunking.** `app/rag/extract.py`, `app/rag/chunking.py`, `tests/unit/test_rag_chunking.py`, `tests/fixtures/rag/`. Spec AC #2 and the chunk part of #4.
 4. **Sparse BM25 encoder.** `app/rag/sparse.py`, `tests/unit/test_rag_sparse.py`. Spec AC #5.
-5. **Embedders and model fetch.** `app/rag/embedding.py`, `scripts/fetch_models.py`, and the `fetch_models` part of `tests/integration/test_rag_cli.py`. Spec AC #15. The real fetch runs in step 10.
+5. **Embedders and model fetch.** `app/rag/embedding.py`, `scripts/fetch_models.py`, `tests/unit/test_rag_embedding.py`, and the `fetch_models` part of `tests/integration/test_rag_cli.py`. Spec AC #15. The real fetch runs in step 10.
 6. **Store and ingestion pipeline.** `app/rag/store.py`, `app/rag/ingest.py`, `scripts/ingest.py`, `tests/unit/test_rag_store_ingest.py`, and the `ingest` part of `tests/integration/test_rag_cli.py`. Spec AC #1, #3, #4, #10.
 7. **Hybrid search and citation validator.** `app/rag/search.py`, `app/rag/citations.py`, `scripts/search.py`, `tests/unit/test_rag_search.py`, `tests/unit/test_rag_citations.py`, and the `search` part of `tests/integration/test_rag_cli.py`. Spec AC #6, #7, #8, #9, #10.
 8. **Retrieval metrics and eval CLI.** `app/rag/metrics.py`, `scripts/eval_retrieval.py`, `tests/unit/test_rag_metrics.py`, `tests/unit/test_retrieval_golden.py` (schema check, run against a 2-query sample until step 11), and the `eval_retrieval` part of `tests/integration/test_rag_cli.py`. Spec AC #11 (schema) and #13 (harness).
