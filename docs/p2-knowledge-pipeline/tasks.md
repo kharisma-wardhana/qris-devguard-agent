@@ -13,5 +13,5 @@
 - [x] 9. Threat model and steering docs — spec flagged concerns
 - [x] 10. Real corpus (you, then me) — spec AC: #12, #14
 - [x] 11. The 30-query retrieval set — spec AC: #11
-- [ ] 12. Measured retrieval report — spec AC: #13
+- [x] 12. Measured retrieval report — spec AC: #13
 - [ ] 13. CLAUDE.md merge — agent configuration
