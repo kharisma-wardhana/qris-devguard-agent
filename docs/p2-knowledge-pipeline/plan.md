@@ -67,7 +67,7 @@
     3. `reviewed_by` and `reviewed_at` are filled in **only for entries you approved**.
 
     Spec AC #11.
-12. **Measured retrieval report.** Run `scripts/eval_retrieval.py` on the real corpus, paste the output, and write `docs/p2-knowledge-pipeline/retrieval-report.md`. Spec AC #13.
+12. **Measured retrieval report.** Run `scripts/eval_retrieval.py` on the real corpus, paste the output, and write `docs/p2-knowledge-pipeline/retrieval-report.md`. Spec AC #13. *Found at commit:* P1's IP-literal hygiene test flagged a four-part section ID (the data spec's Virtual Account section) in the retrieval set as an IPv4 address. Fix: `tests/unit/test_repo_hygiene.py` skips a quoted `section_id` value, with a regression test that real IPs are still caught. Step 12's box was first ticked in a commit (`169e0e2`) where this test failed; the fix lands in the next commit.
 13. **`CLAUDE.md` merge.** Agent configuration, below.
 
 **Parallel work:** steps 2, 3 and 4 have no dependency on each other and share no files, so they could run in separate git worktrees. Given the size, I'll do them in sequence in this session unless you ask for worktrees.
