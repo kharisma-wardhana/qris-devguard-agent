@@ -27,6 +27,11 @@ uv run python scripts/init_env.py                        # create .env with rand
 podman compose up -d                                     # local PostgreSQL, Qdrant, Langfuse
 bash scripts/tunnel.sh                                   # SSH tunnel to the RunPod vLLM on 127.0.0.1:8080
 uv run python scripts/healthcheck.py                     # 7 PASS/FAIL checks; appends to evals/reports/healthcheck.jsonl
+uv sync --extra embed                                    # once: CPU embedding stack (torch, sentence-transformers)
+uv run python scripts/fetch_models.py                    # once: pinned BGE-M3 into the HF cache (truststore TLS)
+uv run python scripts/ingest.py                          # approved sources -> Qdrant; unchanged checksum+config = skipped
+uv run python scripts/search.py "<query>"                # hybrid search; results are untrusted data
+uv run python scripts/eval_retrieval.py                  # Recall@5/10/20, MRR@10 on evals/datasets/retrieval_golden.yaml
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -99,6 +104,7 @@ All documentation lives under `docs/`, and `docs/index.md` is the table of conte
 - Scripts and CLI entry points: add an integration test that runs the real entry point as a subprocess (`tests/integration/`), in addition to unit tests.
 - Changes to existing behaviour: add a regression test, and keep the existing tests passing unchanged.
 - Database (PostgreSQL): add a regression test whenever a step changes the schema or an existing query or behaviour around stored data.
+- Qdrant collection config or payload fields: add a regression test when either changes (`tests/unit/test_rag_store_ingest.py` pins them).
 
 Run `uv run pytest` before reporting a task complete, and paste the output.
 
@@ -106,4 +112,5 @@ Run `uv run pytest` before reporting a task complete, and paste the output.
 Nothing is implemented without an accepted plan. Each feature follows `intent.md` → `spec.md` → `plan.md` (+ `tasks.md`) in `docs/<feature-name>/`, each committed before the next starts.
 
 ## Common mistakes
-- None recorded yet.
+- Piping `uv run pytest | tail` hides pytest's exit code, so a red suite can be committed. Gate on pytest itself, or use `set -o pipefail`.
+- `tests/unit/test_repo_hygiene.py` flags any IPv4-shaped string in tracked files, including four-part section numbers written in docs. Only a quoted `section_id: "…"` value is exempt.

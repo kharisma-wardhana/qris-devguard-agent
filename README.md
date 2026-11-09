@@ -11,7 +11,7 @@ A self-hosted agentic assistant for diagnosing **sandbox** QRIS/SNAP API integra
 
 ## Status
 
-Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is in progress: see `docs/p1-infrastructure/`.
+Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is complete: 7/7 health checks passed on 2026-11-07 (`docs/p1-infrastructure/`). Phase P2 (knowledge pipeline) is in progress: see `docs/p2-knowledge-pipeline/`.
 
 ## Development
 
@@ -23,3 +23,15 @@ uv run python scripts/init_env.py         # once: create .env with random secret
 podman compose up -d                      # local PostgreSQL, Qdrant, Langfuse
 uv run python scripts/healthcheck.py      # PASS/FAIL per service
 ```
+
+## Knowledge pipeline (P2)
+
+```bash
+uv sync --extra embed                                  # once: CPU embedding stack (torch, sentence-transformers)
+uv run python scripts/fetch_models.py                  # once: pinned BGE-M3 weights (~2.3 GB) into the HF cache
+uv run python scripts/ingest.py                        # approved sources -> Qdrant (re-runs skip unchanged files)
+uv run python scripts/search.py "X-SIGNATURE tidak valid"
+uv run python scripts/eval_retrieval.py                # Recall@5/10/20, MRR@10: dense, sparse, hybrid
+```
+
+The two ASPI PDFs are reference-only: put them at the `local_path`s in `knowledge_base/manifests/sources.yaml`. They are git-ignored and never committed.
