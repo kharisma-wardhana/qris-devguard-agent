@@ -2,7 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Build. Written: 2026-11-09. Via /aspec:make-it-simple-v2.*
 *Implements: docs/p3-reranking-eval/plan.md*
 
-- [ ] 1. Draft hard queries for review; start reranker download — spec AC: #5
+- [x] 1. Draft hard queries for review; start reranker download — spec AC: #5
 - [ ] 2. Reranker module and config — spec AC: #1, #2, #3
 - [ ] 3. Ranking metrics and golden-set schema — spec AC: #4, #5
 - [ ] 4. Model fetch for both models — spec AC: #8
