@@ -163,3 +163,26 @@ def test_eval_cli_rejects_gold_section_missing_from_corpus(tmp_path):
                  "--test-backends", "--qdrant-path", str(tmp_path / "qdrant"), env_extra=TEST_ENV)
     assert result.returncode == 1
     assert "gold sections not in the corpus: s01:synthetic-qris-mpm-service-spec#9.nowhere" in result.stderr
+
+
+# --- search.py --rerank (p3 step 5) ------------------------------------------
+
+def test_search_cli_rerank_shows_both_ranks(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    backend = ["--test-backends", "--qdrant-path", str(tmp_path / "qdrant")]
+    result = run("search.py", "X-SIGNATURE HMAC_SHA512 minify body", "--rerank", "--limit", "5", *backend,
+                 env_extra=TEST_ENV)
+    assert result.returncode == 0, result.stderr
+    rows = [l for l in result.stdout.splitlines() if "(fused" in l]
+    assert len(rows) == 5
+    assert [int(l.split()[0]) for l in rows] == [1, 2, 3, 4, 5]
+    assert result.stdout.strip().splitlines()[-1].startswith("reranked 20 candidates in")   # 28 chunks -> pool of 20
+
+
+def test_search_cli_rerank_without_collection_is_one_line(tmp_path):
+    backend = ["--test-backends", "--qdrant-path", str(tmp_path / "empty")]
+    result = run("search.py", "anything", "--rerank", *backend, env_extra=TEST_ENV)
+    assert result.returncode == 1
+    assert result.stderr.strip().startswith("error: collection") and "Traceback" not in result.stderr
+

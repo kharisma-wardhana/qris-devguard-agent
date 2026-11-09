@@ -39,6 +39,17 @@ def backends(args):
     return Store(make_client()), BgeM3Embedder()
 
 
+def make_reranker(args):
+    """Reranker for real or test mode (p3). Built only when asked for: the cross-encoder takes ~30 s to load."""
+    from app.rag.rerank import CrossEncoderReranker, FakeReranker
+
+    if args.test_backends:
+        if os.environ.get("DEVGUARD_TEST_BACKENDS") != "1":
+            raise SystemExit("error: --test-backends is for tests only (set DEVGUARD_TEST_BACKENDS=1)")
+        return FakeReranker()
+    return CrossEncoderReranker()
+
+
 def add_backend_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--test-backends", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--qdrant-path", help=argparse.SUPPRESS)

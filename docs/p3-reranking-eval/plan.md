@@ -11,7 +11,7 @@
 - `app/rag/metrics.py`: edit. Adds `ndcg_at_k`, deduplication by section for ranking metrics, and the optional `set` field with the new completeness rules.
 - `scripts/fetch_models.py`: edit. Fetches the embedding model and the reranker, each with its own file patterns.
 - `scripts/search.py`: edit. Adds a `--rerank` flag.
-- `scripts/ingest.py`: edit. `backends()` also returns a reranker (the fake one in test mode). It is shared by `search.py` and `eval_retrieval.py`.
+- `scripts/ingest.py`: edit. A new `make_reranker(args)` next to `backends()`, so the cross-encoder (about 30 s to load) is built only when `--rerank` or the eval asks for it, not inside `backends()`. It returns the fake reranker in test mode and is shared by `search.py` and `eval_retrieval.py`. *Changed during the build, step 5.*
 - `scripts/eval_retrieval.py`: edit. Adds the before/after table, the subset split, latency and the cut-off count.
 - `evals/datasets/retrieval_golden.yaml`: edit. Version 0.2.0, with the reviewed hard entries appended. The original 30 are unchanged.
 - `tests/unit/test_rag_rerank.py`: new.

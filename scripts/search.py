@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from ingest import add_backend_args, backends  # noqa: E402
+from ingest import add_backend_args, backends, make_reranker  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,6 +27,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("hybrid", "dense", "sparse"), default="hybrid")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--json", action="store_true", help="print one JSON object per result")
+    parser.add_argument("--rerank", action="store_true",
+                        help="rerank the hybrid top candidates with the cross-encoder (p3)")
     add_backend_args(parser)
     args = parser.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")       # Windows consoles default to cp1252
@@ -39,7 +41,17 @@ def main(argv: list[str] | None = None) -> int:
         if not store.client.collection_exists(store.collection):
             print(f"error: collection {store.collection} not found: run scripts/ingest.py first", file=sys.stderr)
             return 1
-        run = search(store, embedder, args.query, mode=args.mode, limit=args.limit)
+        if args.rerank:
+            from app.rag import config
+            from app.rag.rerank import rerank
+
+            reranker = make_reranker(args)
+            pool = search(store, embedder, args.query, mode="hybrid",
+                          limit=config.retrieval()["rerank"]["candidates"])
+            run, stats = rerank(pool, reranker)
+            run.results = run.results[:args.limit] if args.limit else run.results
+        else:
+            run = search(store, embedder, args.query, mode=args.mode, limit=args.limit)
     except EmbedStackMissing as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -55,10 +67,16 @@ def main(argv: list[str] | None = None) -> int:
         else:
             page = f"p.{r.page}" if r.page is not None else "-"
             snippet = r.quote_or_excerpt.replace("\n", " ")[:110]
-            print(f"{r.rank:>2} {r.citation_id} {r.score:.4f} {r.document_id} v{r.document_version} "
-                  f"§{r.section_id} {page} | {snippet}")
+            if args.rerank:      # fused rank = the number in the run's citation ID
+                print(f"{r.rank:>2} (fused {int(r.citation_id[4:]):>2}) {r.citation_id} {r.rerank_score:+.4f} "
+                      f"{r.document_id} v{r.document_version} §{r.section_id} {page} | {snippet}")
+            else:
+                print(f"{r.rank:>2} {r.citation_id} {r.score:.4f} {r.document_id} v{r.document_version} "
+                      f"§{r.section_id} {page} | {snippet}")
     if not run.results:
         print("no results")
+    elif args.rerank and not args.json:
+        print(f"reranked {stats.pairs} candidates in {stats.seconds:.2f} s")
     return 0
 
 
