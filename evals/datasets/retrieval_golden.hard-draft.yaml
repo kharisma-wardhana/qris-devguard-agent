@@ -1,0 +1,124 @@
+# DRAFT hard queries for review (p3-reranking-eval plan step 1). Not part of the golden set until reviewed.
+# Hardness rules: phrased as a symptom or goal; no section numbers; at most one content word
+# from the gold section's title. Team-written paraphrases; no ASPI text copied.
+# Approved entries move into evals/datasets/retrieval_golden.yaml with set: hard (plan step 7).
+# Drafted by Claude, 2026-11-09.
+queries:
+  # --- snap-technical-security-standard (7) ---
+  - id: h01
+    set: hard
+    language: id
+    query: Request token kami selalu ditolak karena tanda tangan tidak valid, padahal private key sudah benar. Apa yang perlu dicek di string yang ditandatangani?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.5" }]
+  - id: h02
+    set: hard
+    language: en
+    query: My HMAC signature for a payment call never matches the server's. How should the body be prepared before hashing?
+    gold:
+      - { document_id: snap-technical-security-standard, section_id: "2.1.6#1" }
+      - { document_id: snap-technical-security-standard, section_id: "2.1.6#2" }
+  - id: h03
+    set: hard
+    language: id
+    query: Server bilang waktu request tidak sesuai format, padahal kami kirim jam lokal tanpa offset.
+    gold:
+      - { document_id: snap-technical-security-standard, section_id: "2.1.5" }
+      - { document_id: snap-technical-security-standard, section_id: "2.1.6#2" }
+  - id: h04
+    set: hard
+    language: en
+    query: Our partner wants us to connect over an older TLS protocol version. Is that allowed?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.10" }]
+  - id: h05
+    set: hard
+    language: id
+    query: Kunci publik kami sudah kedaluwarsa, bagaimana prosedur mengirim kunci yang baru ke bank?
+    gold:
+      - { document_id: snap-technical-security-standard, section_id: "1.7.1" }
+      - { document_id: snap-technical-security-standard, section_id: "1.7.2" }
+  - id: h06
+    set: hard
+    language: en
+    query: Is it acceptable to keep our signing keys in a plain config file on the application server?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "1.8" }]
+  - id: h07
+    set: hard
+    language: id
+    query: Apakah boleh memanggil endpoint SNAP dengan DELETE?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.4" }]
+  # --- snap-data-technical-spec (7) ---
+  - id: h08
+    set: hard
+    language: en
+    query: A customer scanned the merchant's QR and paid, but our system was never told about the payment.
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.3.5" }]
+  - id: h09
+    set: hard
+    language: id
+    query: QR yang kami buat tidak bisa dibayar pelanggan. Field apa saja yang wajib saat membuat QR dinamis?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.3.5" }]
+  - id: h10
+    set: hard
+    language: en
+    query: We got HTTP 409 back on a payment request. What does it mean?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "6.1" }]
+  - id: h11
+    set: hard
+    language: id
+    query: Kode respons yang diawali 401 terus muncul saat memanggil API, maksudnya apa?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "6.1" }]
+  - id: h12
+    set: hard
+    language: en
+    query: A transfer to another bank timed out and we don't know whether the money moved.
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.2.3" }]
+  - id: h13
+    set: hard
+    language: id
+    query: Pelanggan ingin bayar dengan menunjukkan QR dari aplikasinya di kasir. API mana yang dipakai?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "5.2.2" }]
+  - id: h14
+    set: hard
+    language: en
+    query: How can we show customers how much they still owe on their VA before they pay?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.2.2.7" }]
+  # --- synthetic-qris-mpm-service-spec (3) ---
+  - id: h15
+    set: hard
+    language: en
+    query: Our test QR generation keeps returning a conflict. What did we do wrong?
+    gold:
+      - { document_id: synthetic-qris-mpm-service-spec, section_id: 2.response-codes }
+      - { document_id: snap-data-technical-spec, section_id: "6.1" }
+  - id: h16
+    set: hard
+    language: id
+    query: Di lingkungan uji, bagaimana menulis waktu request yang benar beserta zona waktunya?
+    gold: [{ document_id: synthetic-qris-mpm-service-spec, section_id: "1.3" }]
+  - id: h17
+    set: hard
+    language: en
+    query: Checking a payment status in the sandbox fails with an authorization error. What must the request carry?
+    gold:
+      - { document_id: synthetic-qris-mpm-service-spec, section_id: 3.required-headers }
+      - { document_id: synthetic-qris-mpm-service-spec, section_id: "1.2" }
+  # --- synthetic-qris-troubleshooting-sop (3) ---
+  - id: h18
+    set: hard
+    language: id
+    query: Jawaban diagnosis harus berisi apa saja supaya bisa diperiksa ulang oleh reviewer?
+    gold: [{ document_id: synthetic-qris-troubleshooting-sop, section_id: "5" }]
+  - id: h19
+    set: hard
+    language: en
+    query: The amount keeps getting rejected even though the number looks right to us.
+    gold:
+      - { document_id: synthetic-qris-troubleshooting-sop, section_id: "3.3" }
+      - { document_id: synthetic-qris-mpm-service-spec, section_id: 2.request-fields }
+  - id: h20
+    set: hard
+    language: id
+    query: Status transaksi di sistem kami berbeda dengan di provider dan dokumen tidak menjelaskan urutannya, apa yang harus dilakukan?
+    gold:
+      - { document_id: synthetic-qris-troubleshooting-sop, section_id: "3.5" }
+      - { document_id: synthetic-qris-troubleshooting-sop, section_id: "4" }
