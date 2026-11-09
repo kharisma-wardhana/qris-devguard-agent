@@ -9,6 +9,6 @@
 - [x] 5. search.py --rerank — spec AC: #7
 - [x] 6. Before/after eval (subset fixture is a new file, see plan) — spec AC: #6
 - [x] 7. Merge the reviewed hard queries — spec AC: #5
-- [ ] 8. Threat model and steering docs — spec flagged concerns
+- [x] 8. Threat model and steering docs — spec flagged concerns
 - [ ] 9. Real measurements and report — spec AC: #9, #10
 - [ ] 10. CLAUDE.md merge — agent configuration

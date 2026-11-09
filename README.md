@@ -28,10 +28,11 @@ uv run python scripts/healthcheck.py      # PASS/FAIL per service
 
 ```bash
 uv sync --extra embed                                  # once: CPU embedding stack (torch, sentence-transformers)
-uv run python scripts/fetch_models.py                  # once: pinned BGE-M3 weights (~2.3 GB) into the HF cache
+uv run python scripts/fetch_models.py                  # once: pinned BGE-M3 and reranker weights (~2.3 GB each) into the HF cache
 uv run python scripts/ingest.py                        # approved sources -> Qdrant (re-runs skip unchanged files)
 uv run python scripts/search.py "X-SIGNATURE tidak valid"
-uv run python scripts/eval_retrieval.py                # Recall@5/10/20, MRR@10: dense, sparse, hybrid
+uv run python scripts/search.py "X-SIGNATURE tidak valid" --rerank   # fused vs reranked ranks
+uv run python scripts/eval_retrieval.py                # Recall@5/10/20, MRR@10: dense, sparse, hybrid; before/after reranking
 ```
 
 The two ASPI PDFs are reference-only: put them at the `local_path`s in `knowledge_base/manifests/sources.yaml`. They are git-ignored and never committed.

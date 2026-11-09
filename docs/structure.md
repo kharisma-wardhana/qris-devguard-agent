@@ -18,15 +18,16 @@
 │   └── workflows/              ci.yml (tests), agent-config-eval.yml, security-scan.yml (weekly pip-audit)
 ├── app/
 │   └── rag/                    knowledge pipeline: manifest, extract, chunking, sparse, embedding,
-│                               store, ingest, search, citations, metrics (P2)
+│                               store, ingest, search, citations, metrics (P2); rerank (P3)
 ├── configs/                    policy-as-config: security.yaml, eval_thresholds.yaml, model.yaml (P1), retrieval.yaml (P2)
 ├── deploy/                     runpod/bootstrap_vllm.sh, postgres/, clickhouse/ (P1)
 ├── docs/                       PRD/TRD, P0 scope + threat model, foundation docs, index
 │   ├── scope-and-source-inventory/   feature chain: intent, spec, plan, tasks, deploy-tools
 │   ├── p1-infrastructure/            feature chain + deploy-tools, monitoring
-│   └── p2-knowledge-pipeline/        feature chain + retrieval-report
+│   ├── p2-knowledge-pipeline/        feature chain + retrieval-report
+│   └── p3-reranking-eval/            feature chain + rerank-report
 ├── evals/
-│   ├── datasets/               labelled sets (retrieval_golden.yaml, P2)
+│   ├── datasets/               labelled sets (retrieval_golden.yaml: P2 original 30 + P3 hard 20)
 │   └── reports/                eval output (git-ignored except .gitkeep)
 ├── knowledge_base/
 │   ├── manifests/              source inventory (sources.yaml) + JSON Schema
