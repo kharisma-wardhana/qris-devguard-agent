@@ -44,6 +44,7 @@ class Citation:
     permission_basis: str
     approval_status: str
     untrusted: bool = True
+    rerank_score: float | None = None      # set by app.rag.rerank (p3); None for plain search
 
     def as_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
