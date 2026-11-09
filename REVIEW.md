@@ -2,6 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Deploy. Written: 2026-11-06. Via /aspec:make-it-simple-v2.*
 *Amended: 2026-11-07 for p1-infrastructure.*
 *Amended: 2026-11-09 for p2-knowledge-pipeline.*
+*Amended: 2026-11-09 for p3-reranking-eval.*
 
 Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` and the feature's `docs/<feature-name>/spec.md` first. The review checks the diff against the spec's acceptance criteria.
 
@@ -20,6 +21,10 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P2:** a chunking or extraction change that renames section IDs must update `evals/datasets/retrieval_golden.yaml` in the same PR. `scripts/eval_retrieval.py` refuses gold sections that are missing from the corpus.
 - **P2:** editing a synthetic document updates its `checksum_sha256` in `sources.yaml` in the same commit (`test_real_manifest_checksums_match_committed_synthetic_files`).
 - **P2:** CLIs in `scripts/` print UTF-8 (Windows consoles default to cp1252) and fail with one `error:` line, never a traceback.
+- **P3:** `rerank()` only reorders. Any change keeps the permutation, `citation_id` and §12.4-field tests in `tests/unit/test_rag_rerank.py`; `select()` takes `top_n` from `configs/retrieval.yaml`, never a literal.
+- **P3:** the original 30 entries of `evals/datasets/retrieval_golden.yaml` are pinned by content hash (`test_original_thirty_unchanged_since_p2`). New queries are appended with `set:` and a `dataset_version` bump; the old entries are never edited.
+- **P3:** the `rerank` block stays outside `pipeline_fingerprint()`. A reranker change must not trigger re-ingestion, and nothing that changes chunks or vectors may move into `rerank`.
+- **P3:** `scripts/eval_retrieval.py` computes fused and reranked metrics from the same hybrid top-20 pool object, never from a second search.
 
 ### Security
 - Nothing under `knowledge_base/sources/` may be tracked except `.gitkeep`. No `.env*` file other than `.env.example`, and no `*.pem`, `*.key` or `*.p12` file, may be added anywhere.
@@ -36,6 +41,7 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P2:** search results keep `untrusted: true`. Nothing in `app/rag/` executes, follows or templates retrieved text into instructions.
 - **P2:** models load offline (`HF_HUB_OFFLINE=1`) everywhere except `scripts/fetch_models.py`. The model revision stays pinned by full commit SHA. `truststore` is used only in the fetch script, and TLS verification is never turned off (`verify=False`).
 - **P2:** ingestion reads only manifest `local_path` files. No URL, shell or arbitrary path input.
+- **P3:** the reranker revision stays pinned by full SHA; `fetch_models.py` fetches it as `model.safetensors` only (no `*.bin` or pickle pattern); it loads offline, with no `trust_remote_code`.
 
 ### Compliance
 - Public ASPI/SNAP documents are `reference_only`: they are never committed, and any quoted excerpt is at most `citations.max_excerpt_chars.reference_only` (300) characters.
@@ -47,6 +53,8 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P2:** a PR touching `evals/`, `docs/`, `tests/fixtures/` or `knowledge_base/` pastes local output of `uv run pytest tests/unit/test_licence_hygiene.py`. It skips in CI, where the PDFs are absent, so CI green proves nothing here.
 - **P2:** extracted-text caches (`knowledge_base/sources/.*.txt`) stay inside the git-ignored `knowledge_base/sources/`.
 - **P2:** retrieval numbers in docs carry their date, dataset version and config, and are labelled measured, not targets.
+- **P3:** reranking numbers in docs are labelled measured, with date, dataset version and config, and are stated against the gate whatever the result. The measured 0.800 Recall@5, against a 0.85 gate, is never reworded as a pass.
+- **P3:** eval JSON reports hold IDs, ranks, scores and timings only, never chunk text.
 
 ## Severity levels
 
@@ -69,6 +77,8 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P1:** environment-variable names in `docker-compose.yml` copied from Langfuse's official compose file. Check only pins, ports and secrets.
 - **P2:** the wording of queries in `evals/datasets/retrieval_golden.yaml`. Check only schema, IDs and review fields.
 - **P2:** torch wheel and platform markers in `uv.lock`. Check only that torch resolves from the `pytorch-cpu` index.
+- **P3:** the wording of `set: hard` queries (check schema, IDs and review fields only).
+- **P3:** the latency values in `docs/p3-reranking-eval/rerank-report.md` depend on the machine. Check only that they are labelled measured.
 
 ## What a human must decide
 
