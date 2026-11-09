@@ -15,5 +15,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv export --locked --format requirements-txt --no-hashes --no-emit-project > requirements-audit.txt
+      - run: uv export --locked --all-extras --format requirements-txt --no-hashes --no-emit-project > requirements-audit.txt
       - run: uvx --from pip-audit==2.9.0 pip-audit -r requirements-audit.txt --no-deps --disable-pip --progress-spinner off
