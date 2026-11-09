@@ -1,6 +1,7 @@
 # REVIEW.md
 *Author: Kharisma Wardhana. Stage: Deploy. Written: 2026-11-06. Via /aspec:make-it-simple-v2.*
 *Amended: 2026-11-07 for p1-infrastructure.*
+*Amended: 2026-11-09 for p2-knowledge-pipeline.*
 
 Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` and the feature's `docs/<feature-name>/spec.md` first. The review checks the diff against the spec's acceptance criteria.
 
@@ -15,6 +16,10 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P1:** `configs/model.yaml`, `deploy/runpod/bootstrap_vllm.sh` and `scripts/tunnel.sh` (port) change together. A value changed in only one fails the config-agreement test in `tests/unit/test_bootstrap_vllm.py`.
 - **P1:** local URLs in `.env.example` use `127.0.0.1`, never `localhost` (on Windows, `localhost` tries IPv6 first and every connection stalls).
 - **P1:** `docs/runpod-deployment.md` fetches the bootstrap script only by commit SHA, never by branch name.
+- **P2:** a new setting that changes chunks or vectors must be included in `pipeline_fingerprint()` (`app/rag/ingest.py`). Otherwise re-ingestion reports `unchanged` and keeps stale vectors.
+- **P2:** a chunking or extraction change that renames section IDs must update `evals/datasets/retrieval_golden.yaml` in the same PR. `scripts/eval_retrieval.py` refuses gold sections that are missing from the corpus.
+- **P2:** editing a synthetic document updates its `checksum_sha256` in `sources.yaml` in the same commit (`test_real_manifest_checksums_match_committed_synthetic_files`).
+- **P2:** CLIs in `scripts/` print UTF-8 (Windows consoles default to cp1252) and fail with one `error:` line, never a traceback.
 
 ### Security
 - Nothing under `knowledge_base/sources/` may be tracked except `.gitkeep`. No `.env*` file other than `.env.example`, and no `*.pem`, `*.key` or `*.p12` file, may be added anywhere.
@@ -27,6 +32,10 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P1:** vLLM binds to `127.0.0.1` with no `--api-key` on its command line, and the runbook's pod table exposes no HTTP port. No IP address, pod ID or `ssh.runpod.io` user string appears in a tracked file.
 - **P1:** `scripts/healthcheck.py` never prints response bodies or secrets. Its sentinel tests stay.
 - **P1:** changes to the tunnel, the bootstrap or the runbook keep T13 and T18 in `docs/threat-model.md` consistent.
+- **P2:** `--test-backends` stays refused unless `DEVGUARD_TEST_BACKENDS=1`.
+- **P2:** search results keep `untrusted: true`. Nothing in `app/rag/` executes, follows or templates retrieved text into instructions.
+- **P2:** models load offline (`HF_HUB_OFFLINE=1`) everywhere except `scripts/fetch_models.py`. The model revision stays pinned by full commit SHA. `truststore` is used only in the fetch script, and TLS verification is never turned off (`verify=False`).
+- **P2:** ingestion reads only manifest `local_path` files. No URL, shell or arbitrary path input.
 
 ### Compliance
 - Public ASPI/SNAP documents are `reference_only`: they are never committed, and any quoted excerpt is at most `citations.max_excerpt_chars.reference_only` (300) characters.
@@ -35,6 +44,9 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - Nothing is added that connects to production systems or performs payment, refund, reversal, settlement or merchant-activation actions (PRD §1.4).
 - **P1:** Langfuse stays self-hosted with telemetry off, and traces carry only the fixed synthetic probe. Adding a Langfuse Cloud host to `egress_allowlist` needs a threat-model change.
 - **P1:** values in the runbook's measured-values table are labelled as measured, and a deviation from the plan (such as the RTX A5000 instead of the RTX PRO 4000) is recorded as found, not presented as planned (CLAUDE.md: targets are never presented as results).
+- **P2:** a PR touching `evals/`, `docs/`, `tests/fixtures/` or `knowledge_base/` pastes local output of `uv run pytest tests/unit/test_licence_hygiene.py`. It skips in CI, where the PDFs are absent, so CI green proves nothing here.
+- **P2:** extracted-text caches (`knowledge_base/sources/.*.txt`) stay inside the git-ignored `knowledge_base/sources/`.
+- **P2:** retrieval numbers in docs carry their date, dataset version and config, and are labelled measured, not targets.
 
 ## Severity levels
 
@@ -55,6 +67,8 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - Debt already accepted: tests import `scripts/` via `sys.path` (`docs/structure.md` § Deviations)
 - **P1:** the numbers in `docs/runpod-deployment.md` § Measured values. The user reports them from live runs; check only that each is labelled with its source.
 - **P1:** environment-variable names in `docker-compose.yml` copied from Langfuse's official compose file. Check only pins, ports and secrets.
+- **P2:** the wording of queries in `evals/datasets/retrieval_golden.yaml`. Check only schema, IDs and review fields.
+- **P2:** torch wheel and platform markers in `uv.lock`. Check only that torch resolves from the `pytorch-cpu` index.
 
 ## What a human must decide
 
