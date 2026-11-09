@@ -24,6 +24,16 @@ def test_fetch_models_dry_run_prints_pinned_revision():
     assert "nothing downloaded" in result.stdout
 
 
+def test_fetch_models_dry_run_covers_the_reranker():
+    """p3 spec AC #8: both models, both full revisions, no download."""
+    result = run("fetch_models.py", "--dry-run")
+    assert result.returncode == 0, result.stderr
+    assert "BAAI/bge-reranker-v2-m3" in result.stdout
+    assert "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e" in result.stdout
+    assert "model.safetensors" in result.stdout
+    assert "cached:" not in result.stdout
+
+
 def test_fetch_models_without_embed_stack_fails_with_one_line(tmp_path):
     # Shadow the optional packages with modules that fail to import, whether or not the extra is installed.
     for name in ("truststore", "huggingface_hub"):
