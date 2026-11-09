@@ -16,7 +16,7 @@
 - `evals/datasets/retrieval_golden.yaml`: edit. Version 0.2.0, with the reviewed hard entries appended. The original 30 are unchanged.
 - `tests/unit/test_rag_rerank.py`: new.
 - `tests/unit/test_rag_metrics.py`, `tests/unit/test_retrieval_golden.py`: edit. New cases. The completeness test changes on purpose (spec AC #5).
-- `tests/fixtures/rag/golden_sample.yaml`: edit. One `set: hard` entry is added, so the integration test covers the subset split.
+- `tests/fixtures/rag/golden_sample_subsets.yaml`: new. A three-query sample (two `original`, one `set: hard`), so the integration test covers the subset split. `golden_sample.yaml` stays unchanged, because P2's tests assert exactly two queries in it. *Changed during the build, step 6.*
 - `tests/integration/test_rag_cli.py`: edit. The fetch dry-run covers both models; adds `search --rerank` and the eval before/after.
 - `docs/threat-model.md`: edit. T19 also covers the reranker.
 - `docs/tech.md`, `docs/structure.md`, `README.md`: edit. The reranker, its commands and `rerank.py`.
@@ -42,7 +42,7 @@
    Spec AC #4, #5 (schema part).
 4. **Model fetch for both models.** `scripts/fetch_models.py`, `tests/integration/test_rag_cli.py`. Spec AC #8.
 5. **`search.py --rerank`.** `scripts/ingest.py` (`backends()` returns a reranker), `scripts/search.py`, `tests/integration/test_rag_cli.py`. Spec AC #7.
-6. **Before/after eval.** `scripts/eval_retrieval.py`, `tests/fixtures/rag/golden_sample.yaml`, `tests/integration/test_rag_cli.py`. Spec AC #6.
+6. **Before/after eval.** `scripts/eval_retrieval.py`, `tests/fixtures/rag/golden_sample_subsets.yaml` (new, *changed during the build*), `tests/integration/test_rag_cli.py`. Spec AC #6.
 7. **Merge the reviewed hard queries.** The entries you approved are appended to `evals/datasets/retrieval_golden.yaml` (version 0.2.0) with `reviewed_by` and `reviewed_at`. The draft file is deleted, and the hard-set assertion stops skipping. Spec AC #5.
 8. **Threat model and steering docs.** `docs/threat-model.md`, `docs/tech.md`, `docs/structure.md`, `README.md`. Spec flagged concern: supply chain.
 9. **Real measurements.**

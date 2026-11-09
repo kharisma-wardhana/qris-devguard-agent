@@ -186,3 +186,50 @@ def test_search_cli_rerank_without_collection_is_one_line(tmp_path):
     assert result.returncode == 1
     assert result.stderr.strip().startswith("error: collection") and "Traceback" not in result.stderr
 
+
+
+# --- eval before/after (p3 step 6) -------------------------------------------
+
+SUBSET_GOLDEN = ROOT / "tests" / "fixtures" / "rag" / "golden_sample_subsets.yaml"
+
+
+def test_eval_cli_before_after_on_the_same_pool(tmp_path):
+    import json
+
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    result = run("eval_retrieval.py", "--golden", str(SUBSET_GOLDEN), "--report-dir", str(tmp_path / "reports"),
+                 "--test-backends", "--qdrant-path", str(tmp_path / "qdrant"), env_extra=TEST_ENV)
+    assert result.returncode == 0, result.stdout + result.stderr
+    out = result.stdout
+    assert {"hybrid", "dense", "sparse"} <= {l.split()[0] for l in out.splitlines() if l.strip()}   # P2 table kept
+    assert "before/after on the same hybrid top-20 pool" in out and "FAKE" in out
+    rows = {l.split()[0]: l for l in out.splitlines() if l.split() and l.split()[0] in ("original", "hard", "all")}
+    assert set(rows) == {"original", "hard", "all"}
+    assert rows["original"].split()[1] == "2" and rows["hard"].split()[1] == "1" and rows["all"].split()[1] == "3"
+    assert "rerank latency per query: median" in out and "pairs over max_length: n/a (fake)" in out
+    report = json.loads(next((tmp_path / "reports").glob("retrieval-*.json")).read_text(encoding="utf-8"))
+    assert all(r["is_permutation"] for r in report["rerank_per_query"])
+    for subset in ("original", "hard", "all"):           # reranking can't change the candidate pool
+        assert 0.0 <= report["before_after"][subset]["candidate_recall@20"] <= 1.0
+    assert "X-SIGNATURE" not in json.dumps(report)        # IDs and numbers only, no chunk text
+
+
+def test_eval_cli_no_rerank_keeps_p2_output(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    result = run("eval_retrieval.py", "--golden", str(SUBSET_GOLDEN), "--no-rerank", "--report-dir",
+                 str(tmp_path / "reports"), "--test-backends", "--qdrant-path", str(tmp_path / "qdrant"),
+                 env_extra=TEST_ENV)
+    assert result.returncode == 0
+    assert "before/after" not in result.stdout
+
+
+def test_eval_cli_malformed_golden_is_one_line(tmp_path):
+    """Regression (found in p3 step 1): a malformed golden file gave a traceback."""
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("dataset_version: x\n  - id: broken\n", encoding="utf-8")
+    result = run("eval_retrieval.py", "--golden", str(bad), env_extra=TEST_ENV)
+    assert result.returncode == 1
+    assert result.stderr.strip().startswith("error: golden set unreadable:")
+    assert "Traceback" not in result.stderr

@@ -1,0 +1,26 @@
+# Sample with both subsets for testing the p3 before/after eval (p3 plan step 6).
+# golden_sample.yaml (p2) stays unchanged; its tests assert exactly 2 queries.
+dataset_version: sample-subsets-0.1.0
+queries:
+  - id: s01
+    language: en
+    query: what does response code 4094700 mean for QR generation
+    gold:
+      - { document_id: synthetic-qris-mpm-service-spec, section_id: 2.response-codes }
+    reviewed_by: test-fixture
+    reviewed_at: "2026-11-09"
+  - id: s02
+    language: id
+    query: urutan langkah diagnosis masalah integrasi QRIS
+    gold:
+      - { document_id: synthetic-qris-troubleshooting-sop, section_id: "2" }
+    reviewed_by: test-fixture
+    reviewed_at: "2026-11-09"
+  - id: s03
+    set: hard
+    language: en
+    query: our test QR generation keeps returning a conflict
+    gold:
+      - { document_id: synthetic-qris-mpm-service-spec, section_id: 2.response-codes }
+    reviewed_by: test-fixture
+    reviewed_at: "2026-11-09"
