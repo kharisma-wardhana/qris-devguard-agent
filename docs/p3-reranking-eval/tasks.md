@@ -11,4 +11,4 @@
 - [x] 7. Merge the reviewed hard queries — spec AC: #5
 - [x] 8. Threat model and steering docs — spec flagged concerns
 - [x] 9. Real measurements and report — spec AC: #9, #10
-- [ ] 10. CLAUDE.md merge — agent configuration
+- [x] 10. CLAUDE.md merge — agent configuration
