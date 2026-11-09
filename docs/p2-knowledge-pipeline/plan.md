@@ -56,6 +56,10 @@
     6. `tests/unit/test_licence_hygiene.py` is added.
 
     Files: `knowledge_base/manifests/sources.yaml`, `tests/unit/test_licence_hygiene.py`, and possibly `app/rag/extract.py` with its test. Spec AC #12, #14.
+    - **Found on the real PDFs, 2026-11-07 to 2026-11-09:**
+      - **Headings.** Table-of-contents rows and numbered list items matched the pattern. Fix: a PDF heading must also be bold (`pdf_heading_requires_bold`), and a bare number that doesn't continue the top-level sequence becomes a sub-item ID such as `2.1.6#1`. Files: `app/rag/extract.py`, `configs/retrieval.yaml`, `tests/unit/test_rag_chunking.py` (regression tests; the test PDF now draws headings in bold, as the real PDFs do).
+      - **Truncation.** 34 of 213 data-spec chunks were over BGE-M3's 1024-token limit (measured 3.25 characters per token median and 2.13 worst, against the estimate of 4; longest chunk 1,275 tokens). Your decision: raise `embedding.max_seq_length` to 1536. Chunk boundaries are unchanged.
+      - **Stale vectors.** The unchanged check looked only at the file checksum, so a config change wouldn't re-embed anything. Fix: each chunk stores a `pipeline_fingerprint` (a hash of the chunking, sparse and embedding settings), and a document is unchanged only if both checksum and fingerprint match. Files: `app/rag/ingest.py`, `app/rag/store.py`, `tests/unit/test_rag_store_ingest.py`, and `spec.md` § Data (new payload field).
 11. **The 30-query retrieval set.**
     1. I draft `evals/datasets/retrieval_golden.yaml`: at least 10 Indonesian and at least 10 English queries, covering all 4 documents, with gold section IDs taken from the step 10 heading list.
     2. You review and correct it.

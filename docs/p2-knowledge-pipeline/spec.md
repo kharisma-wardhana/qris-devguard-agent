@@ -66,7 +66,7 @@ Follows `docs/tech.md` and `docs/structure.md`: Python 3.11+, uv, pytest, settin
 
 - **Qdrant collection** `qris_kb_v1`:
   - Each point is one chunk, with a dense vector (1024, cosine) and a sparse BM25 vector.
-  - The payload holds `chunk_id`, `document_id`, `title`, `publisher`, `source_url`, `document_version`, `effective_date`, `language`, `permission_basis`, `approval_status`, `page_start`, `page_end`, `section_id`, `section_title`, `checksum_sha256` (of the source file), `text_hash`, `ingested_at` and `text`.
+  - The payload holds `chunk_id`, `document_id`, `title`, `publisher`, `source_url`, `document_version`, `effective_date`, `language`, `permission_basis`, `approval_status`, `page_start`, `page_end`, `section_id`, `section_title`, `checksum_sha256` (of the source file), `pipeline_fingerprint` (a hash of the chunking, sparse and embedding settings, added during the build on 2026-11-09 so that a config change re-ingests), `text_hash`, `ingested_at` and `text`.
   - It is local, in the existing Qdrant volume.
   - **It holds ASPI text** for `reference_only` documents. That is allowed, because the volume is local and never committed. Reference-only text only ever leaves it as an excerpt of at most 300 characters.
 - **Manifest:** `checksum_sha256` is filled in for the four ingested sources. A checksum is a hash, not content, so it is committed.
