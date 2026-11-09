@@ -1,0 +1,206 @@
+# Labelled retrieval set (p2-knowledge-pipeline spec AC #11; TRD §22.1: 30 queries with gold sections).
+# Queries are team-written paraphrases; no ASPI text is copied here. Gold labels name
+# (document_id, section_id) as produced by the extractor (bold numbered PDF headings,
+# `#n` = numbered sub-item, Markdown heading slugs for synthetic docs), so they survive
+# re-chunking. Drafted by Claude; every entry reviewed and approved by Kharisma Wardhana.
+# Reused by P3 for reranking evaluation.
+dataset_version: 0.1.0
+queries:
+  # --- SNAP Standar Teknis dan Keamanan (snap-technical-security-standard) ---
+  - id: q01
+    language: id
+    query: Bagaimana menyusun stringToSign untuk signature asimetris saat meminta access token B2B?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.5" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q02
+    language: en
+    query: Which algorithm is used to sign the B2B access token request, and how long is the token valid?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.5" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q03
+    language: id
+    query: Header apa saja yang wajib dikirim pada request transaksi yang memakai signature asimetris?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.6#2" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q04
+    language: en
+    query: How is the symmetric HMAC_SHA512 signature for a transaction request calculated?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.6#1" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q05
+    language: id
+    query: Mengapa request body harus di-minify lalu di-hash sebelum dimasukkan ke string yang ditandatangani?
+    gold:
+      - { document_id: snap-technical-security-standard, section_id: "2.1.6#1" }
+      - { document_id: snap-technical-security-standard, section_id: "2.1.6#2" }
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q06
+    language: en
+    query: What TLS version and cipher requirements apply to the secured communication channel?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.10" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q07
+    language: id
+    query: Bagaimana cara pengiriman API public key dari pengguna layanan ke penyedia layanan?
+    gold:
+      - { document_id: snap-technical-security-standard, section_id: "1.7.1" }
+      - { document_id: snap-technical-security-standard, section_id: "1.7.2" }
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q08
+    language: en
+    query: What are the requirements for storing and managing cryptographic keys securely?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "1.8" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q09
+    language: id
+    query: Format data dan character encoding apa yang digunakan pada API SNAP?
+    gold:
+      - { document_id: snap-technical-security-standard, section_id: "2.1.2" }
+      - { document_id: snap-technical-security-standard, section_id: "2.1.3" }
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q10
+    language: en
+    query: Which HTTP methods are allowed for SNAP API requests?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.4" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q11
+    language: en
+    query: How should the URI path of a SNAP endpoint include the API version?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.11" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q12
+    language: id
+    query: Standar enkripsi apa yang dipakai untuk melindungi data sensitif?
+    gold: [{ document_id: snap-technical-security-standard, section_id: "2.1.9" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q13
+    language: id
+    query: Format X-TIMESTAMP yang benar pada header request, termasuk zona waktunya
+    gold:
+      - { document_id: snap-technical-security-standard, section_id: "2.1.5" }
+      - { document_id: snap-technical-security-standard, section_id: "2.1.6#2" }
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  # --- SNAP Standar Data dan Spesifikasi Teknis (snap-data-technical-spec) ---
+  - id: q14
+    language: id
+    query: Endpoint dan field request untuk generate QR MPM
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.3.5" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q15
+    language: en
+    query: How do I query whether a QR MPM payment has been paid?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.3.5" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q16
+    language: en
+    query: What notification does the provider send to the merchant when a QR MPM payment completes?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.3.5" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q17
+    language: id
+    query: Apa beda alur pembayaran QR CPM dibanding QR MPM?
+    gold:
+      - { document_id: snap-data-technical-spec, section_id: "5.2.2" }
+      - { document_id: snap-data-technical-spec, section_id: "4.3.5" }
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q18
+    language: en
+    query: How is a SNAP response code structured from the HTTP status, service code and case code?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "6.1" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q19
+    language: id
+    query: Response code untuk Unauthorized artinya apa dan kapan dikembalikan?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "6.1" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q20
+    language: en
+    query: Which response code is returned for a conflict or duplicate request?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "6.1" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q21
+    language: en
+    query: How do I inquire a virtual account bill before paying it?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.2.2.7" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q22
+    language: id
+    query: Bagaimana cara mengecek status transaksi transfer kredit yang belum jelas hasilnya?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "4.2.3" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q23
+    language: en
+    query: What is the account binding flow and how is the OTP verified?
+    gold:
+      - { document_id: snap-data-technical-spec, section_id: "1.2.7" }
+      - { document_id: snap-data-technical-spec, section_id: "1.2.4" }
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q24
+    language: id
+    query: API apa yang dipakai untuk cek saldo rekening nasabah?
+    gold: [{ document_id: snap-data-technical-spec, section_id: "2.2.1" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q25
+    language: en
+    query: Request fields for a direct debit payment
+    gold: [{ document_id: snap-data-technical-spec, section_id: "5.2.1" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  # --- synthetic QRIS MPM service spec ---
+  - id: q26
+    language: en
+    query: How is the canonical string built for the synthetic-snap-symmetric-v1 profile?
+    gold: [{ document_id: synthetic-qris-mpm-service-spec, section_id: "1.4" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q27
+    language: id
+    query: Kode 4094700 artinya apa saat generate QR di spesifikasi sintetis?
+    gold: [{ document_id: synthetic-qris-mpm-service-spec, section_id: 2.response-codes }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q28
+    language: en
+    query: Required headers for the synthetic Query Payment endpoint
+    gold: [{ document_id: synthetic-qris-mpm-service-spec, section_id: 3.required-headers }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  # --- synthetic troubleshooting SOP ---
+  - id: q29
+    language: id
+    query: Langkah diagnosis apa yang dilakukan kalau signature ditolak?
+    gold:
+      - { document_id: synthetic-qris-troubleshooting-sop, section_id: "3.1" }
+      - { document_id: synthetic-qris-troubleshooting-sop, section_id: "2" }
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
+  - id: q30
+    language: en
+    query: When should an integration problem be escalated to a human?
+    gold: [{ document_id: synthetic-qris-troubleshooting-sop, section_id: "4" }]
+    reviewed_by: Kharisma Wardhana
+    reviewed_at: "2026-11-09"
