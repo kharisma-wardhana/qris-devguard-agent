@@ -56,10 +56,13 @@ class Store:
             for field in ("document_id", "document_version", "section_id"):
                 self.client.create_payload_index(self.collection, field, qm.PayloadSchemaType.KEYWORD)
 
-    def document_checksum(self, document_id: str, version: str) -> str | None:
-        points, _ = self.client.scroll(self.collection, scroll_filter=_doc_filter(document_id, version),
-                                       limit=1, with_payload=["checksum_sha256"], with_vectors=False)
-        return points[0].payload.get("checksum_sha256") if points else None
+    def document_state(self, document_id: str, version: str) -> tuple[str | None, str | None]:
+        """(source checksum, pipeline fingerprint) of a stored document, or (None, None)."""
+        points, _ = self.client.scroll(self.collection, scroll_filter=_doc_filter(document_id, version), limit=1,
+                                       with_payload=["checksum_sha256", "pipeline_fingerprint"], with_vectors=False)
+        if not points:
+            return None, None
+        return points[0].payload.get("checksum_sha256"), points[0].payload.get("pipeline_fingerprint")
 
     def delete_document(self, document_id: str, version: str) -> None:
         self.client.delete(self.collection, points_selector=qm.FilterSelector(filter=_doc_filter(document_id, version)))

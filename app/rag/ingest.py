@@ -7,6 +7,7 @@ The run record holds IDs, counts and hashes only, never document text.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -50,6 +51,13 @@ class IngestReport:
         return any(d.status == manifest.FAILED for d in self.documents)
 
 
+def pipeline_fingerprint() -> str:
+    """Hash of every setting that changes chunks or vectors; a change forces re-ingestion."""
+    cfg = config.retrieval()
+    relevant = {"chunking": cfg["chunking"], "sparse": cfg["sparse"], "embedding": cfg["embedding"]}
+    return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
 def _payload(entry: dict[str, Any], chunk: chunking.Chunk, sha: str, now: str) -> dict[str, Any]:
     effective = entry.get("effective_date")
     return {
@@ -68,6 +76,7 @@ def _payload(entry: dict[str, Any], chunk: chunking.Chunk, sha: str, now: str) -
         "section_id": chunk.section_id,
         "section_title": chunk.section_title,
         "checksum_sha256": sha,
+        "pipeline_fingerprint": pipeline_fingerprint(),
         "text_hash": chunk.text_hash,
         "ingested_at": now,
         "text": chunk.text,
@@ -81,7 +90,7 @@ def ingest_document(check: manifest.SourceCheck, store: Store, embedder: Embedde
     if entry.get("permission", {}).get("basis") == "team_authored" and SYNTHETIC_MARKER not in entry.get("title", ""):
         result.status, result.reason = manifest.FAILED, "synthetic title marker missing"
         return result
-    if store.document_checksum(check.document_id, version) == check.sha256:
+    if store.document_state(check.document_id, version) == (check.sha256, pipeline_fingerprint()):
         result.status = UNCHANGED
         result.chunks = store.count(check.document_id, version)
         return result

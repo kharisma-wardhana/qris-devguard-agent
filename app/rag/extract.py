@@ -188,24 +188,54 @@ def _pdf_line_blocks(lines: list[str], page: int) -> list[Block]:
     return blocks
 
 
-def extract_pdf_pages(pages: list[str]) -> Extraction:
-    """Sections from per-page text (pages[0] is page 1). Separated from pdfplumber for testing."""
-    pattern = re.compile(config.retrieval()["chunking"]["pdf_heading_pattern"])
+Line = tuple[str, bool | None]          # (text, is_bold); None = font unknown
+
+
+def extract_pdf_pages(pages: list[str] | list[list[Line]]) -> Extraction:
+    """Sections from per-page text (pages[0] is page 1). Separated from pdfplumber for testing.
+
+    A page is either plain text (font unknown) or a list of (line, is_bold). With
+    `pdf_heading_requires_bold`, a line known not to be bold is never a heading: in the real
+    ASPI PDFs, headings are bold while table-of-contents rows and numbered list items are not.
+    """
+    cfg = config.retrieval()["chunking"]
+    pattern = re.compile(cfg["pdf_heading_pattern"])
+    requires_bold = cfg.get("pdf_heading_requires_bold", False)
     ids = _SectionIds()
     sections: list[Section] = [Section("0", "", [])]
     empty = []
-    for number, page_text in enumerate(pages, start=1):
-        if not page_text or not page_text.strip():
+    last_top = 0          # last top-level section number (1, 2, 3 ...)
+    parent = ""           # id of the last dotted/top-level section, for numbered sub-items
+
+    def section_id(number_text: str) -> str:
+        """`2.1.6` stays as is. A bare `3` is top-level only if it continues 1, 2, 3...;
+        otherwise it is a numbered item inside the current section: `2.1.6#3`."""
+        nonlocal last_top, parent
+        if "." in number_text:
+            parent = number_text
+            return number_text
+        n = int(number_text)
+        if n == last_top + 1 or not parent:
+            last_top, parent = n, number_text
+            return number_text
+        return f"{parent}#{n}"
+
+    for number, page in enumerate(pages, start=1):
+        lines: list[Line] = [(l, None) for l in page.splitlines()] if isinstance(page, str) else list(page)
+        if not any(text.strip() for text, _ in lines):
             empty.append(number)
             continue
         body: list[str] = []
-        for raw in page_text.splitlines():
+        for raw, bold in lines:
             line = raw.rstrip()
             match = pattern.match(line.strip())
+            if match and requires_bold and bold is False:
+                match = None
             if match:
                 sections[-1].blocks.extend(_pdf_line_blocks(body, number))
                 body = []
-                sections.append(Section(ids.unique(match.group(1)), match.group(2).strip(), []))
+                title = match.group(2).strip().rstrip(":").strip()
+                sections.append(Section(ids.unique(section_id(match.group(1))), title, []))
             else:
                 body.append(line)
         sections[-1].blocks.extend(_pdf_line_blocks(body, number))
@@ -215,8 +245,15 @@ def extract_pdf_pages(pages: list[str]) -> Extraction:
 def extract_pdf(path: Path) -> Extraction:
     import pdfplumber
 
+    pages: list[list[Line]] = []
     with pdfplumber.open(path) as pdf:
-        pages = [page.extract_text() or "" for page in pdf.pages]
+        for page in pdf.pages:
+            lines = []
+            for line in page.extract_text_lines(return_chars=True):
+                chars = [c for c in line["chars"] if c["text"].strip()]
+                bold = sum("Bold" in c.get("fontname", "") for c in chars) > len(chars) / 2 if chars else False
+                lines.append((line["text"], bold))
+            pages.append(lines)
     return extract_pdf_pages(pages)
 
 

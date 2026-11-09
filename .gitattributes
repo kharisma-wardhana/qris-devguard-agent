@@ -1,2 +1,5 @@
 # Shell scripts run under bash on Linux pods and Git Bash; keep LF endings.
 *.sh text eol=lf
+
+# Synthetic KB documents have checksums in the manifest; keep the bytes identical on every OS.
+knowledge_base/synthetic/*.md text eol=lf

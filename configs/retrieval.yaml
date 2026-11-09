@@ -12,7 +12,9 @@ embedding:
   model_id: BAAI/bge-m3
   revision: 5617a9f61b028005a4858fdac845db406aefb181   # pinned; MIT licence
   dimension: 1024
-  max_seq_length: 1024                # tokens; above chunking.max_tokens, below the model's 8192
+  max_seq_length: 1536                # tokens. Was 1024; raised 2026-11-09 (user decision) after the real
+                                      # data spec measured 3.25 chars/token (estimate assumes 4) and its
+                                      # longest chunk reached 1,275 tokens. Model limit is 8192.
   batch_size: 8
 
 chunking:
@@ -23,6 +25,9 @@ chunking:
   # PDF section headings: a line that starts with a section number and a title.
   # Checked against the real ASPI PDFs in plan step 10; group 1 = number, group 2 = title.
   # Month names are excluded so dates ("12 Mei 2024") are not read as headings.
+  # Bold is required too: checked 2026-11-07 on both ASPI PDFs, where headings are
+  # BookmanOldStyle-Bold 12pt and TOC rows / numbered list items are regular or italic.
+  pdf_heading_requires_bold: true
   pdf_heading_pattern: '^(\d{1,2}(?:\.\d{1,2}){0,3})\.?\s+(?!(?:Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember|January|February|March|May|June|July|August|October|December)\b)([A-Z][^.!?]{2,90})$'
 
 sparse:                               # project BM25 encoder; Qdrant applies IDF

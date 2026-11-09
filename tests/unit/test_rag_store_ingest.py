@@ -18,7 +18,7 @@ REAL = {e["document_id"]: e for e in yaml.safe_load(
 SPEC, SOP = "synthetic-qris-mpm-service-spec", "synthetic-qris-troubleshooting-sop"
 PAYLOAD_FIELDS = {"chunk_id", "document_id", "title", "publisher", "source_url", "document_version",
                   "effective_date", "language", "permission_basis", "approval_status", "page_start",
-                  "page_end", "section_id", "section_title", "checksum_sha256", "text_hash",
+                  "page_end", "section_id", "section_title", "checksum_sha256", "pipeline_fingerprint", "text_hash",
                   "ingested_at", "text"}
 
 
@@ -28,8 +28,11 @@ def corpus(tmp_path):
     syn.mkdir(parents=True)
     for doc in (SPEC, SOP):
         shutil.copy(ROOT / REAL[doc]["local_path"], syn)
-    entries = [REAL[SPEC], REAL[SOP], REAL["synthetic-test-fixtures"],
-               {**REAL[SOP], "document_id": "synthetic-misplaced", "local_path": f"knowledge_base/sources/{SOP}.md"}]
+    # Checksums are cleared: these tests edit file content, which a real manifest checksum would refuse.
+    entries = [{**REAL[SPEC], "checksum_sha256": None}, {**REAL[SOP], "checksum_sha256": None},
+               REAL["synthetic-test-fixtures"],
+               {**REAL[SOP], "checksum_sha256": None, "document_id": "synthetic-misplaced",
+                "local_path": f"knowledge_base/sources/{SOP}.md"}]
     manifest = tmp_path / "sources.yaml"
     manifest.write_text(yaml.safe_dump({"sources": entries}, allow_unicode=True), encoding="utf-8")
     return tmp_path, manifest
@@ -116,3 +119,29 @@ def test_run_record_holds_no_document_text(corpus, store, tmp_path):
     record = path.read_text(encoding="utf-8")
     assert SPEC in record and "chunks" in record
     assert "X-SIGNATURE" not in record and "partnerReferenceNo" not in record
+
+
+def test_config_change_reingests_even_with_unchanged_checksum(corpus, store, monkeypatch):
+    """Regression (step 10): a chunking/embedding config change must not leave stale vectors."""
+    from app.rag import config
+
+    run(corpus, store)
+    real = config.retrieval()
+    changed = {**real, "embedding": {**real["embedding"], "max_seq_length": real["embedding"]["max_seq_length"] + 1}}
+    monkeypatch.setattr(config, "retrieval", lambda: changed)
+    docs = run(corpus, store)
+    assert docs[SPEC].status == docs[SOP].status == "ingested"
+    assert docs[SPEC].upserted > 0
+    again = run(corpus, store)
+    assert again[SPEC].status == again[SOP].status == "unchanged"
+
+
+def test_real_manifest_checksums_match_committed_synthetic_files():
+    """The manifest pins synthetic docs by checksum; .gitattributes keeps them LF so this holds on every OS."""
+    from app.rag import manifest
+
+    for doc in (SPEC, SOP):
+        check = manifest.check_source(REAL[doc], ROOT)
+        assert check.status == manifest.OK, check.reason
+        assert REAL[doc]["checksum_sha256"] == check.sha256
+

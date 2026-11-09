@@ -14,22 +14,28 @@ MAX_CHARS = CFG["max_tokens"] * CFG["chars_per_token"]
 
 
 def make_pdf(pages: list[list[str]]) -> bytes:
-    """A minimal valid PDF with one text line per entry, built from raw PDF syntax."""
+    """A minimal valid PDF with one text line per entry, built from raw PDF syntax.
+    A line starting with `**` is drawn in Helvetica-Bold (real ASPI headings are bold)."""
     def esc(s: str) -> str:
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
+    def show(line: str) -> str:
+        font, text = ("/F2", line[2:]) if line.startswith("**") else ("/F1", line)
+        return f"{font} 11 Tf ({esc(text)}) Tj T*"
+
     objects: list[bytes] = []
     n_pages = len(pages)
-    page_ids = [4 + 2 * i for i in range(n_pages)]
+    page_ids = [5 + 2 * i for i in range(n_pages)]
     objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
     kids = " ".join(f"{pid} 0 R" for pid in page_ids)
     objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {n_pages} >>".encode())
     objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>")
     for i, lines in enumerate(pages):
-        ops = "BT /F1 11 Tf 14 TL 50 800 Td " + " ".join(f"({esc(l)}) Tj T*" for l in lines) + " ET"
+        ops = "BT 14 TL 50 800 Td " + " ".join(show(l) for l in lines) + " ET"
         stream = ops.encode("latin-1")
         objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-                       f"/Resources << /Font << /F1 3 0 R >> >> /Contents {page_ids[i] + 1} 0 R >>".encode())
+                       f"/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {page_ids[i] + 1} 0 R >>".encode())
         objects.append(b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream")
     out = bytearray(b"%PDF-1.4\n")
     offsets = []
@@ -156,9 +162,9 @@ def test_normalisation_keeps_identifiers_but_collapses_spaces():
 def test_pdf_pages_and_numbered_headings(tmp_path):
     pdf = tmp_path / "doc.pdf"
     pdf.write_bytes(make_pdf([
-        ["1. Pendahuluan", "Dokumen ini menjelaskan standar teknis.", "Diterbitkan 12 Mei 2024"],
+        ["**1. Pendahuluan", "Dokumen ini menjelaskan standar teknis.", "Diterbitkan 12 Mei 2024"],
         [],
-        ["4.2 Signature Generation", "Use SHA256withRSA over the string to sign.", "X-SIGNATURE carries the value."],
+        ["**4.2 Signature Generation", "Use SHA256withRSA over the string to sign.", "X-SIGNATURE carries the value."],
         ["Continued text on page four about X-TIMESTAMP."],
     ]))
     ext = extract.extract(pdf)
@@ -179,3 +185,30 @@ def test_pdf_json_run_is_atomic():
     ext = extract.extract_pdf_pages(["\n".join(lines)])
     kinds = [(b.kind, b.text.splitlines()[0]) for b in ext.sections[0].blocks]
     assert ("atomic", "{") in kinds
+
+
+# --- regressions found on the real ASPI PDFs (p2 plan step 10) ---------------
+
+def test_pdf_non_bold_numbered_lines_are_not_headings(tmp_path):
+    """Table-of-contents rows and numbered list items are regular weight; only bold lines are headings."""
+    pdf = tmp_path / "toc.pdf"
+    pdf.write_bytes(make_pdf([
+        ["Daftar Isi", "1.1 Bentuk Pengajuan API", "2.1 Komponen Standar"],          # TOC page, regular
+        ["**1. BAGIAN I : PENGELOLAAN AKSES API", "Pengantar bagian.", "**1.1. BENTUK PENGAJUAN API",
+         "1. Project Manager", "2. Penanggung jawab API Public Key", "Isi bagian."],     # list items, regular
+    ]))
+    ext = extract.extract(pdf)
+    assert [s.section_id for s in ext.sections] == ["0", "1", "1.1"]
+    assert ext.sections[2].title == "BENTUK PENGAJUAN API"
+    assert "Project Manager" in ext.sections[2].blocks[0].text
+
+
+def test_pdf_bold_numbered_items_inside_a_section_become_sub_items():
+    pages = [[("2. BAGIAN II", True), ("pengantar", False), ("2.1.6. Header Transaction", True), ("teks", False),
+              ("1. Symetric-Signature :", True), ("rumus simetris", False),
+              ("2. Asymetric-Signature :", True), ("rumus asimetris", False),
+              ("3. BAGIAN III", True), ("isi", False)]]
+    ids = [(s.section_id, s.title) for s in extract.extract_pdf_pages(pages).sections]
+    assert ids == [("2", "BAGIAN II"), ("2.1.6", "Header Transaction"), ("2.1.6#1", "Symetric-Signature"),
+                   ("2.1.6#2", "Asymetric-Signature"), ("3", "BAGIAN III")]
+

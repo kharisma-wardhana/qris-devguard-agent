@@ -34,7 +34,7 @@ sources:
         Site (Jan 2026 v1.0). Checked by Kharisma Wardhana, 2026-11-06. Version 1.0.2 (September 2024)
         confirmed on the PDF cover.
     approval_status: approved
-    checksum_sha256: null
+    checksum_sha256: c60c330587e1c9d1f04d8ed82b8899f2e03e4f08b290420fda0ba6918f8f902a
     notes: Source for access-token-b2b (SHA256withRSA, service code 73, v1.0; also shown on /api-services/keamanan).
 
   - document_id: snap-data-technical-spec
@@ -54,8 +54,8 @@ sources:
         Developer Site (Jan 2026 v1.0). Checked by Kharisma Wardhana, 2026-11-06. Version 1.0.2
         (September 2024) per the portal homepage and Info page; this PDF's cover was not separately checked.
     approval_status: approved
-    checksum_sha256: null
-    notes: Source for the SNAP response-code structure and list (part 6, Response Code). Re-check the cover version at ingestion (P2).
+    checksum_sha256: 5ba81809c5812fb756979ae5ca557f8485216e098df1d9f8637b69c5fd20eeda
+    notes: "Source for the SNAP response-code structure and list (part 6, Response Code). Cover re-checked at ingestion (P2) on 2026-11-09 by Kharisma Wardhana: Versi 1.0.2, September 2024 (the cover's text layer carries the version but no date)."
 
   - document_id: synthetic-qris-mpm-service-spec
     title: QRIS MPM Service Specification (SYNTHETIC — not an official ASPI/BI document)
@@ -71,7 +71,7 @@ sources:
       basis: team_authored
       evidence: Authored by Kharisma Wardhana for the capstone, 2026-11-06. All values synthetic.
     approval_status: approved
-    checksum_sha256: null
+    checksum_sha256: ffc038eec9eb3eb5ad5f84ebb6e6ba0531f216b7173ebf94954c97e506a10e3b
     notes: Source for qr-mpm-generate (service 47) and qr-mpm-query (service 51). Replaces the unconfirmed public MPM source.
 
   - document_id: synthetic-qris-troubleshooting-sop
@@ -88,7 +88,7 @@ sources:
       basis: team_authored
       evidence: Authored by Kharisma Wardhana for the capstone, 2026-11-06. No internal procedure reproduced.
     approval_status: approved
-    checksum_sha256: null
+    checksum_sha256: e6c5fdf9f277a72a61268c919b3a21a199a6dc16df08e24d5dd0a21ba9e0940f
     notes: Retrievable form of skills/qris-integration-troubleshooting/SKILL.md.
 
   - document_id: synthetic-test-fixtures

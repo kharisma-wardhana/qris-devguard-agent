@@ -99,9 +99,9 @@ def test_bad_mode_and_empty_query_rejected(synthetic):
 
 def test_excerpts_respect_licence_limits(tmp_path):
     long_para = " ".join(f"Kalimat referensi nomor {i} tentang tanda tangan digital." for i in range(60))
-    ref_entry = {**REAL[SOP], "document_id": "ref-doc", "title": "Reference doc",
+    ref_entry = {**REAL[SOP], "checksum_sha256": None, "document_id": "ref-doc", "title": "Reference doc",
                  "local_path": "knowledge_base/sources/ref-doc.md", "permission": {"basis": "reference_only"}}
-    syn_entry = {**REAL[SOP], "local_path": "knowledge_base/synthetic/syn.md"}
+    syn_entry = {**REAL[SOP], "checksum_sha256": None, "local_path": "knowledge_base/synthetic/syn.md"}
     store, emb = build(tmp_path, [ref_entry, syn_entry], {
         "knowledge_base/sources/ref-doc.md": f"# Ref\n\n## 1. Tanda tangan\n\n{long_para}\n",
         "knowledge_base/synthetic/syn.md": f"# Syn (SYNTHETIC — not an official ASPI/BI document)\n\n## 1. Tanda tangan\n\n{long_para}\n",
@@ -113,7 +113,7 @@ def test_excerpts_respect_licence_limits(tmp_path):
 
 
 def test_version_conflict_returns_both_versions_unmerged(tmp_path):
-    base = {**REAL[SOP], "document_id": "synthetic-qr-validity", "title": "QR Validity Rules (SYNTHETIC — not an official ASPI/BI document)"}
+    base = {**REAL[SOP], "checksum_sha256": None, "document_id": "synthetic-qr-validity", "title": "QR Validity Rules (SYNTHETIC — not an official ASPI/BI document)"}
     entries = [{**base, "document_version": "0.1.0", "local_path": "knowledge_base/synthetic/v010.md"},
                {**base, "document_version": "0.2.0", "local_path": "knowledge_base/synthetic/v020.md"}]
     store, emb = build(tmp_path, entries, {
