@@ -174,10 +174,10 @@ def test_extra_field_rejected(server, tool):
 
 
 def test_oversized_payload_rejected(server):
-    big = {"headers": {}, "body": {"additionalInfo": {"x": "a" * (config.max_payload_bytes() + 1)}}}
+    big = {"headers": {}, "body": {"additionalInfo": {"x": "Z" * (config.max_payload_bytes() + 1)}}}
     is_error, body = call(server, "validate_request_payload", {**GOOD["validate_request_payload"], "payload": big})
     assert is_error and body["code"] == "INVALID_ARGUMENT" and body["field_errors"][0]["field"] == "payload"
-    assert "aaaa" not in json.dumps(body)
+    assert "ZZZZ" not in json.dumps(body)          # Z: cannot occur in the hex correlation_id
 
 
 def test_secret_shaped_values_never_in_response_or_log(server, caplog):

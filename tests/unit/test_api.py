@@ -79,7 +79,7 @@ def test_unauthenticated_gets_401_envelope(client, harness, name):
     ({**CODE, "extra": 1}, "extra"),
     ({"message": "x" * (config.agent()["api"]["max_message_chars"] + 1)}, "message"),
     ({"message": ""}, "message"),
-    ({"message": "q", "context": {"payload": {"body": {"x": "a" * 33000}}}}, "context.payload"),
+    ({"message": "q", "context": {"payload": {"body": {"x": "Z" * 33000}}}}, "context.payload"),
     ({"message": "q", "context": {"response_code": "../../etc"}}, "context.response_code"),
     ({"message": "q", "context": {"signature": {"fixture_id": "http://x"}}}, "context.signature.fixture_id"),
     ({"message": "q", "context": {"endpoint_id": "payment-refund"}}, "context.endpoint_id"),
@@ -89,7 +89,7 @@ def test_malformed_body_gets_422_without_values(client, harness, body, field):
     assert r.status_code == 422 and r.json()["code"] == "INVALID_ARGUMENT"
     assert field in [e["field"] for e in r.json()["field_errors"]]
     text = json.dumps(r.json())
-    assert "etc" not in text and "http://x" not in text and "aaaa" not in text and "Traceback" not in text
+    assert "etc" not in text and "http://x" not in text and "ZZZZ" not in text and "Traceback" not in text
 
 
 def test_unknown_route_is_envelope(client):
