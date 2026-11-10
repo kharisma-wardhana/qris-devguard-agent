@@ -21,7 +21,7 @@ def run(*args):
 def test_committed_manifest_exits_zero():
     result = run()
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.startswith("OK: 5 sources, 4 approved")
+    assert result.stdout.startswith("OK: 5 sources, 5 approved")
 
 
 def test_invalid_manifest_exits_one(tmp_path):
@@ -45,7 +45,7 @@ def test_committed_manifest_has_exactly_the_agreed_sources():
         "snap-data-technical-spec": "approved",
         "synthetic-qris-mpm-service-spec": "approved",
         "synthetic-qris-troubleshooting-sop": "approved",
-        "synthetic-test-fixtures": "candidate",
+        "synthetic-test-fixtures": "approved",          # p4: fixture index
     }
     by_id = {s["document_id"]: s for s in sources}
     for doc in ("snap-technical-security-standard", "snap-data-technical-spec"):

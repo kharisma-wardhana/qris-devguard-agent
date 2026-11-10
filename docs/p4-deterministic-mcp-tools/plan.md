@@ -58,11 +58,13 @@ New: docs
 Edited
 - `pyproject.toml` / `uv.lock`: `mcp==2.3.0`, `pyjwt==2.15.1`, `cryptography==50.0.2` as direct pins.
 - `knowledge_base/manifests/sources.yaml`: `synthetic-test-fixtures` completed and approved.
-- `app/rag/manifest.py`: skips `kind: fixture_set` with an explicit reason (one check).
+- `app/rag/manifest.py`: skips `kind: fixture_set` with an explicit reason (one check), and gains `retrievable_document_ids()` (approved and not a fixture set).
+- `tests/unit/test_retrieval_golden.py`: its "every approved document has a query" set uses `retrievable_document_ids()`, because the approved fixture index is not a retrievable document. Found at step 5. The test's intent is unchanged.
 - `tests/unit/test_rag_manifest.py`: regression test for that skip.
 - `tests/unit/test_check_sources.py`: the real manifest with the approved fixture entry still validates.
 - `tests/integration/test_check_sources_cli.py`: its pinned counts change by design, from "4 approved" to "5 approved", and `synthetic-test-fixtures` moves from `candidate` to `approved`. This was found at step 5 and added to the plan before the edit.
 - `tests/unit/test_repo_hygiene.py`: no tracked key file, PEM block or `knowledge_base/sources/derived/` file.
+- `.gitattributes`: `knowledge_base/fixtures/fixtures.yaml text eol=lf`, so its manifest checksum is identical on every OS, as P2 did for the synthetic docs. Found at step 5.
 - `.gitignore`: checked. `knowledge_base/fixtures/signatures/keys/` and `knowledge_base/sources/*` already cover both generated areas, so it changes only if a check proves otherwise.
 - `docs/threat-model.md`: T1, T2, T7, T10 and T14 gain their P4 evidence. T16 gets the derived table. T19 gets the new dependencies.
 - `docs/tech.md`, `docs/structure.md`, `README.md`: MCP SDK and protocol version (TRD §13.1), new packages, commands.

@@ -66,6 +66,8 @@ def check_source(entry: dict[str, Any], root: Path) -> SourceCheck:
 
     if entry.get("approval_status") != "approved":
         return result(SKIPPED, f"not approved ({entry.get('approval_status')})")
+    if entry.get("kind") == "fixture_set":
+        return result(SKIPPED, "fixture set: validator test data, not a retrievable document (p4)")
     local = entry.get("local_path")
     if not local:
         return result(SKIPPED, "no local_path")
@@ -95,6 +97,11 @@ def check_source(entry: dict[str, Any], root: Path) -> SourceCheck:
 def load_manifest(manifest_path: Path) -> list[dict[str, Any]]:
     data = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
     return list(data.get("sources") or [])
+
+
+def retrievable_document_ids(entries: list[dict[str, Any]]) -> set[str]:
+    """Approved entries that are documents to retrieve; a fixture set (p4) is validator test data."""
+    return {e["document_id"] for e in entries if e.get("approval_status") == "approved" and e.get("kind") != "fixture_set"}
 
 
 def select_sources(manifest_path: Path, root: Path) -> list[SourceCheck]:

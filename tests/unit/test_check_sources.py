@@ -148,3 +148,21 @@ def test_effective_date_accepted(value):
 def test_effective_date_rejected(value):
     errors = check_manifest(manifest({**APPROVED, "effective_date": value}), SCHEMA)
     assert any(e.startswith("schema:") and "effective_date" in e for e in errors), errors
+
+
+def test_real_manifest_with_approved_fixture_set_validates():
+    """p4 regression: the fixture index entry is approved and the committed manifest still passes."""
+    manifest = yaml.safe_load(DEFAULT_MANIFEST.read_text(encoding="utf-8"))
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    assert check_manifest(manifest, schema) == []
+    entry = next(s for s in manifest["sources"] if s["document_id"] == "synthetic-test-fixtures")
+    assert (entry["approval_status"], entry["kind"]) == ("approved", "fixture_set")
+    assert entry["local_path"] == "knowledge_base/fixtures/fixtures.yaml"
+
+
+def test_fixture_index_checksum_matches_manifest():
+    import hashlib
+    manifest = yaml.safe_load(DEFAULT_MANIFEST.read_text(encoding="utf-8"))
+    entry = next(s for s in manifest["sources"] if s["document_id"] == "synthetic-test-fixtures")
+    path = DEFAULT_MANIFEST.parents[2] / entry["local_path"]
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == entry["checksum_sha256"]

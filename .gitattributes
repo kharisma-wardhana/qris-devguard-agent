@@ -3,3 +3,6 @@
 
 # Synthetic KB documents have checksums in the manifest; keep the bytes identical on every OS.
 knowledge_base/synthetic/*.md text eol=lf
+
+# Fixture index has a checksum in the manifest (p4); keep its bytes identical on every OS.
+knowledge_base/fixtures/fixtures.yaml text eol=lf

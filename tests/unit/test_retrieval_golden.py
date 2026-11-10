@@ -13,8 +13,8 @@ from app.rag import manifest, metrics
 ROOT = Path(__file__).resolve().parents[2]
 SAMPLE = ROOT / "tests" / "fixtures" / "rag" / "golden_sample.yaml"
 GOLDEN = ROOT / "evals" / "datasets" / "retrieval_golden.yaml"
-APPROVED = {e["document_id"] for e in manifest.load_manifest(ROOT / "knowledge_base" / "manifests" / "sources.yaml")
-            if e.get("approval_status") == "approved"}
+APPROVED = manifest.retrievable_document_ids(           # approved documents; the p4 fixture set is not one
+    manifest.load_manifest(ROOT / "knowledge_base" / "manifests" / "sources.yaml"))
 
 
 def test_sample_passes_schema():

@@ -6,7 +6,7 @@
 - [x] 2. Payload validator — spec AC: #6, #7
 - [x] 3. Canonicalization, keys and signature validator — spec AC: #8, #9, #10
 - [x] 4. Response-code lookup and extraction — spec AC: #11, #12
-- [ ] 5. Fixture index, manifest and the ingest skip — spec AC: #16
+- [x] 5. Fixture index, manifest and the ingest skip — spec AC: #16
 - [ ] 6. Fixture eval CLI — spec AC: #14
 - [ ] 7. MCP layer — spec AC: #1, #2, #3, #4, #5, #13
 - [ ] 8. Entry points — spec AC: #1, #2, #3, #15
