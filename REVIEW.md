@@ -4,6 +4,7 @@
 *Amended: 2026-11-09 for p2-knowledge-pipeline.*
 *Amended: 2026-11-09 for p3-reranking-eval.*
 *Amended: 2026-11-10 for p4-deterministic-mcp-tools.*
+*Amended: 2026-11-10 for p5-langgraph-agent.*
 
 Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` and the feature's `docs/<feature-name>/spec.md` first. The review checks the diff against the spec's acceptance criteria.
 
@@ -31,6 +32,10 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P4:** `scripts/eval_validators.py` stays at 100% on every PR. A `requires_table` response-code case is reported skipped in CI, never counted as passed.
 - **P4:** editing `knowledge_base/fixtures/fixtures.yaml` updates its `checksum_sha256` in `sources.yaml` in the same commit (`test_fixture_index_checksum_matches_manifest`). The file stays `eol=lf` in `.gitattributes`.
 - **P4:** the tool list, `config.TOOL_NAMES` and the `tools:` matrix in `configs/security.yaml` change together.
+- **P5:** intent, risk, tool choice and tool arguments stay deterministic (`app/agent/classify.py`, `select_tools`). No change may let model output pick a node, a tool or an argument.
+- **P5:** verdicts, sources and confidence are assembled by `app/agent/answer.py` from tool output, never taken from model text. A change to `policy.py` keeps a breaking-output test per rule in `tests/unit/test_agent_policy.py`.
+- **P5:** `evals/datasets/agent_flows.yaml` flows pass in CI mode (`scripts/eval_agent.py`). A routing or policy change adds or updates a flow property; it never deletes one to go green.
+- **P5:** live flow results in `docs/p5-langgraph-agent/agent-flow-report.md` stay as measured. Flow 1's recorded FAIL is fixed in P6 and re-measured, never edited into a pass.
 
 ### Security
 - Nothing under `knowledge_base/sources/` may be tracked except `.gitkeep`. No `.env*` file other than `.env.example`, and no `*.pem`, `*.key` or `*.p12` file, may be added anywhere.
@@ -54,6 +59,11 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P4:** the MCP server binds `127.0.0.1` only, keeps DNS-rebinding protection on, and keeps the body limit (`configs/mcp.yaml`). Changing any of these needs a threat-model change (T1, T13).
 - **P4:** test keys are generated at runtime and never tracked (`test_no_test_key_pem_or_derived_snap_table_tracked`). Signature results never carry a string-to-sign, key or signature.
 - **P4:** all P4 tools are read-only. A write tool (`create_support_ticket`) arrives only with the P6 approval and idempotency flow, never as a stub that writes.
+- **P5:** `sanitize_input` runs before anything is stored in state or sent to the model. A new state field, prompt input or log line holds only sanitized values. The secret-in-state test (`test_secrets_never_reach_state_llm_or_answer`) stays.
+- **P5:** untrusted text (the user message and retrieved excerpts) goes only into the user turn's `<question>`/`<evidence>` blocks, with brackets neutralised. The system prompt never interpolates either.
+- **P5:** `/api/v1` accepts only API-audience tokens. The agent mints its own short-lived MCP token per run and never forwards the API token. The API binds `127.0.0.1` only. `--fake-llm` stays refused without `DEVGUARD_TEST_BACKENDS=1`.
+- **P5:** API errors are the §18 envelope (401, 404, 422, 500) with no submitted value or exception text. Request logs never include message text.
+- **P5:** prohibited requests call no tool; high-risk requests call no tool and stay draft-only until the P6 approval path exists.
 
 ### Compliance
 - Public ASPI/SNAP documents are `reference_only`: they are never committed, and any quoted excerpt is at most `citations.max_excerpt_chars.reference_only` (300) characters.
@@ -71,6 +81,8 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P4:** `NOT_FOUND` never carries a meaning; suggestions are labelled `suggestion, not a match`. Synthetic tables, schemas and fixtures keep their SYNTHETIC label.
 - **P4:** the PKCS#1 v1.5 / base64 assumption of `snap-asymmetric-access-token-v1` stays labelled in results and in `docs/p4-deterministic-mcp-tools/validator-report.md` until a source confirms it.
 - **P4:** fixture and smoke-test numbers in docs are labelled measured, with date and fixture-set version.
+- **P5:** live agent results are labelled measured with model, GPU, date and dataset version, and a failed flow is reported as failed. The exit criterion (4/4 flows) is not claimed while flow 1 fails live.
+- **P5:** only sanitized, synthetic text is sent to the model on the RunPod pod, through the SSH tunnel; no new egress host is added.
 
 ## Severity levels
 
@@ -98,6 +110,8 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P4:** synthetic values inside `knowledge_base/fixtures/payloads/*.yaml` and `signatures/cases.yaml`. Check only IDs, expected outcomes and that no real credential appears.
 - **P4:** MCP SDK internals (`mcp==2.3.0` is pinned). Check only that tools go through `GuardedTool` and that the SDK pin moves together with a re-run of `tests/integration/test_mcp_server.py`.
 - **P4:** smoke-test latencies in `validator-report.md` depend on the machine.
+- **P5:** the wording of `compose-v1` and of model answers (flows check properties, not wording); the per-node latencies and token counts in `agent-flow-report.md` (machine- and GPU-dependent).
+- **P5:** the keyword lists in `configs/agent.yaml`. Check only that a change keeps `test_agent_classify.py` green and adds a row for the new case.
 
 ## What a human must decide
 
