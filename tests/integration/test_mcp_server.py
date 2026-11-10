@@ -1,0 +1,173 @@
+"""The real MCP server as a subprocess, reached with the SDK Streamable HTTP client (p4 spec AC #1-#3, #15).
+
+Authentication: no / bad / expired tokens get HTTP 401 before any tool runs.
+Authorization: a role outside the security.yaml matrix gets FORBIDDEN.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import secrets
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import httpx
+import pytest
+
+from app.mcp_server import auth, config
+from app.validators import keys
+
+ROOT = Path(__file__).resolve().parents[2]
+SECRET = secrets.token_hex(24)
+PATH = config.mcp()["server"]["path"]
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+@pytest.fixture(scope="module")
+def server(tmp_path_factory):
+    keys_dir = tmp_path_factory.mktemp("keys")
+    import yaml
+    wanted = yaml.safe_load((ROOT / "knowledge_base/fixtures/signatures/cases.yaml").read_text(encoding="utf-8"))["keys"]
+    keys.generate(keys_dir, wanted)
+    port = _free_port()
+    env = {**os.environ, "MCP_AUTH_SECRET": SECRET, "DEVGUARD_TEST_KEYS_DIR": str(keys_dir),
+           "QDRANT_URL": f"http://127.0.0.1:{_free_port()}"}          # nothing listens there: search unavailable
+    proc = subprocess.Popen([sys.executable, str(ROOT / "scripts" / "mcp_server.py"), "--port", str(port)], cwd=ROOT,
+                            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            pytest.fail("server exited: " + proc.stderr.read())
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                break
+        except OSError:
+            time.sleep(0.2)
+    else:
+        proc.kill()
+        pytest.fail("server did not start")
+    yield f"http://127.0.0.1:{port}{PATH}", port, proc
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}
+HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+
+
+@pytest.mark.parametrize("name,token", [
+    ("none", None),
+    ("garbage", "not-a-token"),
+    ("other secret", auth.mint("dev-1", "developer", secret="o" * 48)),
+    ("expired", auth.mint("dev-1", "developer", secret=SECRET, ttl_minutes=1, now=int(time.time()) - 3600)),
+])
+def test_unauthenticated_requests_get_401(server, name, token):
+    url, _, _ = server
+    headers = dict(HEADERS)
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    r = httpx.post(url, headers=headers, json=INIT, timeout=10)
+    assert r.status_code == 401, (name, r.status_code)
+    assert "Traceback" not in r.text and SECRET not in r.text
+
+
+def test_foreign_host_header_is_refused(server):
+    url, port, _ = server
+    headers = {**HEADERS, "Authorization": f"Bearer {auth.mint('dev-1', 'developer', secret=SECRET)}",
+               "Host": f"evil.example:{port}"}
+    r = httpx.post(url, headers=headers, json=INIT, timeout=10)
+    assert r.status_code in (400, 403, 421)
+
+
+async def _session(url: str, role: str, calls: list[tuple[str, dict]]):
+    import httpx2
+    from mcp.client.session import ClientSession
+    from mcp.client.streamable_http import streamable_http_client
+
+    token = auth.mint("it-user", role, secret=SECRET)
+    async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {token}"}, timeout=30) as hc:
+        async with streamable_http_client(url, http_client=hc) as streams:
+            async with ClientSession(streams[0], streams[1]) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                results = []
+                for name, args in calls:
+                    res = await session.call_tool(name, args)
+                    results.append((res.is_error, json.loads(res.content[0].text)))
+                return [t.name for t in tools.tools], results
+
+
+CALLS = [
+    ("validate_request_payload", {"api_family": "qris-mpm", "endpoint_id": "qr-mpm-generate", "spec_version": "0.1.0",
+                                  "payload": {"headers": {"Content-Type": "application/json"}, "body": {}}}),
+    ("validate_test_signature", {"algorithm": "HMAC_SHA512", "fixture_id": "syn-hmac-01",
+                                 "canonicalization_profile": "synthetic-snap-symmetric-v1",
+                                 "test_payload_ref": "sig-gen-body-not-minified"}),
+    ("lookup_response_code", {"code": "4094700", "api_family": "qris-mpm", "spec_version": "0.1.0"}),
+    ("search_qris_spec", {"query": "signature invalid"}),
+]
+
+
+def test_developer_lists_four_tools_and_calls_each_validator(server):
+    url, _, _ = server
+    names, results = asyncio.run(_session(url, "developer", CALLS))
+    assert sorted(names) == sorted(config.TOOL_NAMES)
+    (e1, payload), (e2, sig), (e3, code), (e4, search) = results
+    assert not e1 and payload["valid"] is False and payload["schema_version"] == "0.1.0"
+    assert not e2 and (sig["status"], sig["diagnostic_code"]) == ("INVALID", "SIG_BODY_NOT_MINIFIED")
+    assert not e3 and code["status"] == "FOUND" and code["synthetic"] is True
+    assert e4 and search["code"] == "SEARCH_UNAVAILABLE"                   # no Qdrant in this test
+
+
+def test_kb_maintainer_is_forbidden_from_signature_tool(server):
+    url, _, _ = server
+    _, results = asyncio.run(_session(url, "kb_maintainer", [CALLS[1], CALLS[2]]))
+    (e_sig, sig), (e_code, code) = results
+    assert e_sig and sig["code"] == "FORBIDDEN" and set(sig) == {"code", "message", "correlation_id"}
+    assert not e_code and code["status"] == "FOUND"
+
+
+def test_server_listens_on_loopback_only(server):
+    _, port, _ = server
+    try:
+        external = socket.gethostbyname(socket.gethostname())
+    except OSError:
+        pytest.skip("no non-loopback address on this machine")
+    if external.startswith("127."):
+        pytest.skip("hostname resolves to loopback")
+    with pytest.raises(OSError):
+        socket.create_connection((external, port), timeout=1).close()
+
+
+def test_mint_dev_token_cli(tmp_path):
+    env = {**os.environ, "MCP_AUTH_SECRET": SECRET}
+    run = lambda *a: subprocess.run([sys.executable, str(ROOT / "scripts" / "mint_dev_token.py"), *a], cwd=ROOT,  # noqa: E731
+                                    env=env, capture_output=True, text=True, encoding="utf-8")
+    ok = run("--sub", "dev-1", "--role", "developer")
+    assert ok.returncode == 0 and ok.stdout.count(".") == 2 and SECRET not in ok.stdout + ok.stderr
+    claims = auth.HS256Verifier(SECRET).claims(ok.stdout.strip())
+    assert claims["role"] == "developer" and claims["sub"] == "dev-1"
+    assert run("--sub", "dev-1", "--role", "root").returncode != 0
+    assert run("--sub", "dev-1", "--role", "developer", "--ttl", "61").returncode == 1
+
+
+def test_server_refuses_to_start_without_secret(tmp_path):
+    env = {k: v for k, v in os.environ.items() if k != "MCP_AUTH_SECRET"}
+    env["MCP_AUTH_SECRET"] = "Xq7tooFewChars"
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "mcp_server.py"), "--port", str(_free_port())],
+                       cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+    assert r.returncode == 1 and "MCP_AUTH_SECRET" in r.stderr and "Xq7tooFewChars" not in r.stderr
