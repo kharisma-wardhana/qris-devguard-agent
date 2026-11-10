@@ -61,6 +61,7 @@ Edited
 - `app/rag/manifest.py`: skips `kind: fixture_set` with an explicit reason (one check).
 - `tests/unit/test_rag_manifest.py`: regression test for that skip.
 - `tests/unit/test_check_sources.py`: the real manifest with the approved fixture entry still validates.
+- `tests/integration/test_check_sources_cli.py`: its pinned counts change by design, from "4 approved" to "5 approved", and `synthetic-test-fixtures` moves from `candidate` to `approved`. This was found at step 5 and added to the plan before the edit.
 - `tests/unit/test_repo_hygiene.py`: no tracked key file, PEM block or `knowledge_base/sources/derived/` file.
 - `.gitignore`: checked. `knowledge_base/fixtures/signatures/keys/` and `knowledge_base/sources/*` already cover both generated areas, so it changes only if a check proves otherwise.
 - `docs/threat-model.md`: T1, T2, T7, T10 and T14 gain their P4 evidence. T16 gets the derived table. T19 gets the new dependencies.
@@ -100,7 +101,7 @@ Not matched: UI/e2e (no screen) and database (P4 touches no PostgreSQL schema or
 - **Step 2:** unit tests run every payload case through `payload.py`, each business rule broken and satisfied, and the hash check that the input is unchanged.
 - **Step 3:** unit tests cover the KAT hashes, the RFC 4231 HMAC-SHA512 vectors, every signature case, the diagnostic code per named mistake, and that no response field holds the string-to-sign, a key or a signature. Keys are generated into `tmp_path`. **Integration:** `scripts/gen_test_keys.py --out <tmp>` as a subprocess writes the index and prints no key material.
 - **Step 4:** unit tests cover lookup `FOUND`/`NOT_FOUND`/`TABLE_UNAVAILABLE`, suggestion labelling, the 300-character cap, and continuation-row merging on synthetic rows. **Integration:** `scripts/extract_response_codes.py` as a subprocess exits non-zero with a one-line error for a missing PDF and for a checksum mismatch (a temp copy of the manifest).
-- **Step 5:** **regression** tests show `check_source` skips the `fixture_set` entry and still selects the four document sources (`test_rag_manifest.py`), `check_sources.py` passes on the real manifest (`test_check_sources.py`), and the hygiene test finds no tracked key, PEM or derived table.
+- **Step 5:** **regression** tests show `check_source` skips the `fixture_set` entry and still selects the four document sources (`test_rag_manifest.py`), `check_sources.py` passes on the real manifest (`test_check_sources.py`, and `test_check_sources_cli.py` with its approved count updated from 4 to 5), and the hygiene test finds no tracked key, PEM or derived table.
 - **Step 6:** unit tests show the fixture runner returns 100% on the committed set and reports a failure for a wrong expectation. **Integration:** `scripts/eval_validators.py` as a subprocess exits 0 and writes its JSON report, and exits 1 on a temp fixture index with one wrong expectation.
 - **Step 7:** unit tests cover:
   - token verification (valid, expired, wrong secret, `alg` `none`/HS512, wrong `aud`, unknown role, TTL over 60 min refused at mint);
