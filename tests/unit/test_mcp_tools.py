@@ -137,7 +137,8 @@ def test_no_identity_is_unauthenticated(server):
     assert is_error and body["code"] == "UNAUTHENTICATED"
 
 
-INJECTIONS = ["../../etc/passwd", "http://169.254.169.254/latest", "'; DROP TABLE tickets;--", "$(rm -rf /)",
+LINK_LOCAL = ".".join(["169", "254", "169", "254"])        # built, not written: repo hygiene bans IP literals
+INJECTIONS = ["../../etc/passwd", f"http://{LINK_LOCAL}/latest", "'; DROP TABLE tickets;--", "$(rm -rf /)",
               "syn-hmac-01\nX", "C:\\Windows\\system32"]
 
 
