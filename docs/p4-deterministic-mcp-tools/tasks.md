@@ -8,7 +8,7 @@
 - [x] 4. Response-code lookup and extraction — spec AC: #11, #12
 - [x] 5. Fixture index, manifest and the ingest skip — spec AC: #16
 - [x] 6. Fixture eval CLI — spec AC: #14
-- [ ] 7. MCP layer — spec AC: #1, #2, #3, #4, #5, #13
+- [x] 7. MCP layer — spec AC: #1, #2, #3, #4, #5, #13
 - [ ] 8. Entry points — spec AC: #1, #2, #3, #15
 - [ ] 9. Local measured run — spec AC: #12, #14
 - [ ] 10. Threat model and steering docs — spec flagged concerns, AC #16
