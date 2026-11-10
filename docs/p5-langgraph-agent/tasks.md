@@ -12,4 +12,4 @@
 - [x] 8. Scripted flows and the eval CLI — spec AC: #11, #12, #13, #14, #15
 - [x] 9. Live run and report — spec AC: #16
 - [x] 10. Threat model and steering docs — spec flagged concerns
-- [ ] 11. CLAUDE.md merge — agent configuration
+- [x] 11. CLAUDE.md merge — agent configuration

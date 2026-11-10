@@ -14,7 +14,7 @@ Phase P0 (§27, scope and source inventory) is signed off (2026-11-06). The deci
 - `configs/security.yaml` defines the role/tool matrix, redaction fields and egress allowlist.
 - `configs/eval_thresholds.yaml` defines the release gates.
 
-Application code so far: `app/rag/` (P2–P3), plus `app/validators/` and `app/mcp_server/` (P4). The agent, API and memory packages arrive in P5 onward.
+Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_server/` (P4), and `app/agent/` and `app/api/` (P5). The checkpointer and approvals arrive in P6, and memory in P8.
 
 ## Commands
 
@@ -38,6 +38,10 @@ uv run python scripts/extract_response_codes.py          # once: SNAP response-c
 uv run python scripts/eval_validators.py                 # every validator fixture; exit 0 only at 100% (validator_fixture_accuracy)
 uv run python scripts/mcp_server.py                      # MCP server, http://127.0.0.1:8765/mcp, bearer auth (MCP_AUTH_SECRET)
 uv run python scripts/mint_dev_token.py --sub dev-1 --role developer   # short-lived bearer token; treat it as a secret
+uv run python scripts/mint_dev_token.py --sub dev-1 --role developer --audience api   # token for /api/v1 (never accepted by MCP)
+uv run python scripts/api_server.py                      # /api/v1 on 127.0.0.1:8000; needs the MCP server and the vLLM tunnel
+uv run python scripts/eval_agent.py                      # scripted agent flows, CI mode (MCP harness + fake LLM, no services)
+uv run python scripts/eval_agent.py --live --api-smoke   # the same flows on the real MCP server, Qdrant and vLLM (pod + tunnel)
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -126,3 +130,6 @@ Nothing is implemented without an accepted plan. Each feature follows `intent.md
 - `approved` is not the same as "retrievable". The fixture index (`kind: fixture_set`) is approved but never ingested; use `manifest.retrievable_document_ids()` when you need the documents a query can cite.
 - A committed file whose checksum is in the manifest needs `text eol=lf` in `.gitattributes`, or Windows checkouts change its bytes.
 - SSRF and IP test strings trip the IPv4 check in `test_repo_hygiene.py`. Build them from parts (`".".join([...])`) rather than writing the literal.
+- The hygiene tests read *tracked* files only, so a new file with a PEM header or an IP passes them until it is committed. Stage new files (`git add`) before running the gate. Build PEM headers in tests from parts too.
+- On this Windows machine a refused loopback port can hang (probably the Podman/WSL relay) instead of refusing, while Linux CI refuses instantly. Any "service down" test or readiness probe needs a short client timeout.
+- `redact_fields` in `configs/security.yaml` includes `signature`, which is also the name of the API's `signature` context block. Redaction applies inside context blocks, never to the block names.
