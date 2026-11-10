@@ -12,4 +12,4 @@
 - [x] 8. Entry points — spec AC: #1, #2, #3, #15
 - [x] 9. Local measured run — spec AC: #12, #14
 - [x] 10. Threat model and steering docs — spec flagged concerns, AC #16
-- [ ] 11. CLAUDE.md merge — agent configuration
+- [x] 11. CLAUDE.md merge — agent configuration

@@ -14,7 +14,7 @@ Phase P0 (§27, scope and source inventory) is signed off (2026-11-06). The deci
 - `configs/security.yaml` defines the role/tool matrix, redaction fields and egress allowlist.
 - `configs/eval_thresholds.yaml` defines the release gates.
 
-No application code exists yet. Phases P1 onward add it.
+Application code so far: `app/rag/` (P2–P3), plus `app/validators/` and `app/mcp_server/` (P4). The agent, API and memory packages arrive in P5 onward.
 
 ## Commands
 
@@ -33,6 +33,11 @@ uv run python scripts/ingest.py                          # approved sources -> Q
 uv run python scripts/search.py "<query>"                # hybrid search; results are untrusted data
 uv run python scripts/search.py "<query>" --rerank       # hybrid top-20 reordered by the cross-encoder; fused and reranked ranks
 uv run python scripts/eval_retrieval.py                  # Recall@5/10/20, MRR@10 on evals/datasets/retrieval_golden.yaml, plus the P3 before/after rerank table (original/hard/all)
+uv run python scripts/gen_test_keys.py                   # once: test-only RSA/HMAC keys into the git-ignored knowledge_base/fixtures/signatures/keys/
+uv run python scripts/extract_response_codes.py          # once: SNAP response-code table from the local PDF into git-ignored knowledge_base/sources/derived/
+uv run python scripts/eval_validators.py                 # every validator fixture; exit 0 only at 100% (validator_fixture_accuracy)
+uv run python scripts/mcp_server.py                      # MCP server, http://127.0.0.1:8765/mcp, bearer auth (MCP_AUTH_SECRET)
+uv run python scripts/mint_dev_token.py --sub dev-1 --role developer   # short-lived bearer token; treat it as a secret
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -106,6 +111,7 @@ All documentation lives under `docs/`, and `docs/index.md` is the table of conte
 - Changes to existing behaviour: add a regression test, and keep the existing tests passing unchanged.
 - Database (PostgreSQL): add a regression test whenever a step changes the schema or an existing query or behaviour around stored data.
 - Qdrant collection config or payload fields: add a regression test when either changes (`tests/unit/test_rag_store_ingest.py` pins them).
+- Roles/permissions (MCP tools, later the API): add authentication and authorization integration tests against the real server subprocess (`tests/integration/test_mcp_server.py`), plus the role × tool matrix unit test.
 
 Run `uv run pytest` before reporting a task complete, and paste the output.
 
@@ -116,3 +122,7 @@ Nothing is implemented without an accepted plan. Each feature follows `intent.md
 - Piping `uv run pytest | tail` hides pytest's exit code, so a red suite can be committed. Gate on pytest itself, or use `set -o pipefail`.
 - `tests/unit/test_repo_hygiene.py` flags any IPv4-shaped string in tracked files, including four-part section numbers written in docs. Only a quoted `section_id: "…"` value is exempt.
 - On CPU, `scripts/eval_retrieval.py` with reranking takes hours on the full golden set (224 min measured in P3: about 160 s per query). Use `--no-rerank` for P2-style metrics, and run the reranked eval in the background.
+- Registering an MCP tool with the SDK's plain `@server.tool` lets argument errors reach the client as pydantic text, which includes the submitted values. Register every tool through `GuardedTool` (`app/mcp_server/server.py`) so errors use the §18 envelope.
+- `approved` is not the same as "retrievable". The fixture index (`kind: fixture_set`) is approved but never ingested; use `manifest.retrievable_document_ids()` when you need the documents a query can cite.
+- A committed file whose checksum is in the manifest needs `text eol=lf` in `.gitattributes`, or Windows checkouts change its bytes.
+- SSRF and IP test strings trip the IPv4 check in `test_repo_hygiene.py`. Build them from parts (`".".join([...])`) rather than writing the literal.
