@@ -8,7 +8,7 @@
 - [x] 4. LLM client, fake LLM and prompts — spec AC: #9, #10
 - [x] 5. Answer assembly and policy check — spec AC: #2, #8
 - [x] 6. Graph — spec AC: #5, #6, #11, #12, #13, #14
-- [ ] 7. API — spec AC: #1, #2, #17, #18
+- [x] 7. API — spec AC: #1, #2, #17, #18
 - [ ] 8. Scripted flows and the eval CLI — spec AC: #11, #12, #13, #14, #15
 - [ ] 9. Live run and report — spec AC: #16
 - [ ] 10. Threat model and steering docs — spec flagged concerns
