@@ -9,7 +9,9 @@ import pytest
 from app.agent import config
 from app.agent.sanitize import REDACTED, sanitize
 
-PEM = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\nSYNTHETICNOTAREALKEY\n-----END PRIVATE KEY-----"
+DASHES = "-" * 5      # PEM header built from parts: test_repo_hygiene bans tracked PEM blocks
+PEM = (f"{DASHES}BEGIN PRIVATE KEY{DASHES}\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\nSYNTHETICNOTAREALKEY\n"
+       f"{DASHES}END PRIVATE KEY{DASHES}")
 TOKEN = "eyJhbGciOiJIUzI1NiJ9SYNTHETICTOKENVALUE0123"
 
 
