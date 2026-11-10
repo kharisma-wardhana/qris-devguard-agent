@@ -4,7 +4,7 @@
 
 - [x] 1. Dependencies and config — spec AC: #17
 - [x] 2. Payload validator — spec AC: #6, #7
-- [ ] 3. Canonicalization, keys and signature validator — spec AC: #8, #9, #10
+- [x] 3. Canonicalization, keys and signature validator — spec AC: #8, #9, #10
 - [ ] 4. Response-code lookup and extraction — spec AC: #11, #12
 - [ ] 5. Fixture index, manifest and the ingest skip — spec AC: #16
 - [ ] 6. Fixture eval CLI — spec AC: #14
