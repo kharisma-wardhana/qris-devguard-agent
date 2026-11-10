@@ -24,6 +24,16 @@ def test_fetch_models_dry_run_prints_pinned_revision():
     assert "nothing downloaded" in result.stdout
 
 
+def test_fetch_models_dry_run_covers_the_reranker():
+    """p3 spec AC #8: both models, both full revisions, no download."""
+    result = run("fetch_models.py", "--dry-run")
+    assert result.returncode == 0, result.stderr
+    assert "BAAI/bge-reranker-v2-m3" in result.stdout
+    assert "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e" in result.stdout
+    assert "model.safetensors" in result.stdout
+    assert "cached:" not in result.stdout
+
+
 def test_fetch_models_without_embed_stack_fails_with_one_line(tmp_path):
     # Shadow the optional packages with modules that fail to import, whether or not the extra is installed.
     for name in ("truststore", "huggingface_hub"):
@@ -153,3 +163,73 @@ def test_eval_cli_rejects_gold_section_missing_from_corpus(tmp_path):
                  "--test-backends", "--qdrant-path", str(tmp_path / "qdrant"), env_extra=TEST_ENV)
     assert result.returncode == 1
     assert "gold sections not in the corpus: s01:synthetic-qris-mpm-service-spec#9.nowhere" in result.stderr
+
+
+# --- search.py --rerank (p3 step 5) ------------------------------------------
+
+def test_search_cli_rerank_shows_both_ranks(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    backend = ["--test-backends", "--qdrant-path", str(tmp_path / "qdrant")]
+    result = run("search.py", "X-SIGNATURE HMAC_SHA512 minify body", "--rerank", "--limit", "5", *backend,
+                 env_extra=TEST_ENV)
+    assert result.returncode == 0, result.stderr
+    rows = [l for l in result.stdout.splitlines() if "(fused" in l]
+    assert len(rows) == 5
+    assert [int(l.split()[0]) for l in rows] == [1, 2, 3, 4, 5]
+    assert result.stdout.strip().splitlines()[-1].startswith("reranked 20 candidates in")   # 28 chunks -> pool of 20
+
+
+def test_search_cli_rerank_without_collection_is_one_line(tmp_path):
+    backend = ["--test-backends", "--qdrant-path", str(tmp_path / "empty")]
+    result = run("search.py", "anything", "--rerank", *backend, env_extra=TEST_ENV)
+    assert result.returncode == 1
+    assert result.stderr.strip().startswith("error: collection") and "Traceback" not in result.stderr
+
+
+
+# --- eval before/after (p3 step 6) -------------------------------------------
+
+SUBSET_GOLDEN = ROOT / "tests" / "fixtures" / "rag" / "golden_sample_subsets.yaml"
+
+
+def test_eval_cli_before_after_on_the_same_pool(tmp_path):
+    import json
+
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    result = run("eval_retrieval.py", "--golden", str(SUBSET_GOLDEN), "--report-dir", str(tmp_path / "reports"),
+                 "--test-backends", "--qdrant-path", str(tmp_path / "qdrant"), env_extra=TEST_ENV)
+    assert result.returncode == 0, result.stdout + result.stderr
+    out = result.stdout
+    assert {"hybrid", "dense", "sparse"} <= {l.split()[0] for l in out.splitlines() if l.strip()}   # P2 table kept
+    assert "before/after on the same hybrid top-20 pool" in out and "FAKE" in out
+    rows = {l.split()[0]: l for l in out.splitlines() if l.split() and l.split()[0] in ("original", "hard", "all")}
+    assert set(rows) == {"original", "hard", "all"}
+    assert rows["original"].split()[1] == "2" and rows["hard"].split()[1] == "1" and rows["all"].split()[1] == "3"
+    assert "rerank latency per query: median" in out and "pairs over max_length: n/a (fake)" in out
+    report = json.loads(next((tmp_path / "reports").glob("retrieval-*.json")).read_text(encoding="utf-8"))
+    assert all(r["is_permutation"] for r in report["rerank_per_query"])
+    for subset in ("original", "hard", "all"):           # reranking can't change the candidate pool
+        assert 0.0 <= report["before_after"][subset]["candidate_recall@20"] <= 1.0
+    assert "X-SIGNATURE" not in json.dumps(report)        # IDs and numbers only, no chunk text
+
+
+def test_eval_cli_no_rerank_keeps_p2_output(tmp_path):
+    manifest = synthetic_corpus(tmp_path)
+    assert run("ingest.py", *ingest_args(tmp_path, manifest), env_extra=TEST_ENV).returncode == 0
+    result = run("eval_retrieval.py", "--golden", str(SUBSET_GOLDEN), "--no-rerank", "--report-dir",
+                 str(tmp_path / "reports"), "--test-backends", "--qdrant-path", str(tmp_path / "qdrant"),
+                 env_extra=TEST_ENV)
+    assert result.returncode == 0
+    assert "before/after" not in result.stdout
+
+
+def test_eval_cli_malformed_golden_is_one_line(tmp_path):
+    """Regression (found in p3 step 1): a malformed golden file gave a traceback."""
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("dataset_version: x\n  - id: broken\n", encoding="utf-8")
+    result = run("eval_retrieval.py", "--golden", str(bad), env_extra=TEST_ENV)
+    assert result.returncode == 1
+    assert result.stderr.strip().startswith("error: golden set unreadable:")
+    assert "Traceback" not in result.stderr

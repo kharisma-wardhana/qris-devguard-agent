@@ -41,6 +41,15 @@ search:
   sparse_prefetch: 30
   limit: 20
 
+rerank:                               # p3-reranking-eval; not part of the ingest fingerprint
+  model_id: BAAI/bge-reranker-v2-m3
+  revision: 953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e   # pinned; Apache-2.0, safetensors
+  max_length: 1536                    # query + chunk tokens; P2's longest chunk is 1,275
+  candidates: 20                      # hybrid top-20 in (TRD §12.3: 20-30)
+  top_n: 6                            # passages out for the agent (TRD §12.3: 5-8)
+  batch_size: 4
+  latency_budget_p95_s: 10            # planning budget, not a P3 pass/fail (spec)
+
 ingest:
   max_file_mb: 50
   types:

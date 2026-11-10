@@ -43,3 +43,50 @@ def test_schema_catches_bad_entries():
 def test_real_golden_set_is_complete_and_reviewed():
     _, queries = metrics.load_golden(GOLDEN)
     assert metrics.schema_errors(queries, APPROVED, complete=True) == []
+
+
+# --- p3: subsets (spec AC #5) ------------------------------------------------
+
+P2_ORIGINAL_HASH = "8956f2bbf8621e2219530de0c9011ac708d6d1aad4ca86c245fafbac8ab9ef65"   # at commit 674b0f7
+
+
+def test_original_thirty_unchanged_since_p2():
+    """Regression: P3 may only append. The original 30 entries' content is pinned by hash."""
+    _, queries = metrics.load_golden(GOLDEN)
+    assert sum(q.subset == "original" for q in queries) == 30
+    assert metrics.original_content_hash(queries) == P2_ORIGINAL_HASH
+
+
+def test_set_defaults_to_original():
+    _, queries = metrics.load_golden(SAMPLE)
+    assert {q.subset for q in queries if q.id == "s01"} == {"original"}
+
+
+def gq(i, lang, doc, subset="hard"):
+    return metrics.GoldQuery(f"h{i:02d}", lang, "q", frozenset({(doc, "1")}), "me", "2026-11-09", subset)
+
+
+def test_hard_rules_count_language_and_coverage():
+    docs = sorted(APPROVED)
+    few = [gq(i, "en", docs[0]) for i in range(5)]
+    errors = metrics.schema_errors(few, APPROVED, complete=False, require_hard=True)
+    assert "hard set: expected at least 20 queries, found 5" in errors
+    assert "hard set: only 0 'id' queries (need 8)" in errors
+    assert any(e.startswith("hard set: documents with no query:") for e in errors)
+    good = [gq(i, "id" if i % 2 else "en", docs[i % len(docs)]) for i in range(20)]
+    assert metrics.schema_errors(good, APPROVED, complete=False, require_hard=True) == []
+
+
+def test_unknown_subset_rejected():
+    errors = metrics.schema_errors([gq(1, "en", sorted(APPROVED)[0], subset="easy")], APPROVED, complete=False)
+    assert errors == ["h01: set must be one of ['hard', 'original']"]
+
+
+def _has_hard() -> bool:
+    return GOLDEN.exists() and any(q.subset == "hard" for q in metrics.load_golden(GOLDEN)[1])
+
+
+@pytest.mark.skipif(not _has_hard(), reason="hard queries are merged in p3 plan step 7")
+def test_real_golden_set_hard_subset_complete_and_reviewed():
+    _, queries = metrics.load_golden(GOLDEN)
+    assert metrics.schema_errors(queries, APPROVED, complete=True, require_hard=True) == []

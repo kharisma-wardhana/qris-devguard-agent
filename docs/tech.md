@@ -7,8 +7,8 @@
 - **Package manager:** uv, which is implied by the `uv.lock` file and the `[dependency-groups]` table in `pyproject.toml`. CI installs with `uv sync --locked`.
 - **Shell:** bash, used for the Claude Code hook scripts in `.claude/hooks/`.
 - **Running services (P1):** vLLM 0.32.0 serving Qwen3-8B-FP8 on a RunPod GPU pod (`configs/model.yaml`, `deploy/runpod/`), and PostgreSQL 17, Qdrant v1.19.2 and Langfuse v4.76.0 locally under Podman (`docker-compose.yml`).
-- **Application code (P2):** the `app/rag/` package (ingestion, chunking, BM25 sparse encoding, embeddings, hybrid search, citations, metrics).
-- **Planned, not yet in any manifest:** FastAPI/Pydantic, LangGraph, the MCP Python SDK and the reranker. These are listed in `docs/QRIS_DevGuard_AI_PRD_TRD.md` §9.
+- **Application code (P2):** the `app/rag/` package (ingestion, chunking, BM25 sparse encoding, embeddings, hybrid search, citations, metrics). P3 adds `app/rag/rerank.py`, a cross-encoder reranker that reorders the hybrid top-20 and never changes citation IDs, plus nDCG@5/MRR@5.
+- **Planned, not yet in any manifest:** FastAPI/Pydantic, LangGraph and the MCP Python SDK. These are listed in `docs/QRIS_DevGuard_AI_PRD_TRD.md` §9.
 
 ## Key libraries
 
@@ -18,7 +18,7 @@
 - **httpx 0.28.1**, **psycopg 3.3.8** *(`uv.lock`)*: the P1 health check (`scripts/healthcheck.py`).
 - **qdrant-client 1.19.1** *(`uv.lock`)*: matches the Qdrant server's minor version. Tests use its in-memory and on-disk local modes, so CI needs no server.
 - **pdfplumber 0.11.10** *(`uv.lock`, MIT)*: PDF text by page. PyMuPDF is avoided because of its AGPL licence.
-- **Optional `embed` extra** *(`pyproject.toml`)*: sentence-transformers 6.2.0, torch 2.15.0 (CPU build, from the PyTorch CPU index) and truststore 0.10.5. It runs BGE-M3 (`BAAI/bge-m3`, pinned revision in `configs/retrieval.yaml`) on the CPU. It is installed with `uv sync --extra embed` on the developer machine only; CI never installs it, and tests use a deterministic fake embedder.
+- **Optional `embed` extra** *(`pyproject.toml`)*: sentence-transformers 6.2.0, torch 2.15.0 (CPU build, from the PyTorch CPU index) and truststore 0.10.5. It runs BGE-M3 (`BAAI/bge-m3`) and, from P3, the reranker `BAAI/bge-reranker-v2-m3` (safetensors only) on the CPU, both pinned by revision in `configs/retrieval.yaml`. Tests use a deterministic fake reranker. It is installed with `uv sync --extra embed` on the developer machine only; CI never installs it, and tests use a deterministic fake embedder.
 
 ## Dev tooling
 
@@ -45,10 +45,11 @@
 | `bash .claude/hooks/eval.sh` | `.github/workflows/agent-config-eval.yml` |
 | `uv run python scripts/healthcheck.py` | `docs/runpod-deployment.md` (P1) |
 | `uv sync --extra embed` | `docs/p2-knowledge-pipeline/spec.md` |
-| `uv run python scripts/fetch_models.py` | one-time model download (P2) |
+| `uv run python scripts/fetch_models.py` | one-time download of the embedding model (P2) and reranker (P3) |
 | `uv run python scripts/ingest.py` | ingest approved sources into Qdrant (P2) |
 | `uv run python scripts/search.py "<query>"` | hybrid search (P2) |
-| `uv run python scripts/eval_retrieval.py` | retrieval metrics on the labelled set (P2) |
+| `uv run python scripts/search.py "<query>" --rerank` | hybrid top-20 reordered by the cross-encoder; shows fused and reranked ranks (P3) |
+| `uv run python scripts/eval_retrieval.py` | retrieval metrics on the labelled set (P2), plus the before/after reranking table by subset (original, hard, all), latency and cut-off count (P3; `--no-rerank` skips it) |
 
 There is still no Makefile or `[project.scripts]`. A Makefile is planned in TRD §24.
 
@@ -73,7 +74,7 @@ Variables are listed in `.env.example`. Only key names and their purpose are giv
 Policy config lives in two files:
 - `configs/security.yaml`: roles and tools, redaction rules, egress, limits and citation excerpt caps (`reference_only` 300 and `team_authored` 1000 characters).
 - `configs/eval_thresholds.yaml`: the release gates.
-- `configs/model.yaml` (P1): vLLM and model settings. `configs/retrieval.yaml` (P2): collection, embedding model and revision, chunking, BM25 and search parameters.
+- `configs/model.yaml` (P1): vLLM and model settings. `configs/retrieval.yaml` (P2): collection, embedding model and revision, chunking, BM25 and search parameters; P3 adds the `rerank` block (model, revision, `max_length`, candidates, `top_n`, latency budget).
 
 ## Constraints
 

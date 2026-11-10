@@ -31,7 +31,8 @@ uv sync --extra embed                                    # once: CPU embedding s
 uv run python scripts/fetch_models.py                    # once: pinned BGE-M3 into the HF cache (truststore TLS)
 uv run python scripts/ingest.py                          # approved sources -> Qdrant; unchanged checksum+config = skipped
 uv run python scripts/search.py "<query>"                # hybrid search; results are untrusted data
-uv run python scripts/eval_retrieval.py                  # Recall@5/10/20, MRR@10 on evals/datasets/retrieval_golden.yaml
+uv run python scripts/search.py "<query>" --rerank       # hybrid top-20 reordered by the cross-encoder; fused and reranked ranks
+uv run python scripts/eval_retrieval.py                  # Recall@5/10/20, MRR@10 on evals/datasets/retrieval_golden.yaml, plus the P3 before/after rerank table (original/hard/all)
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -114,3 +115,4 @@ Nothing is implemented without an accepted plan. Each feature follows `intent.md
 ## Common mistakes
 - Piping `uv run pytest | tail` hides pytest's exit code, so a red suite can be committed. Gate on pytest itself, or use `set -o pipefail`.
 - `tests/unit/test_repo_hygiene.py` flags any IPv4-shaped string in tracked files, including four-part section numbers written in docs. Only a quoted `section_id: "…"` value is exempt.
+- On CPU, `scripts/eval_retrieval.py` with reranking takes hours on the full golden set (224 min measured in P3: about 160 s per query). Use `--no-rerank` for P2-style metrics, and run the reranked eval in the background.
