@@ -42,7 +42,9 @@ def load_secret(env_file: Path | None = None) -> str:
     return secret
 
 
-def mint(sub: str, role: str, *, secret: str, ttl_minutes: int | None = None, now: int | None = None) -> str:
+def mint(sub: str, role: str, *, secret: str, ttl_minutes: int | None = None, now: int | None = None,
+         audience: str | None = None) -> str:
+    """`audience` defaults to the MCP audience (P4 behaviour); the API uses its own (p5)."""
     a = config.mcp()["auth"]
     ttl = a["default_ttl_minutes"] if ttl_minutes is None else ttl_minutes
     if not SUB.match(sub):
@@ -52,23 +54,24 @@ def mint(sub: str, role: str, *, secret: str, ttl_minutes: int | None = None, no
     if not 1 <= ttl <= a["max_ttl_minutes"]:
         raise ValueError(f"ttl_minutes must be between 1 and {a['max_ttl_minutes']}")
     iat = int(time.time()) if now is None else now
-    claims = {"sub": sub, "role": role, "aud": a["audience"], "iss": a["issuer"], "iat": iat, "exp": iat + ttl * 60}
+    claims = {"sub": sub, "role": role, "aud": audience or a["audience"], "iss": a["issuer"], "iat": iat, "exp": iat + ttl * 60}
     return jwt.encode(claims, secret, algorithm="HS256")
 
 
 class HS256Verifier:
     """`mcp.server.auth.provider.TokenVerifier` for locally minted HS256 tokens."""
 
-    def __init__(self, secret: str):
+    def __init__(self, secret: str, audience: str | None = None):
         self._secret = secret
         self._cfg = config.mcp()["auth"]
+        self._audience = audience or self._cfg["audience"]      # MCP audience by default (P4 behaviour)
 
     def __repr__(self) -> str:
         return "HS256Verifier(<secret hidden>)"
 
     def claims(self, token: str) -> dict | None:
         try:
-            claims = jwt.decode(token, self._secret, algorithms=["HS256"], audience=self._cfg["audience"],
+            claims = jwt.decode(token, self._secret, algorithms=["HS256"], audience=self._audience,
                                 issuer=self._cfg["issuer"],
                                 options={"require": ["exp", "iat", "sub", "aud", "iss"]})
         except jwt.PyJWTError:

@@ -76,3 +76,15 @@ def test_load_secret_from_env_and_refuses_short_or_placeholder(tmp_path, monkeyp
 
 def test_verifier_repr_hides_secret():
     assert SECRET not in repr(auth.HS256Verifier(SECRET))
+
+
+def test_default_audience_unchanged_and_api_audience_is_separate():
+    """p5 regression: mint/HS256Verifier default to the MCP audience; an API-audience token is a different token."""
+    from app.agent import config as agent_config
+    api_aud = agent_config.agent()["api"]["audience"]
+    default = auth.mint("dev-1", "developer", secret=SECRET)
+    api = auth.mint("dev-1", "developer", secret=SECRET, audience=api_aud)
+    assert jwt.decode(default, options={"verify_signature": False})["aud"] == A["audience"]
+    assert verify(default) is not None and verify(api) is None                       # MCP verifier refuses API token
+    api_verifier = auth.HS256Verifier(SECRET, audience=api_aud)
+    assert api_verifier.claims(api)["sub"] == "dev-1" and api_verifier.claims(default) is None
