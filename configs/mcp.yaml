@@ -23,6 +23,7 @@ search:
   top_k_max: 10
   candidate_pool: 20         # hybrid results fetched before the api_family/version post-filter
   query_max_chars: 500
+  qdrant_probe_timeout_seconds: 3   # reachability probe before the 60 s client and BGE-M3 load (p5 step 1 finding)
   api_families:              # api_family -> documents it may cite; no filter = all approved documents
     snap: [snap-technical-security-standard, snap-data-technical-spec]
     qris-mpm: [synthetic-qris-mpm-service-spec]

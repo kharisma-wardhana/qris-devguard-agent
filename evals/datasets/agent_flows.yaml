@@ -1,0 +1,95 @@
+# Scripted agent flows (TRD §22.3; p5 spec AC #11-#15). SYNTHETIC requests; no ASPI text.
+# Flows pass on properties, never on wording. `live` overrides parts of a flow for the live corpus;
+# `modes` limits where a flow runs (4b needs the two-version conflict fixtures, which only the CI corpus has).
+#
+# expect keys:
+#   intent, route, risk           exact values
+#   tools                         tool names called, in order
+#   validator: {result, details}  the first validation_results entry
+#   summary_startswith            fixed policy wording
+#   confirmed_on_validator        some finding is `confirmed` with validator_refs [0]
+#   no_confirmed                  no finding is `confirmed`
+#   no_valid_signature_claim      no answer text claims the signature is valid
+#   version_conflict              evidence flag + both versions in sources + conflict limitation
+#   summary_contains              substrings of the (fixed) summary
+#   sources_include               a source with this document_id whose section starts with section_prefix
+# Always checked: every §5 section present; every cited ID is in sources; sources only hold retrieved IDs.
+
+dataset_version: "0.1.0"
+flows:
+  - id: flow-1-invalid-rsa-signature
+    title: Invalid test RSA signature (B2B access token)
+    request:
+      message: "My B2B access-token request is rejected with an invalid signature. What is wrong?"
+      context:
+        api_family: snap
+        signature: {algorithm: SHA256withRSA, fixture_id: syn-rsa-01, canonicalization_profile: snap-asymmetric-access-token-v1,
+                    test_case_ref: sig-at-wrong-separator}
+    expect:
+      intent: signature
+      route: read
+      tools: [search_qris_spec, validate_test_signature]
+      validator: {result: INVALID, details: [SIG_WRONG_SEPARATOR]}
+      confirmed_on_validator: true
+      no_valid_signature_claim: true
+    live:
+      expect:
+        sources_include: {document_id: snap-technical-security-standard, section_prefix: "2.1.5"}
+
+  - id: flow-2-bad-timestamp
+    title: Incorrect timestamp field (Generate QR)
+    request:
+      message: "Generate QR fails: the provider says X-TIMESTAMP is invalid."
+      context:
+        endpoint_id: qr-mpm-generate
+        spec_version: "0.1.0"
+        payload:
+          headers: {Content-Type: application/json, Authorization: "Bearer SYN-PLACEHOLDER-TOKEN",
+                    X-TIMESTAMP: "2026-11-06T10:15:30+07:00", X-SIGNATURE: SYN-PLACEHOLDER-SIGNATURE,
+                    X-PARTNER-ID: SYN-PARTNER-01, X-EXTERNAL-ID: "41807553358950093184", CHANNEL-ID: "95221"}
+          body: {partnerReferenceNo: SYN-REF-0001, amount: {value: "10000.00", currency: IDR}, merchantId: SYN-MERCHANT-01}
+    expect:
+      intent: timestamp
+      route: read
+      tools: [search_qris_spec, validate_request_payload]
+      validator: {result: invalid, details: ["SCHEMA_FORMAT at /headers/X-TIMESTAMP"]}
+      confirmed_on_validator: true
+
+  - id: flow-3-unknown-response-code
+    title: Unknown response code
+    request:
+      message: "The sandbox returned 4044700 for Generate QR. What does it mean?"
+      context: {api_family: qris-mpm, spec_version: "0.1.0", response_code: "4044700"}
+    expect:
+      intent: response_code
+      route: read
+      tools: [search_qris_spec, lookup_response_code]
+      validator: {result: NOT_FOUND}
+      summary_startswith: "Response code 4044700 was not found"
+      no_confirmed_about_code: "4044700"
+
+  - id: flow-4a-version-not-in-corpus
+    title: Old specification version requested
+    request:
+      message: "In the QRIS MPM spec 0.0.9, what is the X-TIMESTAMP format for Generate QR?"
+    expect:
+      route: clarify
+      tools: [search_qris_spec]
+      no_confirmed: true
+      summary_contains: ["0.0.9", "0.1.0"]
+    live:
+      request:
+        message: "In SNAP 1.0.1, what is the string to sign for the B2B access-token signature?"
+        context: {api_family: snap}
+      expect:
+        summary_contains: ["1.0.1", "1.0.2"]
+
+  - id: flow-4b-two-versions-in-evidence
+    title: Two versions of one document in the evidence
+    modes: [ci]
+    request:
+      message: "How long is a generated QR valid when validityPeriod is omitted?"
+    expect:
+      route: read
+      tools: [search_qris_spec]
+      version_conflict: true

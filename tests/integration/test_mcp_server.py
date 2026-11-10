@@ -171,3 +171,21 @@ def test_server_refuses_to_start_without_secret(tmp_path):
     r = subprocess.run([sys.executable, str(ROOT / "scripts" / "mcp_server.py"), "--port", str(_free_port())],
                        cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert r.returncode == 1 and "MCP_AUTH_SECRET" in r.stderr and "Xq7tooFewChars" not in r.stderr
+
+
+def test_mint_dev_token_audience_option(server):
+    """p5 regression: no --audience still mints an MCP token; --audience api mints one the MCP server rejects."""
+    url, _, _ = server
+    env = {**os.environ, "MCP_AUTH_SECRET": SECRET}
+
+    def mint_cli(*extra):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "mint_dev_token.py"), "--sub", "dev-1", "--role",
+                            "developer", *extra], cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+        return r.stdout.strip()
+
+    assert auth.HS256Verifier(SECRET).claims(mint_cli()) is not None
+    assert auth.HS256Verifier(SECRET).claims(mint_cli("--audience", "mcp")) is not None
+    api_token = mint_cli("--audience", "api")
+    r = httpx.post(url, headers={**HEADERS, "Authorization": f"Bearer {api_token}"}, json=INIT, timeout=10)
+    assert r.status_code == 401

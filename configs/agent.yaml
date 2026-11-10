@@ -1,0 +1,47 @@
+# LangGraph agent and /api/v1 (p5-langgraph-agent spec). Model identity comes from configs/model.yaml;
+# roles per tool from configs/security.yaml; tool limits from configs/mcp.yaml. Nothing here repeats them.
+
+llm:
+  base_url_env: VLLM_BASE_URL          # http://127.0.0.1:8080/v1 through scripts/tunnel.sh
+  api_key_env: VLLM_API_KEY
+  served_name_from: configs/model.yaml # model.served_name
+  temperature: 0
+  max_tokens: 1200
+  timeout_seconds: 60
+  json_retries: 1                      # one retry on malformed JSON, then the deterministic fallback
+  enable_thinking: false               # Qwen3 chat template; no reasoning tokens in the answer
+  prompt_version: compose-v1
+
+tools:
+  mcp_url: http://127.0.0.1:8765/mcp   # configs/mcp.yaml server host/port/path
+  timeout_seconds: 90                  # a cold search loads BGE-M3 (~30 s measured in p4)
+  transient_retries: 1                 # connection errors only; tool error envelopes are never retried
+  token_ttl_minutes: 5                 # per-run MCP token, minted for the caller's sub and role
+
+retrieval:
+  top_k: 6
+  rerank: false                        # CPU reranker ~160 s/query (p3); rerank_evidence passes fused order through
+
+api:
+  host: 127.0.0.1                      # loopback only
+  port: 8000
+  audience: qris-devguard-api          # MCP tokens use qris-devguard-mcp (configs/mcp.yaml); never forwarded
+  max_message_chars: 8000              # configs/security.yaml limits.max_message_chars
+
+classify:
+  code_regex: '(?<!\d)([2-5]\d{6})(?!\d)'
+  version_regex: '(?<![\d.])(\d{1,3}\.\d{1,3}\.\d{1,3})(?![\d.])'
+  keywords:
+    signature: [signature, signing, string to sign, stringtosign, x-signature, sha256withrsa, hmac, tanda tangan, signatur]
+    timestamp: [timestamp, x-timestamp, waktu, iso-8601, iso8601, time zone, zona waktu]
+    payload: [payload, request body, body request, field, header, mandatory, wajib]
+    response_code: [response code, responsecode, kode respons, kode response, error code]
+    version_question: [version, versi, older spec, spesifikasi lama, which version]
+  write: [create ticket, create a ticket, open a ticket, submit ticket, escalate, eskalasi, buat tiket, retry the, change config, ubah konfigurasi, modify record]
+  # Prohibited = asking to DO a prohibited action: an action verb followed within `verb_window` words by a
+  # prohibited object (these objects plus security.yaml prohibited_actions), or an explicit production phrase.
+  # A bare mention ("what does the refund response code mean", "Query Payment") is a read question.
+  action_verbs: [make, process, execute, perform, initiate, issue, trigger, run, lakukan, proses, jalankan, kirim, buat]   # not "do"/"send": "what do I send for the refund code" is a read question
+  verb_window: 4
+  prohibited_objects: [payment, pembayaran, refund, reversal, settlement, merchant activation, aktivasi merchant, transfer, transfer dana]
+  prohibited_phrases: [production api, production endpoint, production key, production credential, live secret, private key produksi, kredensial produksi, api produksi]

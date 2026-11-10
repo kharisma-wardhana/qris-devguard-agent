@@ -174,10 +174,10 @@ def test_extra_field_rejected(server, tool):
 
 
 def test_oversized_payload_rejected(server):
-    big = {"headers": {}, "body": {"additionalInfo": {"x": "a" * (config.max_payload_bytes() + 1)}}}
+    big = {"headers": {}, "body": {"additionalInfo": {"x": "Z" * (config.max_payload_bytes() + 1)}}}
     is_error, body = call(server, "validate_request_payload", {**GOOD["validate_request_payload"], "payload": big})
     assert is_error and body["code"] == "INVALID_ARGUMENT" and body["field_errors"][0]["field"] == "payload"
-    assert "aaaa" not in json.dumps(body)
+    assert "ZZZZ" not in json.dumps(body)          # Z: cannot occur in the hex correlation_id
 
 
 def test_secret_shaped_values_never_in_response_or_log(server, caplog):
@@ -263,3 +263,35 @@ def test_app_refuses_non_loopback(monkeypatch, server):
     monkeypatch.setattr(config, "mcp", lambda: cfg)
     with pytest.raises(ValueError):
         srv.build_app(server)
+
+
+@pytest.mark.parametrize("probe_result", ["raises", "missing"])
+def test_default_backends_probe_qdrant_briefly_before_loading_anything(monkeypatch, probe_result):
+    """p5 regression: a dead, hanging or empty Qdrant fails at a short-timeout probe; the 60 s client
+    and BGE-M3 are never built."""
+    import qdrant_client
+
+    import app.rag.embedding as emb_mod
+    import app.rag.store as store_mod
+
+    seen = {}
+
+    class Probe:
+        def __init__(self, url, timeout, check_compatibility):
+            seen.update(timeout=timeout, check_compatibility=check_compatibility)
+
+        def collection_exists(self, name):
+            if probe_result == "raises":
+                raise ConnectionError("refused")
+            return False
+
+    def must_not_build(*a, **k):
+        raise AssertionError("must not be built when the probe fails")
+
+    monkeypatch.setattr(qdrant_client, "QdrantClient", Probe)
+    monkeypatch.setattr(store_mod, "make_client", must_not_build)
+    monkeypatch.setattr(emb_mod, "BgeM3Embedder", must_not_build)
+    with pytest.raises(ConnectionError):
+        t.default_context().backends()
+    assert seen == {"timeout": config.mcp()["search"]["qdrant_probe_timeout_seconds"], "check_compatibility": False}
+    assert seen["timeout"] <= 5
