@@ -45,6 +45,9 @@ Edited
 - `pyproject.toml` / `uv.lock`: `langgraph==1.2.20`, `fastapi==0.162.2`, `openai==3.49.0`, pinned exactly.
 - `app/mcp_server/auth.py`: `mint(..., audience=None)` and `HS256Verifier(secret, audience=None)`. Both default to the MCP audience, so P4 behaviour is unchanged.
 - `scripts/mint_dev_token.py`: `--audience mcp|api`, default `mcp`.
+- `app/mcp_server/tools.py`: `default_context()`'s search backends first probe Qdrant with a short-timeout client (`search.qdrant_probe_timeout_seconds`), and only then build the 60 s client and load BGE-M3. Found at step 1: on this machine a refused loopback port hangs instead of refusing (probably the Podman/WSL relay; even plain httpx waits out its timeout). The 60 s Qdrant client timeout therefore blew the P4 real-server test's 30 s client timeout. That was the unexplained P4 flake; Linux CI refuses instantly. Regression test in `tests/unit/test_mcp_tools.py`.
+- `configs/mcp.yaml`: `search.qdrant_probe_timeout_seconds: 3` (same finding).
+- `tests/unit/test_mcp_tools.py`: the regression test above.
 - `tests/unit/test_mcp_auth.py`: regression tests. The default audience is unchanged; an API-audience token is refused by the MCP verifier and accepted by the API verifier.
 - `tests/integration/test_mcp_server.py`: regression tests. `mint_dev_token.py` without `--audience` still mints an MCP token; `--audience api` mints one the MCP server rejects with 401.
 - `docs/threat-model.md`: T3, T6, T7, T8 and T14 gain P5 evidence. T1 notes the API audience.
@@ -52,7 +55,7 @@ Edited
 - `docs/index.md`: links the plan, tasks and report.
 - `CLAUDE.md`: see Agent configuration changes.
 
-Not changed: `app/mcp_server/server.py`, `tools.py`, `models.py`; `app/validators/*`; `app/rag/*`; `configs/security.yaml`, `configs/mcp.yaml`, `configs/retrieval.yaml`, `configs/model.yaml`; `.claude/*`; `.github/*`.
+Not changed: `app/mcp_server/server.py`, `models.py`; `app/validators/*`; `app/rag/*`; `configs/security.yaml`, `configs/retrieval.yaml`, `configs/model.yaml`; `.claude/*`; `.github/*`.
 
 ## Work sequence
 

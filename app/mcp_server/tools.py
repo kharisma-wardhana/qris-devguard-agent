@@ -52,8 +52,16 @@ def default_context() -> ToolContext:
     cases_path = config.repo_path(v["fixtures_index"]).parent / "signatures" / "cases.yaml"
 
     def backends() -> tuple[Any, Any]:
+        from qdrant_client import QdrantClient
+
         from app.rag.embedding import BgeM3Embedder
         from app.rag.store import Store, make_client
+        # Probe Qdrant with a short timeout before the 60 s client and the ~30 s BGE-M3 load, so a dead or
+        # hanging store fails fast (p5 step 1 finding: refused loopback ports can hang instead of refusing).
+        probe = QdrantClient(url=rag_config.qdrant_url(), timeout=config.mcp()["search"]["qdrant_probe_timeout_seconds"],
+                             check_compatibility=False)
+        if not probe.collection_exists(rag_config.retrieval()["collection"]):
+            raise ConnectionError("collection not available")
         return Store(make_client()), BgeM3Embedder()
 
     def reranker() -> Any:

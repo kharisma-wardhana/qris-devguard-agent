@@ -2,7 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Build. Written: 2026-11-10. Via /aspec:make-it-simple-v2.*
 *Implements: docs/p5-langgraph-agent/plan.md*
 
-- [ ] 1. Dependencies and config — spec AC: #18
+- [x] 1. Dependencies and config — spec AC: #18
 - [ ] 2. Sanitize and classify — spec AC: #3, #4, #5
 - [ ] 3. Audience-aware tokens and the MCP client — spec AC: #7
 - [ ] 4. LLM client, fake LLM and prompts — spec AC: #9, #10
