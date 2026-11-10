@@ -11,5 +11,5 @@
 - [x] 7. MCP layer — spec AC: #1, #2, #3, #4, #5, #13
 - [x] 8. Entry points — spec AC: #1, #2, #3, #15
 - [x] 9. Local measured run — spec AC: #12, #14
-- [ ] 10. Threat model and steering docs — spec flagged concerns, AC #16
+- [x] 10. Threat model and steering docs — spec flagged concerns, AC #16
 - [ ] 11. CLAUDE.md merge — agent configuration
