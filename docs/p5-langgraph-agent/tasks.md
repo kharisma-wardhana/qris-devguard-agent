@@ -10,6 +10,6 @@
 - [x] 6. Graph — spec AC: #5, #6, #11, #12, #13, #14
 - [x] 7. API — spec AC: #1, #2, #17, #18
 - [x] 8. Scripted flows and the eval CLI — spec AC: #11, #12, #13, #14, #15
-- [ ] 9. Live run and report — spec AC: #16
+- [x] 9. Live run and report — spec AC: #16
 - [ ] 10. Threat model and steering docs — spec flagged concerns
 - [ ] 11. CLAUDE.md merge — agent configuration
