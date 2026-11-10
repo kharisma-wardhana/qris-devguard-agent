@@ -1,0 +1,254 @@
+# Signature test cases (SYNTHETIC test material). No signature or key is committed:
+# each case says how the candidate is produced, and the keys are generated at runtime
+# (scripts/gen_test_keys.py, git-ignored). Outcomes are the same with any fresh key.
+#
+# candidate:
+#   signed_with   key fixture ID used by the simulated client
+#   profile       canonicalization profile the client used
+#   mistake       optional named mistake the client made (app/validators/canonical.py MISTAKES)
+#   encoding      base64 (default) | hex
+#   sign_overrides  components the client signed that differ from the request it sent
+#   literal       a fixed candidate string instead of a real signature
+# check: the tool arguments (algorithm, profile, fixture_id) the case is verified with.
+
+keys:
+  syn-rsa-01: rsa
+  syn-rsa-02: rsa
+  syn-hmac-01: hmac
+  syn-hmac-02: hmac
+
+components:
+  at-base:
+    client_key: SYN-CLIENT-0001
+    timestamp: "2026-11-10T09:00:00.000+07:00"
+  at-utc:
+    client_key: SYN-CLIENT-0001
+    timestamp: "2026-11-10T02:00:00.000Z"
+  at-other-client:
+    client_key: SYN-CLIENT-0042
+    timestamp: "2026-11-10T09:05:00.000+07:00"
+  at-no-timestamp:
+    client_key: SYN-CLIENT-0001
+  gen-base:
+    method: POST
+    path: /v1.0/qr/qr-mpm-generate
+    host: sandbox.devguard.invalid
+    access_token: SYN-PLACEHOLDER-TOKEN
+    timestamp: "2026-11-06T10:15:30.000+07:00"
+    body: '{"partnerReferenceNo":"SYN-REF-0001","amount":{"value":"10000.00","currency":"IDR"},"merchantId":"SYN-MERCHANT-01","terminalId":"T01"}'
+  gen-pretty:
+    method: POST
+    path: /v1.0/qr/qr-mpm-generate
+    host: sandbox.devguard.invalid
+    access_token: SYN-PLACEHOLDER-TOKEN
+    timestamp: "2026-11-06T10:15:30.000+07:00"
+    body: "{\n  \"partnerReferenceNo\": \"SYN-REF-0002\",\n  \"amount\": {\"value\": \"25000.00\", \"currency\": \"IDR\"},\n  \"merchantId\": \"SYN-MERCHANT-01\"\n}"
+  gen-utf8:
+    method: POST
+    path: /v1.0/qr/qr-mpm-generate
+    host: sandbox.devguard.invalid
+    access_token: SYN-PLACEHOLDER-TOKEN
+    timestamp: "2026-11-06T10:15:30.000+07:00"
+    body: '{"partnerReferenceNo":"SYN-REF-0003","amount":{"value":"5000.00","currency":"IDR"},"merchantId":"SYN-MERCHANT-01","additionalInfo":{"note":"Kafé Sintetis"}}'
+  qry-base:
+    method: POST
+    path: /v1.0/qr/qr-mpm-query
+    host: sandbox.devguard.invalid
+    access_token: SYN-PLACEHOLDER-TOKEN
+    timestamp: "2026-11-06T10:20:00.000+07:00"
+    body: '{"originalPartnerReferenceNo":"SYN-REF-0001","serviceCode":"47","merchantId":"SYN-MERCHANT-01"}'
+  gen-no-token:
+    method: POST
+    path: /v1.0/qr/qr-mpm-generate
+    timestamp: "2026-11-06T10:15:30.000+07:00"
+    body: '{"partnerReferenceNo":"SYN-REF-0001"}'
+  gen-body-not-json:
+    method: POST
+    path: /v1.0/qr/qr-mpm-generate
+    access_token: SYN-PLACEHOLDER-TOKEN
+    timestamp: "2026-11-06T10:15:30.000+07:00"
+    body: "partnerReferenceNo=SYN-REF-0001"
+
+cases:
+  # --- snap-asymmetric-access-token-v1 (SHA256withRSA) ---------------------------------------
+  - id: sig-at-valid
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1 }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: VALID, diagnostic_code: SIG_VALID }
+  - id: sig-at-valid-utc
+    components: at-utc
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1 }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: VALID, diagnostic_code: SIG_VALID }
+  - id: sig-at-valid-second-key
+    components: at-other-client
+    candidate: { signed_with: syn-rsa-02, profile: snap-asymmetric-access-token-v1 }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-02 }
+    expect: { status: VALID, diagnostic_code: SIG_VALID }
+  - id: sig-at-wrong-separator
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1, mistake: SIG_WRONG_SEPARATOR }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_WRONG_SEPARATOR }
+  - id: sig-at-components-swapped
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1, mistake: SIG_COMPONENTS_SWAPPED }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_COMPONENTS_SWAPPED }
+  - id: sig-at-trailing-newline
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1, mistake: SIG_TRAILING_NEWLINE }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_TRAILING_NEWLINE }
+  - id: sig-at-hex
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1, encoding: hex }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_HEX_NOT_BASE64 }
+  - id: sig-at-wrong-key
+    components: at-base
+    candidate: { signed_with: syn-rsa-02, profile: snap-asymmetric-access-token-v1 }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_WRONG_KEY }
+  - id: sig-at-timestamp-changed
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1,
+                 sign_overrides: { timestamp: "2026-11-10T09:00:01.000+07:00" } }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_NO_KNOWN_MISTAKE }
+  - id: sig-at-client-key-tampered
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1,
+                 sign_overrides: { client_key: SYN-CLIENT-0002 } }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_NO_KNOWN_MISTAKE }
+  - id: sig-at-not-base64
+    components: at-base
+    candidate: { literal: "not a signature!" }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_NOT_BASE64 }
+  - id: sig-at-truncated
+    components: at-base
+    candidate: { literal: "AAAA" }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_NO_KNOWN_MISTAKE }
+  - id: sig-at-key-unavailable
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1 }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-09 }
+    expect: { status: INCONCLUSIVE, diagnostic_code: SIG_KEY_UNAVAILABLE }
+  - id: sig-at-algorithm-mismatch
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1 }
+    check: { algorithm: HMAC_SHA512, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INCONCLUSIVE, diagnostic_code: SIG_PROFILE_ALGORITHM_MISMATCH }
+  - id: sig-at-missing-timestamp
+    components: at-no-timestamp
+    candidate: { literal: "AAAA" }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-rsa-01 }
+    expect: { status: INCONCLUSIVE, diagnostic_code: SIG_MISSING_COMPONENT }
+  - id: sig-at-hmac-key-for-rsa-profile
+    components: at-base
+    candidate: { signed_with: syn-rsa-01, profile: snap-asymmetric-access-token-v1 }
+    check: { algorithm: SHA256withRSA, profile: snap-asymmetric-access-token-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INCONCLUSIVE, diagnostic_code: SIG_KEY_TYPE_MISMATCH }
+
+  # --- synthetic-snap-symmetric-v1 (HMAC_SHA512) --------------------------------------------
+  - id: sig-gen-valid
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1 }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: VALID, diagnostic_code: SIG_VALID }
+  - id: sig-gen-valid-pretty-body
+    components: gen-pretty
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1 }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: VALID, diagnostic_code: SIG_VALID }
+  - id: sig-gen-valid-utf8-body
+    components: gen-utf8
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1 }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: VALID, diagnostic_code: SIG_VALID }
+  - id: sig-qry-valid
+    components: qry-base
+    candidate: { signed_with: syn-hmac-02, profile: synthetic-snap-symmetric-v1 }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-02 }
+    expect: { status: VALID, diagnostic_code: SIG_VALID }
+  - id: sig-gen-body-not-minified
+    components: gen-pretty
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1, mistake: SIG_BODY_NOT_MINIFIED }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_BODY_NOT_MINIFIED }
+  - id: sig-gen-keys-reordered
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1, mistake: SIG_BODY_KEYS_REORDERED }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_BODY_KEYS_REORDERED }
+  - id: sig-gen-ascii-escaped
+    components: gen-utf8
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1, mistake: SIG_BODY_ASCII_ESCAPED }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_BODY_ASCII_ESCAPED }
+  - id: sig-gen-path-includes-host
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1, mistake: SIG_PATH_INCLUDES_HOST }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_PATH_INCLUDES_HOST }
+  - id: sig-gen-method-lowercase
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1, mistake: SIG_METHOD_NOT_UPPERCASE }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_METHOD_NOT_UPPERCASE }
+  - id: sig-gen-body-hash-uppercase
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1, mistake: SIG_BODY_HASH_UPPERCASE }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_BODY_HASH_UPPERCASE }
+  - id: sig-gen-trailing-newline
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1, mistake: SIG_TRAILING_NEWLINE }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_TRAILING_NEWLINE }
+  - id: sig-gen-hex
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1, encoding: hex }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_HEX_NOT_BASE64 }
+  - id: sig-gen-wrong-key
+    components: gen-base
+    candidate: { signed_with: syn-hmac-02, profile: synthetic-snap-symmetric-v1 }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_WRONG_KEY }
+  - id: sig-gen-timestamp-changed
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1,
+                 sign_overrides: { timestamp: "2026-11-06T10:15:31.000+07:00" } }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_NO_KNOWN_MISTAKE }
+  - id: sig-gen-amount-tampered
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1,
+                 sign_overrides: { body: '{"partnerReferenceNo":"SYN-REF-0001","amount":{"value":"1.00","currency":"IDR"},"merchantId":"SYN-MERCHANT-01","terminalId":"T01"}' } }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INVALID, diagnostic_code: SIG_NO_KNOWN_MISTAKE }
+  - id: sig-gen-key-unavailable
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1 }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-09 }
+    expect: { status: INCONCLUSIVE, diagnostic_code: SIG_KEY_UNAVAILABLE }
+  - id: sig-gen-algorithm-mismatch
+    components: gen-base
+    candidate: { signed_with: syn-hmac-01, profile: synthetic-snap-symmetric-v1 }
+    check: { algorithm: SHA256withRSA, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INCONCLUSIVE, diagnostic_code: SIG_PROFILE_ALGORITHM_MISMATCH }
+  - id: sig-gen-missing-token
+    components: gen-no-token
+    candidate: { literal: "AAAA" }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INCONCLUSIVE, diagnostic_code: SIG_MISSING_COMPONENT }
+  - id: sig-gen-body-not-json
+    components: gen-body-not-json
+    candidate: { literal: "AAAA" }
+    check: { algorithm: HMAC_SHA512, profile: synthetic-snap-symmetric-v1, fixture_id: syn-hmac-01 }
+    expect: { status: INCONCLUSIVE, diagnostic_code: SIG_BODY_NOT_JSON }

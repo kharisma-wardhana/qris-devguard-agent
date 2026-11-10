@@ -102,3 +102,25 @@ def test_real_manifest_selects_only_approved_entries():
     assert by_id["synthetic-test-fixtures"].status == m.SKIPPED      # candidate
     assert by_id["synthetic-qris-mpm-service-spec"].status == m.OK
     assert by_id["synthetic-qris-troubleshooting-sop"].status == m.OK
+
+
+def test_fixture_set_is_skipped_even_when_approved():
+    """p4 regression: the approved fixture index is test data and is never ingested."""
+    results = m.select_sources(ROOT / "knowledge_base" / "manifests" / "sources.yaml", ROOT)
+    by_id = {r.document_id: r for r in results}
+    fixture = by_id["synthetic-test-fixtures"]
+    assert fixture.entry["approval_status"] == "approved"
+    assert (fixture.status, fixture.reason) == (m.SKIPPED, "fixture set: validator test data, not a retrievable document (p4)")
+    # the four documents are still selected (the reference-only PDFs are absent in CI, so they may FAIL there)
+    assert by_id["synthetic-qris-mpm-service-spec"].status == m.OK
+    assert by_id["synthetic-qris-troubleshooting-sop"].status == m.OK
+    for doc in ("snap-technical-security-standard", "snap-data-technical-spec"):
+        assert by_id[doc].status in (m.OK, m.FAILED)
+
+
+def test_retrievable_document_ids_excludes_fixture_set():
+    entries = m.load_manifest(ROOT / "knowledge_base" / "manifests" / "sources.yaml")
+    ids = m.retrievable_document_ids(entries)
+    assert "synthetic-test-fixtures" not in ids
+    assert ids == {"snap-technical-security-standard", "snap-data-technical-spec",
+                   "synthetic-qris-mpm-service-spec", "synthetic-qris-troubleshooting-sop"}

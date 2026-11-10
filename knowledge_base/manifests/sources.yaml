@@ -96,11 +96,17 @@ sources:
     publisher: Capstone project team
     kind: fixture_set
     source_url: null
-    document_version: null
-    effective_date: null
+    local_path: knowledge_base/fixtures/fixtures.yaml
+    document_version: 0.1.0
+    effective_date: 2026-11
     language: [en]
     data_owner: validator_owner
-    permission: { basis: team_authored, evidence: Authored by the capstone team; synthetic data only }
-    approval_status: candidate
-    checksum_sha256: null
-    notes: Created in Phase P4. Key material stays outside git.
+    permission:
+      basis: team_authored
+      evidence: >-
+        Authored by Kharisma Wardhana for the capstone (p4-deterministic-mcp-tools), 2026-11-10. All values
+        synthetic. Schemas are team-written; the access-token schema cites snap-technical-security-standard
+        1.0.2 section 2.1.5(a) without copying its text.
+    approval_status: approved
+    checksum_sha256: f86f6893886830ea2920ae9ba3e7cc96e8d3f178a0c9170a37232f6fef8e60e8
+    notes: Created in Phase P4 (index of schemas, payload, signature and response-code cases). Test data, not ingested (kind fixture_set). Key material is generated at runtime and stays outside git.

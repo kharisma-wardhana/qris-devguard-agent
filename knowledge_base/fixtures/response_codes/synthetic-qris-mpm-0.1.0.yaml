@@ -1,0 +1,20 @@
+# Response codes for the SYNTHETIC QRIS MPM services (not an official ASPI/BI document).
+# Transcribed from synthetic-qris-mpm-service-spec 0.1.0 §2 (service 47) and §3 (service 51).
+document_id: synthetic-qris-mpm-service-spec
+document_version: "0.1.0"
+synthetic: true
+entries:
+  - { http_status: "200", service_code: "47", case_code: "00", category: null, message: "Successful", description: "Generate QR succeeded (SYNTHETIC)", section: "2" }
+  - { http_status: "400", service_code: "47", case_code: "01", category: null, message: "Invalid field format {field name}", description: "A field does not match its format (SYNTHETIC)", section: "2" }
+  - { http_status: "400", service_code: "47", case_code: "02", category: null, message: "Invalid mandatory field {field name}", description: "A mandatory field is missing or empty (SYNTHETIC)", section: "2" }
+  - { http_status: "401", service_code: "47", case_code: "00", category: null, message: "Unauthorized: signature invalid", description: "X-SIGNATURE did not verify (SYNTHETIC)", section: "2" }
+  - { http_status: "401", service_code: "47", case_code: "01", category: null, message: "Invalid token (B2B)", description: "The B2B access token is invalid (SYNTHETIC)", section: "2" }
+  - { http_status: "409", service_code: "47", case_code: "00", category: null, message: "Conflict: duplicate partnerReferenceNo", description: "partnerReferenceNo was already used (SYNTHETIC)", section: "2" }
+  - { http_status: "500", service_code: "47", case_code: "00", category: null, message: "General error", description: "Unspecified provider error (SYNTHETIC)", section: "2" }
+  - { http_status: "200", service_code: "51", case_code: "00", category: null, message: "Successful", description: "Query Payment succeeded (SYNTHETIC)", section: "3" }
+  - { http_status: "400", service_code: "51", case_code: "01", category: null, message: "Invalid field format {field name}", description: "A field does not match its format (SYNTHETIC)", section: "3" }
+  - { http_status: "400", service_code: "51", case_code: "02", category: null, message: "Invalid mandatory field {field name}", description: "A mandatory field is missing or empty (SYNTHETIC)", section: "3" }
+  - { http_status: "401", service_code: "51", case_code: "00", category: null, message: "Unauthorized: signature invalid", description: "X-SIGNATURE did not verify (SYNTHETIC)", section: "3" }
+  - { http_status: "401", service_code: "51", case_code: "01", category: null, message: "Invalid token (B2B)", description: "The B2B access token is invalid (SYNTHETIC)", section: "3" }
+  - { http_status: "404", service_code: "51", case_code: "01", category: null, message: "Transaction not found", description: "No QR transaction matches the reference (SYNTHETIC)", section: "3" }
+  - { http_status: "500", service_code: "51", case_code: "00", category: null, message: "General error", description: "Unspecified provider error (SYNTHETIC)", section: "3" }

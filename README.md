@@ -11,7 +11,7 @@ A self-hosted agentic assistant for diagnosing **sandbox** QRIS/SNAP API integra
 
 ## Status
 
-Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is complete: 7/7 health checks passed on 2026-11-07 (`docs/p1-infrastructure/`). Phase P2 (knowledge pipeline) is in progress: see `docs/p2-knowledge-pipeline/`.
+Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is complete: 7/7 health checks passed on 2026-11-07 (`docs/p1-infrastructure/`). Phases P2 (knowledge pipeline) and P3 (reranking and eval) are complete; see their folders under `docs/`. Phase P4 (deterministic MCP tools) is in review: `docs/p4-deterministic-mcp-tools/`.
 
 ## Development
 
@@ -36,3 +36,19 @@ uv run python scripts/eval_retrieval.py                # Recall@5/10/20, MRR@10:
 ```
 
 The two ASPI PDFs are reference-only: put them at the `local_path`s in `knowledge_base/manifests/sources.yaml`. They are git-ignored and never committed.
+
+## MCP tools (P4)
+
+```bash
+uv run python scripts/gen_test_keys.py                 # once: test-only keys, git-ignored
+uv run python scripts/extract_response_codes.py        # once: SNAP response-code table from the local PDF, git-ignored
+uv run python scripts/eval_validators.py               # all validator fixtures; must be 100%
+uv run python scripts/mcp_server.py                    # http://127.0.0.1:8765/mcp, loopback only
+uv run python scripts/mint_dev_token.py --sub dev-1 --role developer   # bearer token for a client
+```
+
+Four read-only tools: `search_qris_spec`, `validate_request_payload`, `validate_test_signature`, `lookup_response_code`.
+
+- **MCP SDK:** `mcp==2.3.0` (Python). **Protocol:** up to `2026-07-28`; the initialize handshake supports `2024-11-05` to `2025-11-25`, and the SDK's `ClientSession` negotiates `2025-11-25` (TRD §13.1).
+- **Transport:** Streamable HTTP, stateless, JSON responses, bound to `127.0.0.1`, DNS-rebinding protection, 64 KiB body limit.
+- **Auth:** HS256 bearer token signed with `MCP_AUTH_SECRET`, carrying `sub` and `role`, at most 60 minutes. Roles per tool come from `configs/security.yaml`.

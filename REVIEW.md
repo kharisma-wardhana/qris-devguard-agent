@@ -3,6 +3,7 @@
 *Amended: 2026-11-07 for p1-infrastructure.*
 *Amended: 2026-11-09 for p2-knowledge-pipeline.*
 *Amended: 2026-11-09 for p3-reranking-eval.*
+*Amended: 2026-11-10 for p4-deterministic-mcp-tools.*
 
 Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` and the feature's `docs/<feature-name>/spec.md` first. The review checks the diff against the spec's acceptance criteria.
 
@@ -25,6 +26,11 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P3:** the original 30 entries of `evals/datasets/retrieval_golden.yaml` are pinned by content hash (`test_original_thirty_unchanged_since_p2`). New queries are appended with `set:` and a `dataset_version` bump; the old entries are never edited.
 - **P3:** the `rerank` block stays outside `pipeline_fingerprint()`. A reranker change must not trigger re-ingestion, and nothing that changes chunks or vectors may move into `rerank`.
 - **P3:** `scripts/eval_retrieval.py` computes fused and reranked metrics from the same hybrid top-20 pool object, never from a second search.
+- **P4:** a validator never decides by LLM, never mutates its input (`test_input_is_not_modified`) and never picks a "closest" schema: an unknown endpoint/version pair is `INVALID_ARGUMENT`.
+- **P4:** a canonicalization change is a new profile name (`-v2`) in `app/validators/canonical.py`, never an edit to an existing profile. The hashes in `knowledge_base/fixtures/signatures/kat.yaml` are never edited to make a test pass.
+- **P4:** `scripts/eval_validators.py` stays at 100% on every PR. A `requires_table` response-code case is reported skipped in CI, never counted as passed.
+- **P4:** editing `knowledge_base/fixtures/fixtures.yaml` updates its `checksum_sha256` in `sources.yaml` in the same commit (`test_fixture_index_checksum_matches_manifest`). The file stays `eol=lf` in `.gitattributes`.
+- **P4:** the tool list, `config.TOOL_NAMES` and the `tools:` matrix in `configs/security.yaml` change together.
 
 ### Security
 - Nothing under `knowledge_base/sources/` may be tracked except `.gitkeep`. No `.env*` file other than `.env.example`, and no `*.pem`, `*.key` or `*.p12` file, may be added anywhere.
@@ -42,6 +48,12 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P2:** models load offline (`HF_HUB_OFFLINE=1`) everywhere except `scripts/fetch_models.py`. The model revision stays pinned by full commit SHA. `truststore` is used only in the fetch script, and TLS verification is never turned off (`verify=False`).
 - **P2:** ingestion reads only manifest `local_path` files. No URL, shell or arbitrary path input.
 - **P3:** the reranker revision stays pinned by full SHA; `fetch_models.py` fetches it as `model.safetensors` only (no `*.bin` or pickle pattern); it loads offline, with no `trust_remote_code`.
+- **P4:** every MCP tool is registered through `GuardedTool` (`app/mcp_server/server.py`), never `@server.tool`, so identity, role and the strict argument model run before the handler. Argument models keep `extra="forbid"`, strict types, length bounds, and enums or anchored patterns for identifiers. No tool takes a URL, SQL, shell or path argument, and no value from an argument is joined into a path.
+- **P4:** tool errors are the §18 envelope only: no exception text, stack trace, environment value or submitted value. The call log is one line per call (tool, sub, role, outcome, correlation ID, duration) and never logs arguments or results.
+- **P4:** bearer tokens are HS256 only, with `exp`, `iat`, `sub`, `aud` and `iss` required and a TTL of at most 60 minutes. `MCP_AUTH_SECRET` is never printed, logged or committed. `scripts/mint_dev_token.py` prints the token to stdout only.
+- **P4:** the MCP server binds `127.0.0.1` only, keeps DNS-rebinding protection on, and keeps the body limit (`configs/mcp.yaml`). Changing any of these needs a threat-model change (T1, T13).
+- **P4:** test keys are generated at runtime and never tracked (`test_no_test_key_pem_or_derived_snap_table_tracked`). Signature results never carry a string-to-sign, key or signature.
+- **P4:** all P4 tools are read-only. A write tool (`create_support_ticket`) arrives only with the P6 approval and idempotency flow, never as a stub that writes.
 
 ### Compliance
 - Public ASPI/SNAP documents are `reference_only`: they are never committed, and any quoted excerpt is at most `citations.max_excerpt_chars.reference_only` (300) characters.
@@ -55,6 +67,10 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P2:** retrieval numbers in docs carry their date, dataset version and config, and are labelled measured, not targets.
 - **P3:** reranking numbers in docs are labelled measured, with date, dataset version and config, and are stated against the gate whatever the result. The measured 0.800 Recall@5, against a 0.85 gate, is never reworded as a pass.
 - **P3:** eval JSON reports hold IDs, ranks, scores and timings only, never chunk text.
+- **P4:** the extracted SNAP response-code table (`knowledge_base/sources/derived/`) is never committed, and its descriptions are capped at 300 characters in answers. Committed schemas derived from a reference-only document encode field names and rules only, with a section citation and no copied prose.
+- **P4:** `NOT_FOUND` never carries a meaning; suggestions are labelled `suggestion, not a match`. Synthetic tables, schemas and fixtures keep their SYNTHETIC label.
+- **P4:** the PKCS#1 v1.5 / base64 assumption of `snap-asymmetric-access-token-v1` stays labelled in results and in `docs/p4-deterministic-mcp-tools/validator-report.md` until a source confirms it.
+- **P4:** fixture and smoke-test numbers in docs are labelled measured, with date and fixture-set version.
 
 ## Severity levels
 
@@ -79,6 +95,9 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P2:** torch wheel and platform markers in `uv.lock`. Check only that torch resolves from the `pytorch-cpu` index.
 - **P3:** the wording of `set: hard` queries (check schema, IDs and review fields only).
 - **P3:** the latency values in `docs/p3-reranking-eval/rerank-report.md` depend on the machine. Check only that they are labelled measured.
+- **P4:** synthetic values inside `knowledge_base/fixtures/payloads/*.yaml` and `signatures/cases.yaml`. Check only IDs, expected outcomes and that no real credential appears.
+- **P4:** MCP SDK internals (`mcp==2.3.0` is pinned). Check only that tools go through `GuardedTool` and that the SDK pin moves together with a re-run of `tests/integration/test_mcp_server.py`.
+- **P4:** smoke-test latencies in `validator-report.md` depend on the machine.
 
 ## What a human must decide
 

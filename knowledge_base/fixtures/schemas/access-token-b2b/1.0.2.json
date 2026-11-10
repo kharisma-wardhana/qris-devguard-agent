@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qris-devguard:schema:access-token-b2b:1.0.2",
+  "title": "access-token-b2b request (team-written schema; field names and rules read from snap-technical-security-standard 1.0.2 section 2.1.5(a); no prose copied)",
+  "x-source": {"document_id": "snap-technical-security-standard", "document_version": "1.0.2", "section": "2.1.5(a)"},
+  "x-schema-version": "1.0.2",
+  "type": "object",
+  "required": ["headers", "body"],
+  "additionalProperties": false,
+  "properties": {
+    "headers": {
+      "type": "object",
+      "required": ["Content-Type", "X-TIMESTAMP", "X-CLIENT-KEY", "X-SIGNATURE"],
+      "properties": {
+        "Content-Type": {"type": "string", "pattern": "^application/json(\\s*;\\s*charset=[Uu][Tt][Ff]-8)?$"},
+        "X-TIMESTAMP": {"$ref": "#/$defs/snap_timestamp"},
+        "X-CLIENT-KEY": {"type": "string", "minLength": 1},
+        "X-SIGNATURE": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": {"type": "string"}
+    },
+    "body": {
+      "type": "object",
+      "required": ["grantType"],
+      "additionalProperties": false,
+      "properties": {
+        "grantType": {"const": "client_credentials"},
+        "additionalInfo": {"type": "object"}
+      }
+    }
+  },
+  "$defs": {
+    "snap_timestamp": {
+      "description": "yyyy-MM-ddTHH:mm:ss.SSSTZD (TZD = Z or +hh:mm / -hh:mm)",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}(Z|[+-][0-9]{2}:[0-9]{2})$"
+    }
+  }
+}

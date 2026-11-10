@@ -1,0 +1,21 @@
+# Validator fixture index (SYNTHETIC — not an official ASPI/BI document)
+# Manifest entry `synthetic-test-fixtures`. Test data, not retrievable documentation:
+# RAG ingestion skips `kind: fixture_set`.
+# Key material is NOT here: it is generated at runtime (scripts/gen_test_keys.py) into the
+# git-ignored signatures/keys/ directory.
+fixture_set_version: "0.1.0"
+payloads:
+  - payloads/access-token-b2b.yaml
+  - payloads/qr-mpm-generate.yaml
+  - payloads/qr-mpm-query.yaml
+signatures:
+  cases: signatures/cases.yaml
+  kat: signatures/kat.yaml
+response_codes:
+  cases: response_codes/cases.yaml
+  tables:
+    - response_codes/synthetic-qris-mpm-0.1.0.yaml
+schemas:
+  - schemas/access-token-b2b/1.0.2.json
+  - schemas/qr-mpm-generate/0.1.0.json
+  - schemas/qr-mpm-query/0.1.0.json

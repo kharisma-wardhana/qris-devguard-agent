@@ -1,0 +1,63 @@
+# Payload fixtures for qr-mpm-query (SYNTHETIC — synthetic-qris-mpm-service-spec 0.1.0 §1.3, §3).
+# Token and signature values are placeholders, not credentials.
+endpoint_id: qr-mpm-query
+api_family: qris-mpm
+spec_version: "0.1.0"
+base:
+  headers:
+    Content-Type: application/json
+    Authorization: Bearer SYN-PLACEHOLDER-TOKEN
+    X-TIMESTAMP: "2026-11-06T10:20:00.000+07:00"
+    X-SIGNATURE: SYN-PLACEHOLDER-NOT-A-SIGNATURE
+    X-PARTNER-ID: SYN-PARTNER-01
+    X-EXTERNAL-ID: "41807553358950093185"
+    CHANNEL-ID: "95221"
+  body:
+    originalPartnerReferenceNo: SYN-REF-0001
+    serviceCode: "47"
+    merchantId: SYN-MERCHANT-01
+cases:
+  - id: qry-ok-partner-reference
+    expect: { valid: true }
+  - id: qry-ok-provider-reference
+    patch: { remove: [ /body/originalPartnerReferenceNo ], set: { /body/originalReferenceNo: SYN-PROV-REF-0001 } }
+    expect: { valid: true }
+  - id: qry-ok-negative-offset
+    patch: { set: { /headers/X-TIMESTAMP: "2026-11-05T22:20:00.000-05:00" } }
+    expect: { valid: true }
+  - id: qry-ok-mixed-case-headers
+    patch: { rename: { /headers/CHANNEL-ID: Channel-Id, /headers/X-PARTNER-ID: x-partner-id } }
+    expect: { valid: true }
+  - id: qry-both-references
+    patch: { set: { /body/originalReferenceNo: SYN-PROV-REF-0001 } }
+    expect: { valid: false, errors: [ { code: RULE_ORIGINAL_REFERENCE_COUNT, pointer: /body } ] }
+  - id: qry-no-reference
+    patch: { remove: [ /body/originalPartnerReferenceNo ] }
+    expect: { valid: false, errors: [ { code: RULE_ORIGINAL_REFERENCE_COUNT, pointer: /body } ] }
+  - id: qry-service-code-51
+    patch: { set: { /body/serviceCode: "51" } }
+    expect: { valid: false, errors: [ { code: RULE_SERVICE_CODE_MISMATCH, pointer: /body/serviceCode } ] }
+  - id: qry-service-code-number
+    patch: { set: { /body/serviceCode: 47 } }
+    expect: { valid: false, errors: [ { code: SCHEMA_TYPE, pointer: /body/serviceCode } ] }
+  - id: qry-missing-service-code
+    patch: { remove: [ /body/serviceCode ] }
+    expect: { valid: false, errors: [ { code: SCHEMA_REQUIRED, pointer: /body/serviceCode } ] }
+  - id: qry-missing-merchant
+    patch: { remove: [ /body/merchantId ] }
+    expect: { valid: false, errors: [ { code: SCHEMA_REQUIRED, pointer: /body/merchantId } ] }
+  - id: qry-partner-id-too-long
+    patch: { set: { /headers/X-PARTNER-ID: "SYN-PARTNER-0000000000000000000000037" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_MAX_LENGTH, pointer: /headers/X-PARTNER-ID } ] }
+  - id: qry-bearer-missing-prefix
+    patch: { set: { /headers/Authorization: SYN-PLACEHOLDER-TOKEN } }
+    expect: { valid: false, errors: [ { code: SCHEMA_FORMAT, pointer: /headers/Authorization } ] }
+  - id: qry-timestamp-space-separator
+    patch: { set: { /headers/X-TIMESTAMP: "2026-11-06 10:20:00.000+07:00" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_FORMAT, pointer: /headers/X-TIMESTAMP } ] }
+  - id: qry-unexpected-body-field
+    patch: { set: { /body/amount: { value: "10000.00", currency: IDR } } }
+    expect: { valid: false, errors: [ { code: SCHEMA_ADDITIONAL_PROPERTY, pointer: /body/amount } ] }
+  - id: qry-body-not-object
+    patch: { set: { /body: [] } }
+    expect: { valid: false, errors: [ { code: SCHEMA_TYPE, pointer: /body } ] }

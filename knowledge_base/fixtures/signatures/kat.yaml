@@ -1,0 +1,13 @@
+# Known-answer tests for the canonicalization profiles (SYNTHETIC components; p4 spec AC #8).
+# Each hash was computed from a hand-written literal string-to-sign, independently of
+# app/validators/canonical.py, so a change in a profile function fails these tests.
+- profile: snap-asymmetric-access-token-v1
+  components: at-base            # from cases.yaml
+  string_to_sign_sha256: f23ef640647019432421065d3edad9ecd8ebd34dd1befce362e2a59701181371
+- profile: synthetic-snap-symmetric-v1
+  components: gen-pretty         # pretty body must be minified before hashing; key order kept
+  minified_body_sha256: 9261a24a0f4ef42b1a5d778a758ea4ebe8776079dcfe04a27d4cfb925d9f6968
+  string_to_sign_sha256: 25c936479158865fed6a7ea1da92eaee84111a57c24271449717c30e13629cff
+- profile: synthetic-snap-symmetric-v1
+  components: gen-utf8           # non-ASCII kept as UTF-8, not \u-escaped
+  string_to_sign_sha256: 73137756bb80e9ea5031fdbb0a4adf6786b051e6687a51c2dd918bc8c7fae1cf

@@ -60,3 +60,21 @@ def test_ip_pattern_skips_quoted_section_ids_but_still_catches_ips():
     assert IPV4.findall(f'gold: [{{ document_id: snap-data-technical-spec, section_id: "{sec}" }}]') == []
     assert IPV4.findall(f"RUNPOD_SSH_HOST={ip}") == [ip]
     assert IPV4.findall(f'host: "{ip}"  section: {sec}') == [ip, sec]
+
+
+def test_no_test_key_pem_or_derived_snap_table_tracked():
+    """p4: test keys are generated at runtime and the extracted SNAP table is reference-only (T6, T16)."""
+    tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
+    assert not [n for n in tracked if n.startswith("knowledge_base/fixtures/signatures/keys/")]
+    assert not [n for n in tracked if n.startswith("knowledge_base/sources/derived/")]
+    assert not [n for n in tracked if n.endswith((".pem", ".key", ".p12", ".hmac"))]
+    pem = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
+    assert not [name for name, text in _tracked_text_files() if pem.search(text)]
+
+
+def test_key_and_derived_dirs_are_git_ignored():
+    for probe in ("knowledge_base/fixtures/signatures/keys/index.json",
+                  "knowledge_base/fixtures/signatures/keys/syn-rsa-01.pem",
+                  "knowledge_base/sources/derived/snap-response-codes-1.0.2.json"):
+        res = subprocess.run(["git", "check-ignore", "-q", probe], cwd=ROOT)
+        assert res.returncode == 0, probe
