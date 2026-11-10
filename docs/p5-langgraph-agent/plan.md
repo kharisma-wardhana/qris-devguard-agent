@@ -24,6 +24,8 @@ New: application code
 New: scripts
 - `scripts/api_server.py`: runs the API on `127.0.0.1:8000` (`--fake-llm` refused unless `DEVGUARD_TEST_BACKENDS=1`).
 - `scripts/eval_agent.py`: runs `evals/datasets/agent_flows.yaml` in CI mode (default) or `--live`. Writes `evals/reports/agent-flows-<ts>.json`; exit 0 only if every flow passes.
+  - In `--live` the agent runs in-process against the *real* MCP server (HTTP, auth), Qdrant and vLLM, because the API response deliberately omits the trace (node timings, tokens, tool calls) that the report needs.
+  - The API itself gets one smoke request (`--api-smoke`) in the same session. Decided at step 8.
 
 New: config, data, docs
 - `configs/agent.yaml`: LLM (model from `configs/model.yaml`, temperature 0, `max_tokens`, `enable_thinking: false`), timeouts, `retrieval.top_k: 6`, `rerank: false`, keyword lists, regexes, API host, port and audience, MCP token TTL.
