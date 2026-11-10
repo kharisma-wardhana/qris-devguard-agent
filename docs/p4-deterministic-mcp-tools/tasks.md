@@ -2,7 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Build. Written: 2026-11-10. Via /aspec:make-it-simple-v2.*
 *Implements: docs/p4-deterministic-mcp-tools/plan.md*
 
-- [ ] 1. Dependencies and config — spec AC: #17
+- [x] 1. Dependencies and config — spec AC: #17
 - [ ] 2. Payload validator — spec AC: #6, #7
 - [ ] 3. Canonicalization, keys and signature validator — spec AC: #8, #9, #10
 - [ ] 4. Response-code lookup and extraction — spec AC: #11, #12

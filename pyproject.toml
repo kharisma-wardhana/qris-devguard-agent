@@ -11,6 +11,9 @@ dependencies = [
     "psycopg[binary]>=3.3.8",
     "qdrant-client==1.19.1",
     "pdfplumber==0.11.10",
+    "mcp==2.3.0",
+    "pyjwt==2.15.1",
+    "cryptography==50.0.2",
 ]
 
 [project.optional-dependencies]
