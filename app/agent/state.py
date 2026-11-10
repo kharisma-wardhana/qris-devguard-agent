@@ -37,6 +37,7 @@ class DevGuardState(TypedDict, total=False):
     role: str
     route: str                               # read | refuse | draft | clarify
     clarification: list[str]
+    planned_calls: list[list[Any]]           # [tool, args] chosen by select_tools; cleared after execution
     secret_detected: bool
     evidence_flags: dict[str, Any]
     limitations: list[str]
