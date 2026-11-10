@@ -1,0 +1,76 @@
+# Payload fixtures for qr-mpm-generate (SYNTHETIC — synthetic-qris-mpm-service-spec 0.1.0 §1.3, §2).
+# Token and signature values are placeholders, not credentials.
+endpoint_id: qr-mpm-generate
+api_family: qris-mpm
+spec_version: "0.1.0"
+base:
+  headers:
+    Content-Type: application/json
+    Authorization: Bearer SYN-PLACEHOLDER-TOKEN
+    X-TIMESTAMP: "2026-11-06T10:15:30.000+07:00"
+    X-SIGNATURE: SYN-PLACEHOLDER-NOT-A-SIGNATURE
+    X-PARTNER-ID: SYN-PARTNER-01
+    X-EXTERNAL-ID: "41807553358950093184"
+    CHANNEL-ID: "95221"
+  body:
+    partnerReferenceNo: SYN-REF-0001
+    amount: { value: "10000.00", currency: IDR }
+    merchantId: SYN-MERCHANT-01
+    terminalId: T01
+cases:
+  - id: gen-ok-spec-example
+    expect: { valid: true }
+  - id: gen-ok-no-terminal
+    patch: { remove: [ /body/terminalId ] }
+    expect: { valid: true }
+  - id: gen-ok-validity-period
+    patch: { set: { /body/validityPeriod: "2026-11-06T10:30:30.000+07:00" } }
+    expect: { valid: true }
+  - id: gen-ok-additional-info
+    patch: { set: { /body/additionalInfo: { channel: SYN } } }
+    expect: { valid: true }
+  - id: gen-ok-max-lengths
+    patch:
+      set:
+        /body/partnerReferenceNo: "SYN-000000000000000000000000000000000000000000000000000000000001"
+        /body/terminalId: "T000000000000016"
+    expect: { valid: true }
+  - id: gen-missing-amount
+    patch: { remove: [ /body/amount ] }
+    expect: { valid: false, errors: [ { code: SCHEMA_REQUIRED, pointer: /body/amount } ] }
+  - id: gen-amount-no-decimals
+    patch: { set: { /body/amount/value: "10000" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_FORMAT, pointer: /body/amount/value } ] }
+  - id: gen-amount-number-type
+    patch: { set: { /body/amount/value: 10000.00 } }
+    expect: { valid: false, errors: [ { code: SCHEMA_TYPE, pointer: /body/amount/value } ] }
+  - id: gen-currency-usd
+    patch: { set: { /body/amount/currency: USD } }
+    expect: { valid: false, errors: [ { code: SCHEMA_ENUM, pointer: /body/amount/currency } ] }
+  - id: gen-reference-too-long
+    patch: { set: { /body/partnerReferenceNo: "SYN-0000000000000000000000000000000000000000000000000000000000065" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_MAX_LENGTH, pointer: /body/partnerReferenceNo } ] }
+  - id: gen-terminal-too-long
+    patch: { set: { /body/terminalId: "T0000000000000017" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_MAX_LENGTH, pointer: /body/terminalId } ] }
+  - id: gen-timestamp-z-not-allowed
+    patch: { set: { /headers/X-TIMESTAMP: "2026-11-06T03:15:30.000Z" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_FORMAT, pointer: /headers/X-TIMESTAMP } ] }
+  - id: gen-channel-id-four-digits
+    patch: { set: { /headers/CHANNEL-ID: "9522" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_FORMAT, pointer: /headers/CHANNEL-ID } ] }
+  - id: gen-external-id-not-numeric
+    patch: { set: { /headers/X-EXTERNAL-ID: "SYN-EXT-1" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_FORMAT, pointer: /headers/X-EXTERNAL-ID } ] }
+  - id: gen-missing-authorization
+    patch: { remove: [ /headers/Authorization ] }
+    expect: { valid: false, errors: [ { code: SCHEMA_REQUIRED, pointer: /headers/Authorization } ] }
+  - id: gen-unexpected-body-field
+    patch: { set: { /body/customerName: SYN } }
+    expect: { valid: false, errors: [ { code: SCHEMA_ADDITIONAL_PROPERTY, pointer: /body/customerName } ] }
+  - id: gen-validity-before-timestamp
+    patch: { set: { /body/validityPeriod: "2026-11-06T10:00:00.000+07:00" } }
+    expect: { valid: false, errors: [ { code: RULE_VALIDITY_NOT_AFTER_TIMESTAMP, pointer: /body/validityPeriod } ] }
+  - id: gen-validity-not-a-date
+    patch: { set: { /body/validityPeriod: "2026-02-30T10:30:30.000+07:00" } }
+    expect: { valid: false, errors: [ { code: RULE_TIMESTAMP_INVALID_DATE, pointer: /body/validityPeriod } ] }

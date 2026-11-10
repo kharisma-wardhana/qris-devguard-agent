@@ -1,0 +1,68 @@
+# Payload fixtures for access-token-b2b (SYNTHETIC values; schema team-written from
+# snap-technical-security-standard 1.0.2 §2.1.5(a)). Signature values here are placeholders,
+# not signatures: the payload validator checks presence and shape only.
+endpoint_id: access-token-b2b
+api_family: snap
+spec_version: "1.0.2"
+base:
+  headers:
+    Content-Type: application/json
+    X-TIMESTAMP: "2026-11-10T09:00:00.000+07:00"
+    X-CLIENT-KEY: SYN-CLIENT-0001
+    X-SIGNATURE: SYN-PLACEHOLDER-NOT-A-SIGNATURE
+  body:
+    grantType: client_credentials
+cases:
+  - id: at-ok-minimal
+    expect: { valid: true }
+  - id: at-ok-additional-info
+    patch: { set: { /body/additionalInfo: { note: SYN } } }
+    expect: { valid: true }
+  - id: at-ok-utc-z
+    patch: { set: { /headers/X-TIMESTAMP: "2026-11-10T02:00:00.000Z" } }
+    expect: { valid: true }
+  - id: at-ok-lowercase-headers
+    patch: { rename: { /headers/X-TIMESTAMP: x-timestamp, /headers/Content-Type: content-type } }
+    expect: { valid: true }
+  - id: at-ok-charset
+    patch: { set: { /headers/Content-Type: "application/json; charset=UTF-8" } }
+    expect: { valid: true }
+  - id: at-ok-extra-header-warns
+    patch: { set: { /headers/X-DEBUG: "1" } }
+    expect: { valid: true, warnings: [ { code: HEADER_NOT_IN_SPEC, pointer: /headers/X-DEBUG } ] }
+  - id: at-missing-timestamp
+    patch: { remove: [ /headers/X-TIMESTAMP ] }
+    expect: { valid: false, errors: [ { code: SCHEMA_REQUIRED, pointer: /headers/X-TIMESTAMP } ] }
+  - id: at-missing-signature
+    patch: { remove: [ /headers/X-SIGNATURE ] }
+    expect: { valid: false, errors: [ { code: SCHEMA_REQUIRED, pointer: /headers/X-SIGNATURE } ] }
+  - id: at-timestamp-no-millis
+    patch: { set: { /headers/X-TIMESTAMP: "2026-11-10T09:00:00+07:00" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_FORMAT, pointer: /headers/X-TIMESTAMP } ] }
+  - id: at-timestamp-not-a-date
+    patch: { set: { /headers/X-TIMESTAMP: "2026-13-40T09:00:00.000+07:00" } }
+    expect: { valid: false, errors: [ { code: RULE_TIMESTAMP_INVALID_DATE, pointer: /headers/X-TIMESTAMP } ] }
+  - id: at-grant-type-wrong-value
+    patch: { set: { /body/grantType: password } }
+    expect: { valid: false, errors: [ { code: SCHEMA_ENUM, pointer: /body/grantType } ] }
+  - id: at-grant-type-missing
+    patch: { remove: [ /body/grantType ] }
+    expect: { valid: false, errors: [ { code: SCHEMA_REQUIRED, pointer: /body/grantType } ] }
+  - id: at-grant-type-wrong-type
+    patch: { set: { /body/grantType: 123 } }
+    expect: { valid: false, errors: [ { code: SCHEMA_ENUM, pointer: /body/grantType } ] }
+  - id: at-unexpected-body-field
+    patch: { set: { /body/scope: all } }
+    expect: { valid: false, errors: [ { code: SCHEMA_ADDITIONAL_PROPERTY, pointer: /body/scope } ] }
+  - id: at-client-key-empty
+    patch: { set: { /headers/X-CLIENT-KEY: "" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_MIN_LENGTH, pointer: /headers/X-CLIENT-KEY } ] }
+  - id: at-content-type-wrong
+    patch: { set: { /headers/Content-Type: text/plain } }
+    expect: { valid: false, errors: [ { code: SCHEMA_FORMAT, pointer: /headers/Content-Type } ] }
+  - id: at-additional-info-wrong-type
+    patch: { set: { /body/additionalInfo: "SYN" } }
+    expect: { valid: false, errors: [ { code: SCHEMA_TYPE, pointer: /body/additionalInfo } ] }
+  - id: at-duplicate-header-case
+    patch: { set: { /headers/x-client-key: SYN-CLIENT-0002 } }
+    expect: { valid: false, errors: [ { code: HEADER_DUPLICATE, pointer: /headers/X-CLIENT-KEY } ] }
