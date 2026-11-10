@@ -41,7 +41,7 @@ classify:
   # Prohibited = asking to DO a prohibited action: an action verb followed within `verb_window` words by a
   # prohibited object (these objects plus security.yaml prohibited_actions), or an explicit production phrase.
   # A bare mention ("what does the refund response code mean", "Query Payment") is a read question.
-  action_verbs: [make, process, execute, perform, initiate, send, do, trigger, run, lakukan, proses, jalankan, kirim, buat]
+  action_verbs: [make, process, execute, perform, initiate, issue, trigger, run, lakukan, proses, jalankan, kirim, buat]   # not "do"/"send": "what do I send for the refund code" is a read question
   verb_window: 4
   prohibited_objects: [payment, pembayaran, refund, reversal, settlement, merchant activation, aktivasi merchant, transfer, transfer dana]
   prohibited_phrases: [production api, production endpoint, production key, production credential, live secret, private key produksi, kredensial produksi, api produksi]

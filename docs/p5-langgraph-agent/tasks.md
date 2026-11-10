@@ -3,7 +3,7 @@
 *Implements: docs/p5-langgraph-agent/plan.md*
 
 - [x] 1. Dependencies and config — spec AC: #18
-- [ ] 2. Sanitize and classify — spec AC: #3, #4, #5
+- [x] 2. Sanitize and classify — spec AC: #3, #4, #5
 - [ ] 3. Audience-aware tokens and the MCP client — spec AC: #7
 - [ ] 4. LLM client, fake LLM and prompts — spec AC: #9, #10
 - [ ] 5. Answer assembly and policy check — spec AC: #2, #8
