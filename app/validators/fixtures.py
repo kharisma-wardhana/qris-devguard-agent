@@ -1,7 +1,7 @@
 """Fixture cases: build each case's input from a committed base plus a patch (p4 spec AC #6, #14).
 
-A patch has optional `remove` (JSON pointers), `set` (pointer -> value) and `rename`
-(pointer -> new last-segment name). The base is deep-copied, so cases never affect each other.
+A patch has optional `remove` (JSON pointers), `rename` (pointer -> new last-segment name) and
+`set` (pointer -> value), applied in that order. The base is deep-copied, so cases never affect each other.
 """
 
 from __future__ import annotations
@@ -91,3 +91,74 @@ def apply_patch(base: Any, patch: dict[str, Any] | None) -> Any:
         parent, key = _parent(doc, ptr)
         parent[key] = copy.deepcopy(value)
     return doc
+
+
+# --- the whole fixture set (scripts/eval_validators.py, tests) ----------------------------------
+
+def _pairs(items: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    return sorted((i["code"], i["pointer"]) for i in items)
+
+
+def run_all(index_path: Any, *, schemas_dir: Any, keystore: Any, tables_cfg: dict[str, Any], root: Any,
+            excerpt_cap: Any, rules_version: str) -> dict[str, Any]:
+    """Run every payload, signature and response-code case named by the fixture index.
+
+    Returns {"validators": {name: {passed, failed, skipped, total, accuracy}}, "cases": [...]}.
+    `accuracy` = passed / (passed + failed). A skipped case (SNAP table not extracted) never counts as passed.
+    Case records hold IDs, statuses and codes only: no payload values, keys or signatures.
+    """
+    import yaml
+
+    from app.validators import payload as pv
+    from app.validators import signature
+
+    base = index_path.parent
+    index = yaml.safe_load(index_path.read_text(encoding="utf-8"))
+    cases: list[dict[str, Any]] = []
+
+    for rel in index["payloads"]:
+        suite = yaml.safe_load((base / rel).read_text(encoding="utf-8"))
+        for case in suite["cases"]:
+            data = apply_patch(suite["base"], case.get("patch"))
+            res = pv.validate(data, suite["endpoint_id"], suite["spec_version"], schemas_dir=schemas_dir,
+                              rules_version=rules_version)
+            exp = case["expect"]
+            ok = (res.valid is exp["valid"] and _pairs(res.errors) == _pairs(exp.get("errors", []))
+                  and _pairs(res.warnings) == _pairs(exp.get("warnings", [])))
+            cases.append({"validator": "payload", "id": case["id"], "expected": exp["valid"], "actual": res.valid,
+                          "actual_codes": [e["code"] for e in res.errors], "result": "passed" if ok else "failed"})
+
+    sig_doc = yaml.safe_load((base / index["signatures"]["cases"]).read_text(encoding="utf-8"))
+    for c in sig_doc["cases"]:
+        case = signature_case(sig_doc, c["id"])
+        cand = build_candidate(case, keystore)
+        chk = case["check"]
+        if cand is None:
+            actual = ("INCONCLUSIVE", "SIG_KEY_UNAVAILABLE")
+        else:
+            res = signature.verify(algorithm=chk["algorithm"], profile=chk["profile"], fixture_id=chk["fixture_id"],
+                                   components=case["components"], candidate=cand, keystore=keystore)
+            actual = (res.status, res.diagnostic_code)
+        exp = (case["expect"]["status"], case["expect"]["diagnostic_code"])
+        cases.append({"validator": "signature", "id": c["id"], "expected": list(exp), "actual": list(actual),
+                      "result": "passed" if actual == exp else "failed"})
+
+    rc_doc = yaml.safe_load((base / index["response_codes"]["cases"]).read_text(encoding="utf-8"))
+    for case in rc_doc["cases"]:
+        meta = tables_cfg[case["api_family"]][case["spec_version"]]
+        if case.get("requires_table") and not (root / meta["path"]).is_file():
+            cases.append({"validator": "response_codes", "id": case["id"], "expected": case["expect"]["status"],
+                          "actual": None, "result": "skipped"})
+            continue
+        res = response_case(case, tables_cfg=tables_cfg, root=root, excerpt_cap=excerpt_cap)
+        cases.append({"validator": "response_codes", "id": case["id"], "expected": case["expect"]["status"],
+                      "actual": res.status, "result": "passed" if response_case_matches(case, res) else "failed"})
+
+    summary: dict[str, Any] = {}
+    for name in ("payload", "signature", "response_codes"):
+        mine = [c for c in cases if c["validator"] == name]
+        passed = sum(c["result"] == "passed" for c in mine)
+        failed = sum(c["result"] == "failed" for c in mine)
+        summary[name] = {"passed": passed, "failed": failed, "skipped": len(mine) - passed - failed,
+                         "total": len(mine), "accuracy": round(passed / (passed + failed), 4) if passed + failed else None}
+    return {"fixture_set_version": index.get("fixture_set_version"), "validators": summary, "cases": cases}

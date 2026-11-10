@@ -44,3 +44,29 @@ def test_extract_response_codes_refuses_checksum_mismatch(tmp_path):
     assert res.returncode == 1
     assert "checksum mismatch" in res.stderr and "Traceback" not in res.stderr
     assert not (tmp_path / "t.json").exists()
+
+
+def test_eval_validators_passes_and_writes_report(tmp_path):
+    res = run("eval_validators.py", "--keys-dir", str(tmp_path / "keys"), "--report-dir", str(tmp_path / "reports"))
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "validator_fixture_accuracy gate (>= 1.00): PASS" in res.stdout
+    reports = list((tmp_path / "reports").glob("validators-*.json"))
+    assert len(reports) == 1
+    report = json.loads(reports[0].read_text(encoding="utf-8"))
+    assert report["gate"] == "PASS" and all(v["failed"] == 0 for v in report["validators"].values())
+
+
+def test_eval_validators_exits_one_on_a_wrong_expectation(tmp_path):
+    import shutil
+
+    import yaml
+    fx = tmp_path / "fixtures"
+    shutil.copytree(ROOT / "knowledge_base" / "fixtures", fx, ignore=shutil.ignore_patterns("keys"))
+    p = fx / "signatures" / "cases.yaml"
+    doc = yaml.safe_load(p.read_text(encoding="utf-8"))
+    doc["cases"][0]["expect"]["status"] = "INVALID"
+    p.write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+    res = run("eval_validators.py", "--index", str(fx / "fixtures.yaml"), "--keys-dir", str(tmp_path / "keys"),
+              "--report-dir", str(tmp_path / "reports"))
+    assert res.returncode == 1
+    assert f"FAILED signature/{doc['cases'][0]['id']}" in res.stdout and "FAIL" in res.stdout
