@@ -1,0 +1,33 @@
+# Response-code lookup cases (p4 spec AC #11).
+# `requires_table: true` cases need the locally extracted SNAP table; without it they are reported
+# as skipped (never as passed). Expectations hold statuses and code parts only: no ASPI text.
+# `table_override: missing` forces the table to be absent, to prove TABLE_UNAVAILABLE.
+cases:
+  # --- synthetic MPM table: every committed code is found exactly ---
+  - { id: rc-mpm-2004700, api_family: qris-mpm, spec_version: "0.1.0", code: "2004700", expect: { status: FOUND, message: "Successful" } }
+  - { id: rc-mpm-4004701, api_family: qris-mpm, spec_version: "0.1.0", code: "4004701", expect: { status: FOUND, message: "Invalid field format {field name}" } }
+  - { id: rc-mpm-4004702, api_family: qris-mpm, spec_version: "0.1.0", code: "4004702", expect: { status: FOUND, message: "Invalid mandatory field {field name}" } }
+  - { id: rc-mpm-4014700, api_family: qris-mpm, spec_version: "0.1.0", code: "4014700", expect: { status: FOUND, message: "Unauthorized: signature invalid" } }
+  - { id: rc-mpm-4014701, api_family: qris-mpm, spec_version: "0.1.0", code: "4014701", expect: { status: FOUND, message: "Invalid token (B2B)" } }
+  - { id: rc-mpm-4094700, api_family: qris-mpm, spec_version: "0.1.0", code: "4094700", expect: { status: FOUND, message: "Conflict: duplicate partnerReferenceNo" } }
+  - { id: rc-mpm-5004700, api_family: qris-mpm, spec_version: "0.1.0", code: "5004700", expect: { status: FOUND, message: "General error" } }
+  - { id: rc-mpm-2005100, api_family: qris-mpm, spec_version: "0.1.0", code: "2005100", expect: { status: FOUND, message: "Successful" } }
+  - { id: rc-mpm-4005101, api_family: qris-mpm, spec_version: "0.1.0", code: "4005101", expect: { status: FOUND, message: "Invalid field format {field name}" } }
+  - { id: rc-mpm-4005102, api_family: qris-mpm, spec_version: "0.1.0", code: "4005102", expect: { status: FOUND, message: "Invalid mandatory field {field name}" } }
+  - { id: rc-mpm-4015100, api_family: qris-mpm, spec_version: "0.1.0", code: "4015100", expect: { status: FOUND, message: "Unauthorized: signature invalid" } }
+  - { id: rc-mpm-4015101, api_family: qris-mpm, spec_version: "0.1.0", code: "4015101", expect: { status: FOUND, message: "Invalid token (B2B)" } }
+  - { id: rc-mpm-4045101, api_family: qris-mpm, spec_version: "0.1.0", code: "4045101", expect: { status: FOUND, message: "Transaction not found" } }
+  - { id: rc-mpm-5005100, api_family: qris-mpm, spec_version: "0.1.0", code: "5005100", expect: { status: FOUND, message: "General error" } }
+  # --- not found: no invented meaning; suggestions only when labelled ---
+  - { id: rc-mpm-unknown-case, api_family: qris-mpm, spec_version: "0.1.0", code: "4004703", expect: { status: NOT_FOUND, suggestions: 2 } }
+  - { id: rc-mpm-unknown-status, api_family: qris-mpm, spec_version: "0.1.0", code: "4044700", expect: { status: NOT_FOUND, suggestions: 0 } }
+  - { id: rc-mpm-wrong-service, api_family: qris-mpm, spec_version: "0.1.0", code: "4045100", expect: { status: NOT_FOUND, suggestions: 1 } }
+  - { id: rc-mpm-no-snap-fallback, api_family: qris-mpm, spec_version: "0.1.0", code: "4017300", expect: { status: NOT_FOUND, suggestions: 0 } }
+  # --- SNAP table absent (always the case in CI) ---
+  - { id: rc-snap-unavailable, api_family: snap, spec_version: "1.0.2", code: "4017300", table_override: missing, expect: { status: TABLE_UNAVAILABLE } }
+  # --- real SNAP table (local only, after scripts/extract_response_codes.py) ---
+  - { id: rc-snap-4017300, api_family: snap, spec_version: "1.0.2", code: "4017300", requires_table: true, expect: { status: FOUND, http_status: "401", case_code: "00" } }
+  - { id: rc-snap-2007300, api_family: snap, spec_version: "1.0.2", code: "2007300", requires_table: true, expect: { status: FOUND, http_status: "200", case_code: "00" } }
+  - { id: rc-snap-4034723, api_family: snap, spec_version: "1.0.2", code: "4034723", requires_table: true, expect: { status: FOUND, http_status: "403", case_code: "23" } }
+  - { id: rc-snap-4034724, api_family: snap, spec_version: "1.0.2", code: "4034724", requires_table: true, expect: { status: NOT_FOUND } }
+  - { id: rc-snap-4107300, api_family: snap, spec_version: "1.0.2", code: "4107300", requires_table: true, expect: { status: NOT_FOUND, suggestions: 0 } }

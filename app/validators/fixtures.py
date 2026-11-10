@@ -55,6 +55,29 @@ def build_candidate(case: dict[str, Any], keystore: Any) -> str | None:
     return raw.hex() if recipe.get("encoding") == "hex" else base64.b64encode(raw).decode("ascii")
 
 
+def response_case(case: dict[str, Any], *, tables_cfg: dict[str, Any], root: Any, excerpt_cap: Any) -> Any:
+    """Run one response-code case. `excerpt_cap(synthetic: bool) -> int`. Returns a LookupResult."""
+    from app.validators import response_codes
+
+    meta = tables_cfg[case["api_family"]][case["spec_version"]]
+    table = None if case.get("table_override") == "missing" else response_codes.load_table(
+        root / meta["path"].replace("\\", "/"))
+    return response_codes.lookup(case["code"], case["api_family"], case["spec_version"], table=table,
+                                 table_meta=meta, excerpt_cap=excerpt_cap(bool(meta.get("synthetic"))))
+
+
+def response_case_matches(case: dict[str, Any], res: Any) -> bool:
+    exp = case["expect"]
+    if res.status != exp["status"]:
+        return False
+    if "message" in exp and (res.match or {}).get("message") != exp["message"]:
+        return False
+    for k in ("http_status", "case_code"):
+        if k in exp and (res.match or {}).get(k) != exp[k]:
+            return False
+    return "suggestions" not in exp or len(res.suggestions) == exp["suggestions"]
+
+
 def apply_patch(base: Any, patch: dict[str, Any] | None) -> Any:
     doc = copy.deepcopy(base)
     patch = patch or {}

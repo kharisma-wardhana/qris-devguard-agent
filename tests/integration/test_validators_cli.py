@@ -27,3 +27,20 @@ def test_gen_test_keys_writes_index_and_prints_no_key_material(tmp_path):
     assert "PRIVATE KEY" not in res.stdout + res.stderr
     again = run("gen_test_keys.py", "--out", str(tmp_path))
     assert again.returncode == 0 and "wrote 0" in again.stdout
+
+
+def test_extract_response_codes_refuses_missing_pdf(tmp_path):
+    res = run("extract_response_codes.py", "--root", str(tmp_path), "--out", str(tmp_path / "t.json"))
+    assert res.returncode == 1
+    assert res.stderr.strip().startswith("error: PDF not found") and "Traceback" not in res.stderr
+    assert not (tmp_path / "t.json").exists()
+
+
+def test_extract_response_codes_refuses_checksum_mismatch(tmp_path):
+    fake = tmp_path / "knowledge_base" / "sources" / "snap-standar-data-spesifikasi-teknis-1.0.2.pdf"
+    fake.parent.mkdir(parents=True)
+    fake.write_bytes(b"%PDF-1.4\n% synthetic stand-in, not the real document\n")
+    res = run("extract_response_codes.py", "--root", str(tmp_path), "--out", str(tmp_path / "t.json"))
+    assert res.returncode == 1
+    assert "checksum mismatch" in res.stderr and "Traceback" not in res.stderr
+    assert not (tmp_path / "t.json").exists()
