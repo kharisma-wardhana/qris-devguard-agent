@@ -7,7 +7,7 @@
 - [x] 3. Audit writer and MCP wiring, purge — spec AC: #1–#6
 - [x] 4. Services on role DSNs; egress at start-up; no redirects — spec AC: #12, #15, #16, #17
 - [x] 5. Rate and size limits on both servers; malformed input — spec AC: #7–#10
-- [ ] 6. SSRF socket guard and loopback pins — spec AC: #18, #23
+- [x] 6. SSRF socket guard and loopback pins — spec AC: #18, #23
 - [ ] 7. Injection cases, CI mode — spec AC: #19
 - [ ] 8. Security suite, evidence and `eval_security.py` — spec AC: #21, #22
 - [ ] 9. Container scan job and pip-audit record — spec AC: #24

@@ -38,6 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     from app.mcp_server.auth import AuthConfigError, load_secret
 
     api = config.agent()["api"]
+    if api["host"] != "127.0.0.1":                     # p7 (T13, AC #23): the API binds loopback only
+        print("error: configs/agent.yaml api.host must be 127.0.0.1 (loopback only)", file=sys.stderr)
+        return 1
     parser = argparse.ArgumentParser(description="Run the QRIS DevGuard API on loopback.")
     parser.add_argument("--port", type=int, default=api["port"])
     parser.add_argument("--mcp-url", default=config.agent()["tools"]["mcp_url"])

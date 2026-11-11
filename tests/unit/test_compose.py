@@ -119,3 +119,38 @@ def test_local_urls_use_ipv4_loopback(key):
 def test_langfuse_telemetry_off():
     for name in ("langfuse-web", "langfuse-worker"):
         assert SERVICES[name]["environment"]["TELEMETRY_ENABLED"] == "false"
+
+
+# --- p7: every listener is loopback (spec AC #23) -------------------------------------------------------
+
+def test_configured_listeners_are_loopback():
+    from app.agent import config as agent_config
+    from app.mcp_server import config as mcp_config
+    assert agent_config.agent()["api"]["host"] == "127.0.0.1"
+    assert mcp_config.mcp()["server"]["host"] == "127.0.0.1"
+    assert agent_config.agent()["tools"]["mcp_url"].startswith("http://127.0.0.1:")
+
+
+def test_mcp_app_refuses_a_non_loopback_host(monkeypatch):
+    from app.mcp_server import config as mcp_config
+    from app.mcp_server import server as srv
+    real = mcp_config.mcp()
+    monkeypatch.setattr(mcp_config, "mcp", lambda: {**real, "server": {**real["server"], "host": ".".join(["0"] * 4)}})
+    with pytest.raises(ValueError):
+        srv.build_app(object())
+
+
+def test_api_server_refuses_a_non_loopback_host(monkeypatch, capsys):
+    import importlib.util
+    from pathlib import Path
+
+    from app.agent import config as agent_config
+    spec = importlib.util.spec_from_file_location("api_server_script",
+                                                  Path(__file__).resolve().parents[2] / "scripts" / "api_server.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    real = agent_config.agent()
+    monkeypatch.setattr(agent_config, "agent", lambda: {**real, "api": {**real["api"], "host": ".".join(["0"] * 4)}})
+    assert mod.main(["--port", "1"]) == 1
+    assert "loopback only" in capsys.readouterr().err
+
