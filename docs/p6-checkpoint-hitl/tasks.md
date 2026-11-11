@@ -9,6 +9,6 @@
 - [x] 5. Graph HITL and the PostgreSQL checkpointer — spec AC: #3, #6, #9, #14
 - [x] 6. API routes — spec AC: #2, #4, #5
 - [x] 7. Crash/resume and the secrets dump — spec AC: #10, #11
-- [ ] 8. Live re-measure — spec AC: #12
+- [x] 8. Live re-measure — spec AC: #12
 - [ ] 9. Threat model and steering docs — spec flagged concerns
 - [ ] 10. CLAUDE.md merge — agent configuration
