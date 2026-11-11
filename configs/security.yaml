@@ -61,6 +61,20 @@ redact_patterns:
 limits:
   max_message_chars: 8000
   max_payload_bytes: 32768
+  # p7: whole request body, refused with 413 before parsing (API). Room for an 8000-char message (up to
+  # 4 bytes each in UTF-8) plus a 32 KiB payload and JSON overhead. The MCP server keeps mcp.yaml max_body_bytes.
+  max_request_bytes: 131072
+  # p7 (T12): in-process token buckets, per process, reset on restart (docs/p7-mcp-hardening/spec.md).
+  rate:
+    per_address:   { per_minute: 300, burst: 100 }   # before authentication, API and MCP; loopback = one bucket
+    api_agent_run: { per_minute: 10,  burst: 5 }     # per subject: /chat, /threads/{id}/messages, /threads/{id}/resume
+    api_other:     { per_minute: 60,  burst: 20 }    # per subject: thread and approval reads, decisions, thread create
+    mcp_tool_call: { per_minute: 120, burst: 40 }    # per subject, every tools/call
+    max_keys: 10000                                  # oldest key evicted beyond this
+
+# p7: MCP tool-call audit trail (TRD §13.4 Auditability, §19.3 retention). Purged by scripts/purge_audit.py.
+audit:
+  retention_days: 90
 
 # Citation policy by manifest permission.basis (docs/scope-and-source-inventory/spec.md).
 # Enforced by the citation layer from Phase P2/P5.
