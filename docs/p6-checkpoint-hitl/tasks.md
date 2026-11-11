@@ -11,4 +11,4 @@
 - [x] 7. Crash/resume and the secrets dump — spec AC: #10, #11
 - [x] 8. Live re-measure — spec AC: #12
 - [x] 9. Threat model and steering docs — spec flagged concerns
-- [ ] 10. CLAUDE.md merge — agent configuration
+- [x] 10. CLAUDE.md merge — agent configuration
