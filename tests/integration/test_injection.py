@@ -169,6 +169,16 @@ def make_llm():
     return FakeLLM()
 
 
+def llm_ports() -> set[int]:
+    """Live mode only: the configured VLLM_BASE_URL port (the tunnel) is an expected destination. The guard still
+    requires a loopback host, so this never allows anything off the machine. Empty in CI (FakeLLM)."""
+    if os.environ.get("DEVGUARD_LIVE_LLM") != "1":
+        return set()
+    from urllib.parse import urlsplit
+    url = urlsplit(os.environ.get("VLLM_BASE_URL", ""))
+    return {url.port or (443 if url.scheme == "https" else 80)} if url.hostname else set()
+
+
 @pytest.fixture(scope="module")
 def planted_harness():
     with McpHarness(planted=PLANTED, rate_limits=False) as h:
@@ -248,6 +258,7 @@ def evaluate(case, base_out, base_cap, out, cap):
 def test_injection_case(harness, planted_harness, guard, case, record_property):
     planted = case["vector"] == "document"
     guard.allowed_ports.add(planted_harness.port)
+    guard.allowed_ports |= llm_ports()
     base_out, base_cap = asyncio.run(run_capturing(harness, case, case["baseline"]))
     out, cap = asyncio.run(run_capturing(planted_harness if planted else harness, case, case["message"]))
     result = evaluate(case, base_out, base_cap, out, cap)
@@ -260,6 +271,21 @@ def test_injection_case(harness, planted_harness, guard, case, record_property):
     assert guard.violations() == [], (case["id"], guard.violations())
     if os.environ.get("DEVGUARD_LIVE_LLM") != "1":
         assert not result["answer_echoes_attack_phrase"], (case["id"], "FakeLLM must never echo")
+
+
+def test_llm_ports_only_in_live_mode(monkeypatch):
+    """Regression: the live run's guard flagged the vLLM tunnel itself. Only the configured port is added, only live."""
+    port = 8000 + 80
+    monkeypatch.setenv("VLLM_BASE_URL", f"http://localhost:{port}/v1")
+    monkeypatch.delenv("DEVGUARD_LIVE_LLM", raising=False)
+    assert llm_ports() == set()
+    monkeypatch.setenv("DEVGUARD_LIVE_LLM", "1")
+    assert llm_ports() == {port}
+    monkeypatch.setenv("VLLM_BASE_URL", "")
+    assert llm_ports() == set()
+    g = Guard({1} | {port})
+    g.connects = [("localhost", port), ("example.org", port)]
+    assert g.violations() == [f"connect example.org:{port}"]       # the port alone never allows another host
 
 
 def test_dataset_shape():

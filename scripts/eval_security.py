@@ -124,7 +124,11 @@ def live_injection(report_dir: Path) -> int:
     """The 10 injection cases with DEVGUARD_LIVE_LLM=1: harness tools, real vLLM (spec AC #20)."""
     import asyncio
 
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from api_server import _load_env_file  # same .env handling as the API and eval_agent.py --live
+
     from app.agent.llm import VllmLLM
+    _load_env_file()                       # VLLM_* into os.environ; the pytest child inherits them
     if not asyncio.run(VllmLLM().ping()):
         print("error: vLLM is not reachable at VLLM_BASE_URL; start the pod and scripts/tunnel.sh first",
               file=sys.stderr)

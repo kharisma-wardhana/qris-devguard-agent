@@ -41,6 +41,24 @@ def test_all_pass_exits_zero_and_replaces_only_the_generated_block(tmp_path):
     assert data["dataset_version"] == 9 and data["results"][0]["status"] == "PASS"
 
 
+def test_live_injection_loads_vllm_settings_before_the_ping(tmp_path, monkeypatch):
+    """Regression: --live-injection pinged vLLM without reading VLLM_* from .env, so a healthy tunnel was refused."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import api_server
+    import eval_security
+
+    from app.agent import llm
+    order = []
+    monkeypatch.setattr(api_server, "_load_env_file", lambda: order.append("load"))
+
+    async def ping(self):
+        order.append("ping")
+        return False
+    monkeypatch.setattr(llm.VllmLLM, "ping", ping)
+    assert eval_security.live_injection(tmp_path) == 1
+    assert order == ["load", "ping"]
+
+
 def test_uncollected_node_is_not_run_and_exits_nonzero(tmp_path):
     r, report, evidence = run(tmp_path, [case("C1", PASSING), case("C2", MISSING)])
     assert r.returncode == 1
