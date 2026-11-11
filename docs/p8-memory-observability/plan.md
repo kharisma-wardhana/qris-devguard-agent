@@ -100,6 +100,7 @@ Not changed: `app/validators/*`, the MCP tool argument models, `app/db/store.py`
    - (AC 3, 9, 11)
    - (As built:) one reason code beyond spec Behaviour §1, `not_saved:store_unavailable`, for a matched phrase when no memory store is configured or the save fails; a memory error never fails a diagnosis. The message response gained `memory_decision` here (it was not returned before P8). `answer_echo` in `state.py` lands with fencing in step 8.
 5. **Tracing core.** `app/observability/tracing.py`: client, no-op, seeded ID, allowlist, mask hook, egress check. (AC 14, 15, 16, 17)
+   - (As built:) the attribute allowlist is a code constant (`ALLOWED_ATTRS`), so it can't be widened through config. Span helpers catch an escaping exception and record only its class name, because OpenTelemetry would otherwise export the message and stack trace as a span event, which `mask_otel_spans` cannot change. Placeholder keys (`replace-me`) count as missing. The tracer gets its own `TracerProvider`, so the global OpenTelemetry provider is never set. `corpus_version()` and the capped `test_delay_ms()` live here too; step 6 wires them in.
 6. **Agent and MCP spans.**
    - Hook `_timed` and add the generation; MCP call spans in `tools.py`.
    - Server tool span and retrieval child spans (`server.py`, `mcp_server/tools.py`, `rag/search.py`).
