@@ -62,12 +62,13 @@ def test_migrations_apply_once_then_nothing(fresh_db_url):
     from app.db import migrate
     with psycopg.connect(fresh_db_url, autocommit=True) as c:
         applied, skipped = migrate.apply(c)
-        # p7 adds 0002 (audit table) by design
-        assert applied == ["0001_threads_approvals_tickets", "0002_tool_audit_logs"] and skipped == []
-        assert migrate.apply(c) == ([], ["0001_threads_approvals_tickets", "0002_tool_audit_logs"])
-        assert c.execute("select count(*) from schema_migrations").fetchone()[0] == 2
+        # p7 adds 0002 (audit table), p8 adds 0003 (long-term memory) by design
+        versions = ["0001_threads_approvals_tickets", "0002_tool_audit_logs", "0003_long_term_memory"]
+        assert applied == versions and skipped == []
+        assert migrate.apply(c) == ([], versions)
+        assert c.execute("select count(*) from schema_migrations").fetchone()[0] == 3
     assert {"agent_threads", "approval_requests", "sandbox_tickets", "schema_migrations",
-            "tool_audit_logs"} <= _tables(fresh_db_url)
+            "tool_audit_logs", "long_term_memory", "long_term_memory_history"} <= _tables(fresh_db_url)
 
 
 @pytest.mark.db

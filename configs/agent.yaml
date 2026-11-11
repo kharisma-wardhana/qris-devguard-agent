@@ -69,3 +69,44 @@ ticket_draft:                          # p6: the only side effect; values are sa
   body_max_chars: 4000
   max_evidence_ids: 10
   default_priority: medium
+
+memory:                                # p8: long-term memory policy (TRD §16; docs/p8-memory-observability/spec.md §1)
+  preferences:                         # the only keys and values that can be saved; anything else is refused
+    language: [id, en]
+    detail: [brief, detailed]
+  preference_notes:                    # the trusted <notes> line each saved value adds to the prompt
+    language: {id: "Answer in Indonesian.", en: "Answer in English."}
+    detail: {brief: "Keep the answer brief.", detailed: "Give a detailed answer."}
+  # Explicit chat phrases, matched case-insensitively in the sanitized message. The model never decides a save.
+  phrase_prefix: '\b(?:remember|ingat)\s*:'
+  phrases:
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:always\s+)?(?:answer|reply|respond)\s+in\s+(?:bahasa\s+)?indonesian?\b', key: language, value: id}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:selalu\s+)?jawab\s+(?:dalam|pakai|dengan)\s+bahasa\s+indonesia\b', key: language, value: id}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:always\s+)?(?:answer|reply|respond)\s+in\s+english\b', key: language, value: en}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:selalu\s+)?jawab\s+(?:dalam|pakai|dengan)\s+bahasa\s+inggris\b', key: language, value: en}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:keep\s+(?:it|answers?)\s+)?(?:brief|short)\b', key: detail, value: brief}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*jawab\s+(?:singkat|ringkas)\b', key: detail, value: brief}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:give\s+)?(?:detailed|full)\s+answers?\b', key: detail, value: detailed}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*jawab\s+(?:detail|lengkap|rinci)\b', key: detail, value: detailed}
+  preference_ttl_days: 180             # review date for a preference (§16.2 "separate review/expiry date")
+  pattern_ttl_days: 90                 # §16.2 / §19.3 default
+  max_patterns_in_prompt: 2
+  pattern_title_max_chars: 120
+  pattern_text_max_chars: 1000
+  decision_reason_max_chars: 500
+
+observability:                         # p8: Langfuse tracing (TRD §21; spec §2). Keys and host come from .env.
+  enabled: true                        # also off whenever LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST are missing (CI)
+  host_env: LANGFUSE_HOST
+  public_key_env: LANGFUSE_PUBLIC_KEY
+  secret_key_env: LANGFUSE_SECRET_KEY
+  environment: capstone
+  service_tag: "service:agent"
+  export_timeout_seconds: 2            # refused loopback ports can hang on this machine (CLAUDE.md)
+  test_delay_env: DEVGUARD_TEST_DELAY_MS   # test-only delay inside classify_intent, for the p95 alert test
+  test_delay_max_ms: 5000
+  manifest_path: knowledge_base/manifests/sources.yaml   # corpus version = sha256 prefix of this file
+
+retention:                             # p8: TRD §19.3, run by scripts/purge_retention.py as the owner role
+  checkpoint_days: 30
+  approval_days: 90                    # approvals, their sandbox tickets, and threads with nothing newer

@@ -150,6 +150,53 @@ def test_audit_may_not(db_roles, stmt):
     denied(db_roles.url("audit"), stmt)
 
 
+# --- p8: long-term memory (spec AC #27) ---------------------------------------------------------------
+
+PREF_ROW = ("INSERT INTO long_term_memory (memory_id, owner_id, scope, memory_type, pref_key, content_sanitized, "
+            "status, confidence, proposed_by, expires_at) VALUES (%s, 'dev-roles', 'user', 'user_preference', "
+            "'language', 'id', 'active', 'explicit', 'dev-roles', now() + interval '1 day')")
+
+
+@pytest.mark.db
+def test_app_may_read_write_memory_and_history(db_roles):
+    url = db_roles.url("app")
+    mid = str(uuid.uuid4())
+    run(url, PREF_ROW, (mid,))
+    run(url, "UPDATE long_term_memory SET content_sanitized = 'en', version = 2 WHERE memory_id = %s", (mid,))
+    run(url, "INSERT INTO long_term_memory_history (memory_id, version, content_sanitized, changed_by) "
+             "VALUES (%s, 1, 'id', 'dev-roles')", (mid,))
+    run(url, "UPDATE long_term_memory_history SET content_sanitized = '' WHERE memory_id = %s", (mid,))
+    run(url, "SELECT count(*) FROM long_term_memory_history")
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("stmt", [
+    "DELETE FROM long_term_memory WHERE false",
+    "DELETE FROM long_term_memory_history WHERE false",
+    "TRUNCATE long_term_memory",
+    "UPDATE long_term_memory_history SET changed_by = 'x' WHERE false",
+])
+def test_app_may_not_hard_delete_memory(db_roles, stmt):
+    denied(db_roles.url("app"), stmt)
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("role", ["ticket", "audit"])
+@pytest.mark.parametrize("stmt", [
+    "SELECT count(*) FROM long_term_memory",
+    "SELECT count(*) FROM long_term_memory_history",
+    "UPDATE long_term_memory SET title = '' WHERE false",
+])
+def test_ticket_and_audit_may_not_touch_memory(db_roles, role, stmt):
+    denied(db_roles.url(role), stmt)
+
+
+@pytest.mark.db
+def test_ticket_and_audit_may_not_insert_memory(db_roles):
+    for role in ("ticket", "audit"):
+        denied(db_roles.url(role), PREF_ROW, (str(uuid.uuid4()),))
+
+
 # --- creation is idempotent and never leaks a password ----------------------------------------------
 
 @pytest.mark.db

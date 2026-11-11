@@ -41,11 +41,11 @@ def cleanup_roles(fresh_db_url):
 def test_applies_then_reports_nothing_to_apply(fresh_db_url, cleanup_roles):
     first = run(fresh_db_url)
     assert first.returncode == 0, first.stderr
-    assert first.stdout.startswith("applied 2 (0001_threads_approvals_tickets, 0002_tool_audit_logs)")
+    assert first.stdout.startswith("applied 3 (0001_threads_approvals_tickets, 0002_tool_audit_logs, 0003_long_term_memory)")
     assert "checkpoint tables ready" in first.stdout
     assert f"devguard_ticket{SUFFIX} created" in first.stdout
     second = run(fresh_db_url)
-    assert second.returncode == 0 and second.stdout.startswith("applied 0 (-), already applied 2")
+    assert second.returncode == 0 and second.stdout.startswith("applied 0 (-), already applied 3")
     assert f"devguard_app{SUFFIX} unchanged" in second.stdout and "password set" not in second.stdout
     out = first.stdout + first.stderr + second.stdout + second.stderr
     assert not [p for p in PASSWORDS.values() if p in out]

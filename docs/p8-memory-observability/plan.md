@@ -44,8 +44,8 @@ Edited
   - a `retention` block: checkpoints 30, approvals/tickets/threads 90.
   - Model and prompt identity stay where they are.
 - `configs/security.yaml`: `injection_markers` (generic categories) and `pattern_refusal` shapes. The threat model is reviewed alongside, per the file's header rule.
-- `app/db/roles.py`: `app` grants on the memory tables (`SELECT, INSERT, UPDATE` on memory; `SELECT, INSERT` on history; no `DELETE`).
-- `app/db/migrate.py`: applies `0003`.
+- `app/db/roles.py`: `app` grants on the memory tables (`SELECT, INSERT, UPDATE` on memory; `SELECT, INSERT` on history; no `DELETE`). (As built, step 1:) plus `UPDATE (content_sanitized)` on history, so a user delete can blank the history text as spec Behaviour §1 requires; still no `DELETE`.
+- `app/db/migrate.py`: applies `0003`. (As built: no edit needed; `migrate.apply` already picks up every numbered file.)
 - `app/agent/graph.py`:
   - `_timed` opens a node span and applies `DEVGUARD_TEST_DELAY_MS` (capped) inside `classify_intent` only;
   - `run`/`resume` open the trace and load preferences and matching patterns;
