@@ -51,6 +51,16 @@ acts  "deploy-gate asks on tunnel.sh"   .claude/hooks/deploy-gate.sh \
       '{"tool_input":{"command":"bash scripts/tunnel.sh"}}'
 quiet "deploy-gate allows reading tunnel.sh" .claude/hooks/deploy-gate.sh \
       '{"tool_input":{"command":"cat scripts/tunnel.sh"}}'
+acts  "deploy-gate asks on gh pr merge" .claude/hooks/deploy-gate.sh \
+      '"permissionDecision":"ask"' \
+      '{"tool_input":{"command":"gh pr merge 12 --squash"}}'
+quiet "deploy-gate allows gh pr view"  .claude/hooks/deploy-gate.sh \
+      '{"tool_input":{"command":"gh pr view 12"}}'
+acts  "deploy-gate asks on purge_audit" .claude/hooks/deploy-gate.sh \
+      '"permissionDecision":"ask"' \
+      '{"tool_input":{"command":"uv run python scripts/purge_audit.py"}}'
+quiet "deploy-gate allows reading purge_audit.py" .claude/hooks/deploy-gate.sh \
+      '{"tool_input":{"command":"cat scripts/purge_audit.py"}}'
 
 if [ -f .claude/monitoring/control_band.py ]; then
   ran=$((ran + 1))

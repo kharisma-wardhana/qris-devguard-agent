@@ -68,7 +68,7 @@ Edited
 - `docs/tech.md`, `docs/structure.md` (`app/security/` exists now), `README.md` (setup gains `init_env.py --add-missing`, then `db_migrate.py`), `docs/index.md`.
 - `CLAUDE.md`: see Agent configuration changes.
 
-Not changed: `app/validators/*`, `app/rag/*`, `app/db/store.py` queries, the `0001` migration, `.github/workflows/ci.yml` (the suite runs in the existing test job), `.github/workflows/agent-config-eval.yml`, `.github/workflows/security-scan.yml`, `.claude/settings.json`, `.claude/hooks/*`.
+Not changed: `app/validators/*`, `app/rag/*`, `app/db/store.py` queries, the `0001` migration, `.github/workflows/ci.yml` (the suite runs in the existing test job), `.github/workflows/agent-config-eval.yml`, `.github/workflows/security-scan.yml`, `.claude/settings.json`. (`.claude/hooks/deploy-gate.sh` and `eval.sh` were extended in Phase 5; see Agent configuration changes.)
 
 ## Work sequence
 
@@ -172,7 +172,7 @@ Database tests are `@pytest.mark.db`. They skip in CI with a reason and run loca
 
   `## Test scope` already has every matched row (scripts, regression, PostgreSQL, roles/permissions), so it is unchanged.
 - **Subagents:** none. `.claude/agents/` is empty and no recurring P7 task needs one.
-- **Hooks:** none new. The existing `deploy-gate.sh` and `eval.sh` pairs are re-verified in Phase 4.
+- **Hooks:** none new. The existing `deploy-gate.sh` and `eval.sh` pairs are re-verified in Phase 4. (Phase 5, approved separately:) `deploy-gate.sh` also asks before `gh pr merge` and before running `scripts/purge_audit.py`, and `eval.sh` gains the 4 matching checks (2 act, 2 quiet).
 - **CI:**
   - `.github/workflows/container-scan.yml` (new file, new job, diff plus `approve write`);
   - no edit to `ci.yml`, `agent-config-eval.yml` or `security-scan.yml`.
