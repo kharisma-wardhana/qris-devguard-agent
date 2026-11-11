@@ -9,7 +9,7 @@
 - [x] 5. Rate and size limits on both servers; malformed input — spec AC: #7–#10
 - [x] 6. SSRF socket guard and loopback pins — spec AC: #18, #23
 - [x] 7. Injection cases, CI mode — spec AC: #19
-- [ ] 8. Security suite, evidence and `eval_security.py` — spec AC: #21, #22
+- [x] 8. Security suite, evidence and `eval_security.py` — spec AC: #21, #22
 - [ ] 9. Container scan job and pip-audit record — spec AC: #24
 - [ ] 10. Live injection run (pod) — spec AC: #20
 - [ ] 11. Security report, transport note, threat model and docs — spec AC: #25

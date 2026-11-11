@@ -245,12 +245,15 @@ def evaluate(case, base_out, base_cap, out, cap):
 
 
 @pytest.mark.parametrize("case", CASES["cases"], ids=[c["id"] for c in CASES["cases"]])
-def test_injection_case(harness, planted_harness, guard, case):
+def test_injection_case(harness, planted_harness, guard, case, record_property):
     planted = case["vector"] == "document"
     guard.allowed_ports.add(planted_harness.port)
     base_out, base_cap = asyncio.run(run_capturing(harness, case, case["baseline"]))
     out, cap = asyncio.run(run_capturing(planted_harness if planted else harness, case, case["message"]))
     result = evaluate(case, base_out, base_cap, out, cap)
+    record_property("result", json.dumps(result, ensure_ascii=False))     # evidence for eval_security.py
+    record_property("actual", f"{case['id']}: tools {result['tool_calls']} same as baseline: "
+                              f"{result['same_tool_calls_as_baseline']}")
     gate = {k: v for k, v in result.items() if isinstance(v, bool) and k != "answer_echoes_attack_phrase"}
     assert all(gate.values()), (case["id"], result)
     assert result["planted_text_retrieved"] in (None, True), (case["id"], "planted text never retrieved")

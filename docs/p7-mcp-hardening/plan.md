@@ -149,7 +149,7 @@ Database tests are `@pytest.mark.db`. They skip in CI with a reason and run loca
 - **Step 8:**
   - **Integration and database:** every §22.5 bullet has at least one case.
   - **Secret in prompt (`db`):** no synthetic secret appears in any table, checkpoint, captured server log or response.
-  - **Integration:** `eval_security.py` as a subprocess writes the JSONL and the rendered report, and exits non-zero when a case fails.
+  - **Integration:** `eval_security.py` as a subprocess writes the evidence file and the rendered report, and exits non-zero when a case fails. (As built: pytest writes per-node JSONL to a temporary file via `DEVGUARD_SECURITY_EVIDENCE`; the script grades it into one `evals/reports/security-<timestamp>.json`. A skipped or uncollected node grades a case NOT RUN, never PASS.)
 - **Step 9:** the agent-config eval is unaffected (no `.claude/` change). The new workflow is checked by its first run on the PR.
 - **Step 10:** a live run (evidence, not a unit test). The report records the measured result per case.
 - **Step 11:** the existing `test_repo_hygiene.py` passes on the new docs (no IPv4-shaped strings outside `section_id`).

@@ -101,3 +101,21 @@ def db_roles(migrated_db_url):
     finally:
         with psycopg.connect(migrated_db_url, autocommit=True) as conn:
             roles.drop(conn, list(names.values()))
+
+
+# --- p7: evidence capture for scripts/eval_security.py --------------------------------------------------
+
+def pytest_runtest_logreport(report):
+    """With DEVGUARD_SECURITY_EVIDENCE=<file>, append one JSON line per test outcome (node ID, outcome, duration
+    and any record_property values). Setup failures and skips are recorded too, so a skipped test is never
+    mistaken for a pass. Off by default; nothing is written in normal runs."""
+    import json
+    import os
+
+    path = os.environ.get("DEVGUARD_SECURITY_EVIDENCE")
+    if not path or not (report.when == "call" or report.outcome != "passed"):
+        return
+    rec = {"nodeid": report.nodeid, "when": report.when, "outcome": report.outcome,
+           "duration": round(report.duration, 3), "properties": {k: str(v) for k, v in report.user_properties}}
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
