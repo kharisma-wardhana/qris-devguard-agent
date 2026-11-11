@@ -41,7 +41,9 @@ def server(tmp_path_factory):
     keys.generate(keys_dir, wanted)
     port = _free_port()
     env = {**os.environ, "MCP_AUTH_SECRET": SECRET, "DEVGUARD_TEST_KEYS_DIR": str(keys_dir),
-           "QDRANT_URL": f"http://127.0.0.1:{_free_port()}"}          # nothing listens there: search unavailable
+           "QDRANT_URL": f"http://127.0.0.1:{_free_port()}",         # nothing listens there: search unavailable
+           "DEVGUARD_DB_DOTENV": str(keys_dir / "no.env")}           # p7: never the developer's database
+    env.pop("DATABASE_URL", None)
     proc = subprocess.Popen([sys.executable, str(ROOT / "scripts" / "mcp_server.py"), "--port", str(port)], cwd=ROOT,
                             env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
     deadline = time.time() + 60

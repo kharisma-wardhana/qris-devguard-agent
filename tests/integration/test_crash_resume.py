@@ -67,13 +67,14 @@ def _stop(proc):
 
 
 @pytest.fixture(scope="module")
-def stack(migrated_db_url, tmp_path_factory):
+def stack(migrated_db_url, db_roles, tmp_path_factory):
     keys_dir = tmp_path_factory.mktemp("keys")
     wanted = yaml.safe_load((ROOT / "knowledge_base/fixtures/signatures/cases.yaml").read_text(encoding="utf-8"))["keys"]
     keys.generate(keys_dir, wanted)
     mcp_port = free_port()
     env = {**os.environ, "MCP_AUTH_SECRET": SECRET, "DEVGUARD_TEST_KEYS_DIR": str(keys_dir), "DATABASE_URL": migrated_db_url,
-           "QDRANT_URL": f"http://127.0.0.1:{free_port()}", "DEVGUARD_TEST_BACKENDS": "1"}
+           "QDRANT_URL": f"http://127.0.0.1:{free_port()}", "DEVGUARD_TEST_BACKENDS": "1",
+           **db_roles.env()}                                   # p7: throwaway runtime roles
     mcp = _start([str(ROOT / "scripts/mcp_server.py"), "--port", str(mcp_port)], env, mcp_port, "mcp server")
 
     def api(port):

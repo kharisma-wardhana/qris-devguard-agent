@@ -38,6 +38,7 @@ from app.agent.prompts import PROMPT_VERSION, SYSTEM_PROMPT, build_user_turn
 from app.agent.sanitize import redact_text, sanitize
 from app.agent.state import DevGuardState
 from app.agent.tools import ToolClient
+from app.agent.tools import current_run_id as tool_run_id
 from app.mcp_server import config as mcp_config
 
 Node = Callable[[DevGuardState], Awaitable[dict[str, Any]]]
@@ -124,6 +125,7 @@ class Agent:
         args: dict[str, Any] = {"query": s["user_query"][:500], "top_k": config.agent()["retrieval"]["top_k"]}
         if s.get("api_family") in _family_docs():
             args["api_family"] = s["api_family"]
+        tool_run_id.set(s.get("run_id"))
         (res,) = await self.tools.call(s["user_id"], s["role"], [("search_qris_spec", args)])
         calls = [*s["tool_calls"], {"tool": res.tool, "outcome": res.error_code or "OK", "ms": res.ms}]
         if not res.ok:
@@ -197,6 +199,7 @@ class Agent:
 
     async def execute_read_tools(self, s: DevGuardState) -> dict[str, Any]:
         calls = [(name, args) for name, args in s.get("planned_calls", [])]
+        tool_run_id.set(s.get("run_id"))
         results = await self.tools.call(s["user_id"], s["role"], calls)
         return {"validator_results": [{"tool": r.tool, "ok": r.ok, "data": r.data} for r in results],
                 "tool_calls": [*s["tool_calls"], *({"tool": r.tool, "outcome": r.error_code or "OK", "ms": r.ms}
@@ -296,6 +299,7 @@ class Agent:
             payload = dict(appr["action_payload"])
             args = {"approval_id": str(appr["approval_id"]), "thread_id": s["thread_id"], **payload,
                     "idempotency_key": actions.idempotency_key(s["thread_id"], payload)}
+            tool_run_id.set(s.get("run_id"))
             (res,) = await self.tools.call(s["user_id"], s["role"], [(actions.ACTION_TYPE, args)])
             calls.append({"tool": res.tool, "outcome": res.error_code or "OK", "ms": res.ms})
             result.update({"status": res.data.get("status") if res.ok else res.error_code,

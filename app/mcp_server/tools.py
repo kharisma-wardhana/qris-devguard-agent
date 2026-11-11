@@ -38,6 +38,7 @@ class ToolContext:
     backends: Callable[[], tuple[Any, Any]]              # () -> (store, embedder); raises if unavailable
     reranker: Callable[[], Any] | None = None             # built only when search.rerank is true
     db: Callable[[], Any] | None = None                   # p6: () -> psycopg connection; None = no ticket store
+    audit: Any = None                                     # p7: app.db.audit.AuditWriter; None = no database
     _cache: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def search_backends(self) -> tuple[Any, Any]:
@@ -46,7 +47,9 @@ class ToolContext:
         return self._cache["backends"]
 
 
-def default_context() -> ToolContext:
+def default_context(*, database: bool = True) -> ToolContext:
+    """Production context. `database=False` (the CI harness) never looks for a DATABASE_URL: no ticket store,
+    no audit writer; the caller may attach its own."""
     from app.rag import config as rag_config
 
     v = config.mcp()["validators"]
@@ -75,7 +78,8 @@ def default_context() -> ToolContext:
         tables_cfg=v["response_code_tables"], endpoints=v["endpoints"], root=config.ROOT,
         rules_version=v["rules_version"], search_cfg=config.mcp()["search"],
         excerpt_cap=lambda synthetic: rag_config.excerpt_limit("team_authored" if synthetic else "reference_only"),
-        backends=backends, reranker=reranker, db=_default_db(),
+        backends=backends, reranker=reranker, db=_default_db() if database else None,
+        audit=_default_audit() if database else None,
     )
 
 
@@ -88,6 +92,18 @@ def _default_db() -> Callable[[], Any] | None:
     except DatabaseNotConfigured:
         return None
     return lambda: store.connect(info)
+
+
+def _default_audit() -> Any:
+    """Audit writer on the insert-only devguard_audit role (p7), or None when no DATABASE_URL is configured.
+    A configured database without the role password raises RolePasswordMissing: the server refuses to start."""
+    from app.db.audit import AuditWriter, connector
+    from app.db.connect import DatabaseNotConfigured, dsn, role_conninfo
+    try:
+        dsn()
+    except DatabaseNotConfigured:
+        return None
+    return AuditWriter(connector(role_conninfo("audit")))
 
 
 def _bad(field_name: str, reason: str) -> ToolFailure:

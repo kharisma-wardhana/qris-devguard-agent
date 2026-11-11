@@ -27,8 +27,12 @@ class DatabaseNotConfigured(RuntimeError):
     """No DSN in the environment or .env. The message never holds a DSN."""
 
 
+DOTENV_OVERRIDE = "DEVGUARD_DB_DOTENV"      # p7: path of the .env to read database settings from (tests: none)
+
+
 def _from_env_file(key: str) -> str | None:
-    env = ROOT / ".env"
+    override = os.environ.get(DOTENV_OVERRIDE)
+    env = Path(override) if override else ROOT / ".env"
     if not env.is_file():
         return None
     for line in env.read_text(encoding="utf-8").splitlines():

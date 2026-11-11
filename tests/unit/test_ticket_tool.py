@@ -21,9 +21,11 @@ PAYLOAD = {"title": "Access-token signature rejected", "body": "SYN: sig-at-wron
 
 
 @pytest.fixture(scope="module")
-def server(migrated_db_url):
-    ctx = t.default_context()
+def server(migrated_db_url, db_roles):
+    from app.db.audit import AuditWriter, connector
+    ctx = t.default_context(database=False)
     ctx.db = lambda: store.connect(migrated_db_url)
+    ctx.audit = AuditWriter(connector(db_roles.url("audit")))      # p7: the write tool fails closed without one
     return srv.build_server("s" * 48, ctx)
 
 
@@ -145,7 +147,7 @@ def test_secret_in_text_is_refused_not_rewritten(server, conn):
 
 
 def test_store_unavailable():
-    ctx = t.default_context()
+    ctx = t.default_context(database=False)
     ctx.db = None
     s = srv.build_server("s" * 48, ctx)
     err, body = call(s, args("t" * 32, str(uuid.uuid4())))
@@ -153,7 +155,7 @@ def test_store_unavailable():
 
 
 def test_kb_maintainer_is_forbidden():
-    ctx = t.default_context()
+    ctx = t.default_context(database=False)
     ctx.db = None
     err, body = call(srv.build_server("s" * 48, ctx), args("t" * 32, str(uuid.uuid4())), role="kb_maintainer")
     assert err and body["code"] == "FORBIDDEN"

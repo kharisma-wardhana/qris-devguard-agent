@@ -67,8 +67,10 @@ def build_corpus(workdir: Path):
 
 
 class McpHarness:
-    def __init__(self, db_conninfo: str | None = None) -> None:
+    def __init__(self, db_conninfo: str | None = None, audit_conninfo: str | None = None) -> None:
         self.db_conninfo = db_conninfo                     # p6: ticket store for create_support_ticket, or none
+        self.audit_conninfo = audit_conninfo               # p7: audit writer's conninfo, or none
+        self.audit: Any = None
         self.secret = secrets.token_hex(24)
         self.port = free_port()
         self.url = ""
@@ -86,7 +88,7 @@ class McpHarness:
 
         self._tmp = tempfile.TemporaryDirectory(prefix="devguard-harness-")
         work = Path(self._tmp.name)
-        ctx = default_context()
+        ctx = default_context(database=False)
         keys.generate(work / "keys", ctx.signature_cases["keys"])
         ctx.keystore = keys.Keystore(work / "keys")
         store, emb = build_corpus(work / "kb")
@@ -98,7 +100,10 @@ class McpHarness:
             ctx.db = lambda: store.connect(info)
         else:
             ctx.db = None
-        app = build_app(build_server(self.secret, ctx, port=self.port), port=self.port)
+        if self.audit_conninfo:
+            from app.db.audit import AuditWriter, connector
+            ctx.audit = self.audit = AuditWriter(connector(self.audit_conninfo))
+        app = build_app(build_server(self.secret, ctx, port=self.port), port=self.port, audit=ctx.audit)
         self._server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=self.port, log_level="warning",
                                                      access_log=False))
         self._thread = threading.Thread(target=self._server.run, name="mcp-harness", daemon=True)

@@ -24,7 +24,9 @@ sys.path.insert(0, str(ROOT))
 def main(argv: list[str] | None = None) -> int:
     from app.mcp_server import config
     from app.mcp_server.auth import AuthConfigError, load_secret
+    from app.db.roles import RolePasswordMissing
     from app.mcp_server.server import build_app, build_server
+    from app.mcp_server.tools import default_context
 
     cfg = config.mcp()["server"]
     parser = argparse.ArgumentParser(description="Run the QRIS DevGuard MCP server on loopback.")
@@ -41,7 +43,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     import uvicorn
 
-    app = build_app(build_server(secret, port=args.port), port=args.port)
+    try:
+        ctx = default_context()                         # p7: ticket and audit roles, never the owner
+    except RolePasswordMissing as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    app = build_app(build_server(secret, ctx, port=args.port), port=args.port, audit=ctx.audit)
     print(f"MCP server on http://{cfg['host']}:{args.port}{cfg['path']} (loopback only)", flush=True)
     uvicorn.run(app, host=cfg["host"], port=args.port, log_level="warning", access_log=False)
     return 0

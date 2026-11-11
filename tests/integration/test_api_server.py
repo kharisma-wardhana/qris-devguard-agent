@@ -50,7 +50,9 @@ def api(tmp_path_factory):
     keys.generate(keys_dir, wanted)
     mcp_port, api_port = free_port(), free_port()
     env = {**os.environ, "MCP_AUTH_SECRET": SECRET, "DEVGUARD_TEST_KEYS_DIR": str(keys_dir),
-           "QDRANT_URL": f"http://127.0.0.1:{free_port()}", "DEVGUARD_TEST_BACKENDS": "1"}
+           "QDRANT_URL": f"http://127.0.0.1:{free_port()}", "DEVGUARD_TEST_BACKENDS": "1",
+           "DEVGUARD_DB_DOTENV": str(keys_dir / "no.env")}           # p7: never the developer's database
+    env.pop("DATABASE_URL", None)
     procs = []
     mcp = subprocess.Popen([sys.executable, str(ROOT / "scripts/mcp_server.py"), "--port", str(mcp_port)], cwd=ROOT,
                            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")

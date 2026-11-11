@@ -31,6 +31,7 @@ New: tests
 - `tests/integration/test_security_suite.py`: the §22.5 cases against real API and MCP subprocesses. Database cases are marked `db`. Evidence is written only when `DEVGUARD_SECURITY_EVIDENCE` names a file.
 - `tests/integration/test_injection.py`: the 10 cases in CI mode, plus the socket guard (SSRF) for an agent run.
 - `tests/integration/test_purge_audit_cli.py`
+- `tests/integration/test_mcp_audit.py`: (added in step 3) audit rows from the real MCP subprocess on the throwaway audit role: one row per outcome, the run ID, 401 refusals, and no secret-shaped argument in any row.
 - `tests/integration/test_eval_security_cli.py`
 
 New: CI and docs
@@ -59,7 +60,9 @@ Edited
 - `scripts/api_server.py`, `scripts/mcp_server.py`: connect as their roles and refuse the owner fallback; run the egress check at start-up.
 - `tests/unit/test_compose.py`: every port publishes on `127.0.0.1` (extended if not already complete), and the API and MCP refuse a non-loopback host.
 - `tests/unit/test_init_env.py`, `tests/unit/test_db_migrate.py`, `tests/unit/test_mcp_tools.py`, `tests/unit/test_api.py`, `tests/integration/test_mcp_server.py`, `tests/integration/test_api_server.py`, `tests/integration/test_crash_resume.py`, `tests/integration/test_db_migrate_cli.py`: regression updates. They switch to the role DSNs, and use distinct subjects where a module's call volume would hit the new per-subject limits.
-- `tests/conftest.py`: a `migrated_db_roles` fixture that creates random-named roles on the throwaway schema and drops them afterwards.
+- `app/db/connect.py` also honours `DEVGUARD_DB_DOTENV` (step 3), and `app/mcp_server/tools.py` gets `default_context(database=False)`, so tests and the harness never read the developer's `.env` database.
+- `tests/integration/test_api_server.py`, `tests/unit/test_ticket_tool.py`, `tests/unit/test_agent_hitl.py`, `tests/unit/test_api_threads.py`: (step 3) DB-less contexts, or the throwaway audit role, because the write tool fails closed without an audit writer.
+- `tests/conftest.py`: a `db_roles` fixture that creates random-named roles on the throwaway schema and drops them afterwards.
 - `docs/threat-model.md`: T1–T6, T9–T12 and T14 gain P7 evidence; residual risks get the spec's flagged items.
 - `docs/tech.md`, `docs/structure.md` (`app/security/` exists now), `README.md` (setup gains `init_env.py --add-missing`, then `db_migrate.py`), `docs/index.md`.
 - `CLAUDE.md`: see Agent configuration changes.
