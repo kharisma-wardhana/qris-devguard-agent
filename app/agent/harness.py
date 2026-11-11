@@ -79,7 +79,8 @@ def build_corpus(workdir: Path, planted: list[Path] | None = None):
 
 class McpHarness:
     def __init__(self, db_conninfo: str | None = None, audit_conninfo: str | None = None,
-                 planted: list[Path] | None = None, rate_limits: bool = True) -> None:
+                 planted: list[Path] | None = None, rate_limits: bool = True, tracer: Any = None) -> None:
+        self.tracer = tracer                               # p8: the server's tracer (tests: in-memory exporter)
         self.planted = planted                             # p7: injection sections appended to the corpus copy
         # p7: False gives buckets no test volume can empty, for suites that test behaviour, not throttling. Every
         # harness caller is 127.0.0.1, so the per-address bucket is shared by the whole module.
@@ -110,6 +111,7 @@ class McpHarness:
         store, emb = build_corpus(work / "kb", self.planted)
         ctx.backends = lambda: (store, emb)
         ctx.reranker = None
+        ctx.tracer = self.tracer
         if self.db_conninfo:
             from app.db import store
             info = self.db_conninfo

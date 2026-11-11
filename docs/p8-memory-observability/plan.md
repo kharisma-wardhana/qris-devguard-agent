@@ -57,7 +57,9 @@ Edited
 - `app/agent/tools.py`: one span per MCP call (tool name, outcome, ms; no arguments) and `incident_event` on the single-event codes.
 - `app/agent/state.py`: `preferences`, `patterns_shown` and `answer_echo` keys.
 - `app/agent/answer.py`: the limitation lines for fenced text, shown patterns and unrecognised preferences.
-- `app/agent/harness.py`: optional in-memory exporter for the MCP subprocess (test-only environment flag).
+- `app/agent/harness.py`: optional in-memory exporter for the MCP subprocess (test-only environment flag). (As built, step 6:) a `tracer` argument instead; the harness runs in-process.
+- `app/agent/config.py` (as built, step 6): `model_identity()` for trace metadata.
+- `tests/conftest.py` (as built, step 6): `DEVGUARD_TRACING=0` for every test process and its server subprocesses.
 - `app/mcp_server/server.py`: the tool span inside `GuardedTool` (name, outcome, ms), attached to the seeded trace from `current_run_id`.
 - `app/mcp_server/tools.py`: retrieval child spans around the embedding, BM25 encoding, the fused Qdrant query and reranking.
 - `app/rag/search.py`: `_points` gains an optional timing hook (spans) without changing results. Its existing tests stay unchanged.
@@ -107,6 +109,15 @@ Not changed: `app/validators/*`, the MCP tool argument models, `app/db/store.py`
    - The approval-wait span; tracing set-up in the server scripts.
    - The test-only delay.
    - (AC 12, 13, 14, 16)
+   - (As built:)
+     - `app/agent/harness.py` takes the server's tracer as an argument, not an environment flag, because the harness runs the MCP app in a thread of the test process.
+     - The retrieval spans are `retrieval.bm25_encode`, `retrieval.dense_embed`, `retrieval.fused_query` (the dense and BM25 prefetches with RRF fusion are one Qdrant call) and `retrieval.rerank`.
+     - The approval wait is a span on the resume trace whose `ms` attribute is `decided_at − created_at`, because the SDK has no public way to back-date a span's start.
+     - On a resume, the MCP server's `create_support_ticket` span lands on the first run's trace. The server knows only `X-DevGuard-Run-Id`, which stays the run's ID because it is the audit join key; the agent's own call span is on the resume trace.
+     - There is no correlation ID on the agent's trace: the API creates one only for error envelopes. The server's tool spans carry the MCP correlation ID, which joins them to the audit rows.
+     - A LangGraph interrupt is recorded as `outcome=interrupted`, not as an error.
+     - The tracer method is `score_run`, matching the feedback route from step 3. `app/agent/config.py` gains `model_identity()`.
+     - Both server scripts load `LANGFUSE_*` from `.env`, and `DEVGUARD_TRACING=0` turns tracing off. `tests/conftest.py` sets it, so no test process or server subprocess exports to the local Langfuse.
 7. **Scores.** `app/observability/scores.py`; sending scores after finalize; `incident_event` in `tools.py` and the API crash handler; feedback → `user_feedback`. (AC 18, 19, 20)
 8. **Fencing.**
    - `app/agent/fence.py` wired into `compose_diagnosis`, with `answer_echo` measured before the answer fence.

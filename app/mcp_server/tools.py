@@ -39,6 +39,7 @@ class ToolContext:
     reranker: Callable[[], Any] | None = None             # built only when search.rerank is true
     db: Callable[[], Any] | None = None                   # p6: () -> psycopg connection; None = no ticket store
     audit: Any = None                                     # p7: app.db.audit.AuditWriter; None = no database
+    tracer: Any = None                                    # p8: app.observability.tracing tracer; None = off
     _cache: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def search_backends(self) -> tuple[Any, Any]:
@@ -123,13 +124,18 @@ def search_qris_spec(args: SearchArgs, ctx: ToolContext) -> dict[str, Any]:
         store, embedder = ctx.search_backends()
         if not store.client.collection_exists(store.collection):
             raise ToolFailure("SEARCH_UNAVAILABLE")
-        run = search(store, embedder, args.query, mode="hybrid", limit=cfg["candidate_pool"])
+        tracer = ctx.tracer
+        stage = (lambda name: tracer.span(f"retrieval.{name}", stage=name)) if tracer is not None else None
+        run = search(store, embedder, args.query, mode="hybrid", limit=cfg["candidate_pool"], stage=stage)
         reranked = False
         if cfg.get("rerank") and ctx.reranker is not None:
+            from contextlib import nullcontext
+
             from app.rag.rerank import rerank
             if "reranker" not in ctx._cache:
                 ctx._cache["reranker"] = ctx.reranker()
-            run, _ = rerank(run, ctx._cache["reranker"])
+            with stage("rerank") if stage else nullcontext():
+                run, _ = rerank(run, ctx._cache["reranker"])
             reranked = True
     except ToolFailure:
         raise

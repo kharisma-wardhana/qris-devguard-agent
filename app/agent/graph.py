@@ -41,14 +41,23 @@ from app.agent.tools import ToolClient
 from app.agent.tools import current_run_id as tool_run_id
 from app.mcp_server import config as mcp_config
 from app.memory import policy as mpolicy
+from app.observability.tracing import NOOP, corpus_version, test_delay_ms
 
 Node = Callable[[DevGuardState], Awaitable[dict[str, Any]]]
 
 
-def _timed(name: str, fn: Node) -> Node:
+def _timed(name: str, fn: Node, agent: Any) -> Node:
+    """Times a node into the state's trace dict and (p8) wraps it in a tracing span with the node name and ms only.
+    The test-only delay (DEVGUARD_TEST_DELAY_MS, capped; 0 by default) is applied inside classify_intent."""
     async def wrapper(state: DevGuardState) -> dict[str, Any]:
         started = time.perf_counter()
-        update = await fn(state)
+        with agent.tracer.span(name, node=name) as span:
+            if name == "classify_intent":
+                delay = test_delay_ms()
+                if delay:
+                    await anyio.sleep(delay / 1000)
+            update = await fn(state)
+            span.set(ms=int((time.perf_counter() - started) * 1000))
         trace = dict(state.get("trace") or {})
         trace.setdefault("nodes", {})
         trace["nodes"] = {**trace["nodes"], name: int((time.perf_counter() - started) * 1000)}
@@ -90,9 +99,12 @@ def order_evidence(chunks: list[dict[str, Any]], *, api_family: str | None, endp
 
 class Agent:
     def __init__(self, tools: ToolClient, llm: Any, checkpointer: Any | None = None,
-                 db_conninfo: str | None = None) -> None:
+                 db_conninfo: str | None = None, tracer: Any = None) -> None:
         self.tools = tools
         self.llm = llm
+        self.tracer = tracer or NOOP                       # p8: app.observability.tracing; no-op when off
+        if hasattr(tools, "tracer"):
+            tools.tracer = self.tracer
         self.db_conninfo = db_conninfo                     # p6: approval store; None = P5 draft-only mode
         self.checkpointer = checkpointer or InMemorySaver()
         self.graph = self._build().compile(checkpointer=self.checkpointer)
@@ -224,7 +236,11 @@ class Agent:
         notes += mpolicy.note_lines(s.get("preferences") or {})        # p8: trusted fixed text from configs
         patterns = await self._patterns(s)
         user = build_user_turn(s["user_query"], evidence, results, notes, patterns)
-        res = await compose(self.llm, SYSTEM_PROMPT, user, {"evidence": evidence, "validator_results": results})
+        with self.tracer.generation("llm.compose", model=config.served_model_name(),
+                                    prompt_version=PROMPT_VERSION) as gen:
+            res = await compose(self.llm, SYSTEM_PROMPT, user, {"evidence": evidence, "validator_results": results})
+            gen.usage(res.usage.get("prompt_tokens", 0), res.usage.get("completion_tokens", 0))
+            gen.set(attempts=res.attempts, fallback=res.data is None, ms=res.ms, error_code=res.error)
         trace = {"llm": {"prompt_version": PROMPT_VERSION, "attempts": res.attempts, "ms": res.ms, **res.usage,
                          "error": res.error}}
         shown: dict[str, Any] = {"patterns_shown": [str(p["memory_id"]) for p in patterns]}
@@ -379,7 +395,7 @@ class Agent:
                  "validate_evidence", "select_tools", "execute_read_tools", "compose_diagnosis", "policy_check",
                  "draft_action", "request_human_approval", "execute_approved_action", "memory_decision", "finalize"]
         for n in names:
-            g.add_node(n, _timed(n, getattr(self, n)))
+            g.add_node(n, _timed(n, getattr(self, n), self))
         g.add_edge(START, "sanitize_input")
         g.add_edge("sanitize_input", "classify_intent")
         g.add_edge("classify_intent", "classify_risk")
@@ -433,11 +449,27 @@ class Agent:
                                 "user_query": msg, "sanitized_context": ctx, "secret_detected": bool(found),
                                 "trace": {}, "hitl": hitl, "preferences": await self._preferences(sub)}
         started = time.perf_counter()
-        out = await self.graph.ainvoke(state, config={"configurable": {"thread_id": thread_id}})
-        if self.db_conninfo and not out.get("__interrupt__") and not out.get("action_result"):
-            from app.db import store
-            await self._db(store.set_thread, thread_id, "completed", run_id)
-        return self._result(out, started)
+        with self.tracer.run(run_id, name="agent-run", session_id=thread_id, user_id=sub,
+                             tags=[f"prompt:{PROMPT_VERSION}"], **self._trace_meta(thread_id)) as root:
+            out = await self.graph.ainvoke(state, config={"configurable": {"thread_id": thread_id}})
+            if self.db_conninfo and not out.get("__interrupt__") and not out.get("action_result"):
+                from app.db import store
+                await self._db(store.set_thread, thread_id, "completed", run_id)
+            result = self._result(out, started)
+            self._trace_outcome(root, result)
+        return result
+
+    @staticmethod
+    def _trace_meta(thread_id: str) -> dict[str, Any]:
+        model, revision = config.model_identity()
+        return {"thread_id": thread_id, "model": model, "model_revision": revision, "prompt_version": PROMPT_VERSION,
+                "corpus_version": corpus_version()}
+
+    @staticmethod
+    def _trace_outcome(root: Any, result: dict[str, Any]) -> None:
+        root.set(intent=result["intent"], risk=result["risk_level"], route=result["route"], status=result["status"],
+                 memory_decision=result.get("memory_decision"), ms=result["trace"].get("total_ms"),
+                 approval_status=(result.get("approval") or {}).get("status"))
 
     async def _preferences(self, sub: str) -> dict[str, str]:
         """p8: the caller's own active preferences (owner-scoped, T11). No store, or a database error: none,
@@ -453,9 +485,33 @@ class Agent:
     async def resume(self, thread_id: str) -> dict[str, Any]:
         """Continue an interrupted run (after a decision, or after a crash). Exactly-once is enforced by the tool."""
         started = time.perf_counter()
-        out = await self.graph.ainvoke(Command(resume={"resumed": True}),
-                                       config={"configurable": {"thread_id": thread_id}})
-        return self._result(out, started)
+        cfg = {"configurable": {"thread_id": thread_id}}
+        snap = await self.graph.aget_state(cfg)
+        before = (snap.values if snap else None) or {}
+        run_id, sub = str(before.get("run_id") or thread_id), str(before.get("user_id") or "-")
+        # p8: the resumed run is its own trace (seed run_id:resume), linked to the first by session = thread_id.
+        with self.tracer.run(run_id, name="agent-resume", session_id=thread_id, user_id=sub, seed=f"{run_id}:resume",
+                             tags=[f"prompt:{PROMPT_VERSION}"], resumed=True, **self._trace_meta(thread_id)) as root:
+            out = await self.graph.ainvoke(Command(resume={"resumed": True}), config=cfg)
+            await self._approval_wait_span((out.get("approval") or {}).get("approval_id"))
+            result = self._result(out, started)
+            self._trace_outcome(root, result)
+        return result
+
+    async def _approval_wait_span(self, approval_id: str | None) -> None:
+        """p8: the approval wait (created_at to decided_at) as a span on the resume trace, carried as `ms`: the wait
+        spans two processes and possibly a restart, so it is recorded once the decision is known."""
+        if not (approval_id and self.db_conninfo and self.tracer.enabled):
+            return
+        from app.db import store
+        try:
+            row = await self._db(store.get_approval, approval_id)
+        except Exception:  # noqa: BLE001 - tracing never fails a request
+            return
+        if row and row.get("decided_at") and row.get("created_at"):
+            wait = int((row["decided_at"] - row["created_at"]).total_seconds() * 1000)
+            with self.tracer.span("approval_wait", ms=wait, approval_status=row.get("status")):
+                pass
 
     async def snapshot(self, thread_id: str) -> dict[str, Any] | None:
         """The thread's latest state: waiting for approval, or the last run's answer. None for an unknown thread."""

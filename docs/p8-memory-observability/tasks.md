@@ -7,7 +7,7 @@
 - [x] 3. Memory routes and feedback route — spec AC: #1, #2, #4, #6, #7, #8, #10, #19
 - [x] 4. Memory in the graph (`compose-v2`) — spec AC: #3, #9, #11
 - [x] 5. Tracing core (allowlist, mask hook, no-op, egress) — spec AC: #14, #15, #16, #17
-- [ ] 6. Agent and MCP spans — spec AC: #12, #13, #14, #16
+- [x] 6. Agent and MCP spans — spec AC: #12, #13, #14, #16
 - [ ] 7. Scores — spec AC: #18, #19, #20
 - [ ] 8. Fencing and the marker scan — spec AC: #21, #22, #23, #24
 - [ ] 9. Retention command — spec AC: #5, #26, #27

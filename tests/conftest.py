@@ -9,12 +9,15 @@
     migrated_db_url  session schema with our migrations and the LangGraph checkpoint tables
     db_roles         (p7) throwaway least-privilege roles on migrated_db_url: names devguard_<key>_t<hex>,
                      random passwords, dropped afterwards. Never the real roles (their passwords are in .env).
+- (p8) DEVGUARD_TRACING=0 for this process and every server subprocess it starts: no test exports to the local
+  Langfuse, even though the servers load LANGFUSE_* from .env. Tracing tests pass explicit env mappings.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import secrets
 
 import pytest
@@ -22,6 +25,7 @@ import pytest
 from app.db.connect import DatabaseNotConfigured, conninfo, dsn, use_selector_loop
 
 use_selector_loop()
+os.environ["DEVGUARD_TRACING"] = "0"
 
 
 @contextlib.contextmanager

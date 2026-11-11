@@ -30,6 +30,13 @@ def served_model_name() -> str:
     return str(_load("model.yaml")["model"]["served_name"])
 
 
+@lru_cache(maxsize=1)
+def model_identity() -> tuple[str, str]:
+    """(model ID, revision) from configs/model.yaml, for trace metadata (p8)."""
+    m = _load("model.yaml")["model"]
+    return str(m["id"]), str(m["revision"])
+
+
 def prohibited_objects() -> list[str]:
     """agent.yaml prohibited objects plus security.yaml prohibited_actions (underscores as spaces)."""
     extra = [a.replace("_", " ") for a in security()["prohibited_actions"]]

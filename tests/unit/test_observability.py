@@ -54,7 +54,11 @@ def test_missing_or_placeholder_keys_give_the_noop_tracer(over):
     assert isinstance(t, tracing.NoopTracer) and not t.enabled
     with t.run("r1", name="agent-run", session_id="th", user_id="u") as h, t.span("node", ms=1):
         h.set(status="ok")
-    t.score("r1", "tool_success", 1)
+    t.score_run("r1", "tool_success", 1)
+
+
+def test_devguard_tracing_zero_gives_the_noop_tracer():
+    assert isinstance(tracing.build(env(DEVGUARD_TRACING="0")), tracing.NoopTracer)
 
 
 def test_disabled_in_config_gives_the_noop_tracer(monkeypatch):
@@ -173,18 +177,22 @@ def test_mask_hook_raising_drops_the_whole_batch(traced, monkeypatch):
 
 def test_score_goes_to_the_seeded_trace_and_a_text_comment_is_dropped(traced):
     t, _, scores = traced
-    t.score("r5", "incident_event", 1, comment="APPROVAL_INVALID")
-    t.score("r5", "incident_event", 1, comment="approval for client_secret=" + SECRET)
+    t.score_run("r5", "incident_event", 1, comment="APPROVAL_INVALID")
+    t.score_run("r5", "incident_event", 1, comment="approval for client_secret=" + SECRET)
+    t.score_run("r5", "user_feedback", "up", session_id="thread-1")
+    t.score_run("r5", "user_feedback", "free text " + SECRET)            # not a token: not sent at all
     assert scores[0] == {"name": "incident_event", "value": 1, "trace_id": tracing.trace_id_for("r5"),
                          "data_type": "BOOLEAN", "comment": "APPROVAL_INVALID"}
     assert scores[1]["comment"] is None
+    assert scores[2]["data_type"] == "CATEGORICAL" and scores[2]["value"] == "up"
+    assert len(scores) == 3
 
 
 def test_a_failing_score_sink_never_raises(caplog):
     def sink(item):
         raise ConnectionError("down")
     t = tracing.build(env(), span_exporter=InMemorySpanExporter(), score_sink=sink)
-    t.score("r6", "tool_success", 1)
+    t.score_run("r6", "tool_success", 1)
     t.shutdown()
 
 

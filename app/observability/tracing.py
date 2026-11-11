@@ -1,6 +1,7 @@
 """Langfuse tracing core (p8 spec Behaviour §2; AC #14-#17).
 
-- **Off unless configured.** `observability.enabled` false, a missing or placeholder `LANGFUSE_*` key, or a
+- **Off unless configured.** `observability.enabled` false, `DEVGUARD_TRACING=0` (every test process), a missing or
+  placeholder `LANGFUSE_*` key, or a
   host outside `egress_allowlist` gives the `NoopTracer` (the CI default). An egress refusal logs one line naming
   the setting, never its value, and no client or socket is created.
 - **One trace per run.** The trace ID is seeded from `run_id` (`Langfuse.create_trace_id(seed=...)`), so the
@@ -166,8 +167,8 @@ class NoopTracer:
     def generation(self, name: str, *, model: str, **_: Any) -> Iterator[_NoopHandle]:
         yield _NoopHandle()
 
-    def score(self, run_id: str, name: str, value: Any, *, comment: str | None = None,
-              data_type: str = "BOOLEAN") -> None:
+    def score_run(self, run_id: str, name: str, value: Any, *, comment: str | None = None,
+                  data_type: str | None = None, **_: Any) -> None:
         return None
 
     def flush(self) -> None:
@@ -206,19 +207,23 @@ class LangfuseTracer:
                 yield _Handle(obs, self.dropped)
             except BaseException as e:   # noqa: BLE001 - recorded by class name only, then re-raised below
                 err = e
-                obs.update(level="ERROR", metadata={"error_code": type(e).__name__})
+                if any(c.__name__ == "GraphBubbleUp" for c in type(e).__mro__):    # LangGraph interrupt
+                    obs.update(metadata={"outcome": "interrupted"})
+                else:
+                    obs.update(level="ERROR", metadata={"error_code": type(e).__name__})
         if err is not None:
             raise err
 
     @contextmanager
     def run(self, run_id: str, *, name: str, session_id: str, user_id: str, tags: list[str] | None = None,
-            **attrs: Any) -> Iterator[_Handle]:
-        """The root span of a run's trace (seeded ID), with session, user, tags and metadata propagated."""
+            seed: str | None = None, **attrs: Any) -> Iterator[_Handle]:
+        """The root span of a run's trace (ID seeded from `seed`, default `run_id`), with session, user, tags and
+        metadata propagated."""
         from langfuse import propagate_attributes
         meta = {k: str(v) for k, v in clean_attrs({"run_id": run_id, **attrs}, self.dropped).items()}
         safe_tags = [t for t in [cfg()["service_tag"], *(tags or [])] if _TOKEN.match(t)]
         with self._observe(name, "span", {"run_id": run_id, **attrs},
-                           trace_context={"trace_id": trace_id_for(run_id)}) as h:
+                           trace_context={"trace_id": trace_id_for(seed or run_id)}) as h:
             with propagate_attributes(session_id=session_id, user_id=user_id, tags=safe_tags, metadata=meta,
                                       trace_name=name):
                 yield h
@@ -235,10 +240,14 @@ class LangfuseTracer:
         with self._observe(name, "generation", attrs, model=model if _TOKEN.match(model) else None) as h:
             yield h
 
-    def score(self, run_id: str, name: str, value: Any, *, comment: str | None = None,
-              data_type: str = "BOOLEAN") -> None:
-        """A score on the run's trace. The comment must be a token (a code), or it is dropped."""
-        item = {"name": name, "value": value, "trace_id": trace_id_for(run_id), "data_type": data_type,
+    def score_run(self, run_id: str, name: str, value: Any, *, comment: str | None = None,
+                  data_type: str | None = None, **_: Any) -> None:
+        """A score on the run's trace. A string value is CATEGORICAL, a number BOOLEAN unless `data_type` says
+        otherwise. The comment must be a token (a code), or it is dropped. Extra keywords are ignored."""
+        if isinstance(value, str) and not _TOKEN.match(value):
+            return
+        kind = data_type or ("CATEGORICAL" if isinstance(value, str) else "BOOLEAN")
+        item = {"name": name, "value": value, "trace_id": trace_id_for(run_id), "data_type": kind,
                 "comment": _clean_comment(comment)}
         try:
             if self.score_sink is not None:
@@ -262,6 +271,21 @@ class LangfuseTracer:
 
 
 Tracer = NoopTracer | LangfuseTracer
+NOOP = NoopTracer()
+
+
+def load_env_file(root: Path = ROOT) -> None:
+    """Fill LANGFUSE_HOST/PUBLIC_KEY/SECRET_KEY from the repo's .env when unset (values are never printed).
+    `DEVGUARD_TRACING=0` (set for every test process by tests/conftest.py) still turns tracing off."""
+    o = cfg()
+    keys = {o["host_env"], o["public_key_env"], o["secret_key_env"]}
+    env = root / ".env"
+    if not env.is_file():
+        return
+    for line in env.read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() in keys and not os.environ.get(key.strip()):
+            os.environ[key.strip()] = value.strip()
 
 
 def build(env: Mapping[str, str] | None = None, *, span_exporter: Any = None,
@@ -271,7 +295,7 @@ def build(env: Mapping[str, str] | None = None, *, span_exporter: Any = None,
     o = cfg()
     env = env if env is not None else os.environ
     host, pk, sk = (env.get(o[k], "") for k in ("host_env", "public_key_env", "secret_key_env"))
-    if not o.get("enabled") or host in _PLACEHOLDERS or pk in _PLACEHOLDERS or sk in _PLACEHOLDERS:
+    if not o.get("enabled") or env.get("DEVGUARD_TRACING") == "0" or host in _PLACEHOLDERS or pk in _PLACEHOLDERS or sk in _PLACEHOLDERS:
         return NoopTracer()
     try:
         check(o["host_env"], host)

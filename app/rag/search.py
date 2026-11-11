@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -75,26 +77,44 @@ def excerpt(text: str, permission_basis: str) -> str:
     return cut[:space] if space > limit // 2 else cut
 
 
-def _points(store: Store, embedder: Embedder, query: str, mode: str, limit: int):
+Stage = Callable[[str], AbstractContextManager[Any]]
+
+
+def _no_stage(name: str) -> AbstractContextManager[Any]:
+    return nullcontext()
+
+
+def _points(store: Store, embedder: Embedder, query: str, mode: str, limit: int, stage: Stage = _no_stage):
+    """p8: `stage(name)` wraps each retrieval stage (a tracing span); it never changes the results."""
     cfg = config.retrieval()["search"]
     if mode == "dense":
-        return store.client.query_points(store.collection, query=embedder.embed_query(query), using=DENSE,
-                                         limit=limit, with_payload=True).points
-    sq = sparse.encode_query(query)
+        with stage("dense_embed"):
+            vec = embedder.embed_query(query)
+        with stage("dense_query"):
+            return store.client.query_points(store.collection, query=vec, using=DENSE,
+                                             limit=limit, with_payload=True).points
+    with stage("bm25_encode"):
+        sq = sparse.encode_query(query)
     sparse_vec = qm.SparseVector(indices=sq.indices, values=sq.values)
     if mode == "sparse":
         if not sq.indices:
             return []
-        return store.client.query_points(store.collection, query=sparse_vec, using=SPARSE,
-                                         limit=limit, with_payload=True).points
-    prefetch = [qm.Prefetch(query=embedder.embed_query(query), using=DENSE, limit=cfg["dense_prefetch"])]
+        with stage("bm25_query"):
+            return store.client.query_points(store.collection, query=sparse_vec, using=SPARSE,
+                                             limit=limit, with_payload=True).points
+    with stage("dense_embed"):
+        vec = embedder.embed_query(query)
+    prefetch = [qm.Prefetch(query=vec, using=DENSE, limit=cfg["dense_prefetch"])]
     if sq.indices:
         prefetch.append(qm.Prefetch(query=sparse_vec, using=SPARSE, limit=cfg["sparse_prefetch"]))
-    return store.client.query_points(store.collection, prefetch=prefetch, query=qm.FusionQuery(fusion=qm.Fusion.RRF),
-                                     limit=limit, with_payload=True).points
+    with stage("fused_query"):                      # dense + BM25 prefetch, RRF fusion: one Qdrant call
+        return store.client.query_points(store.collection, prefetch=prefetch,
+                                         query=qm.FusionQuery(fusion=qm.Fusion.RRF),
+                                         limit=limit, with_payload=True).points
 
 
-def search(store: Store, embedder: Embedder, query: str, mode: str = "hybrid", limit: int | None = None) -> SearchRun:
+def search(store: Store, embedder: Embedder, query: str, mode: str = "hybrid", limit: int | None = None,
+           stage: Stage | None = None) -> SearchRun:
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
     query = normalise_query(query)
@@ -102,7 +122,7 @@ def search(store: Store, embedder: Embedder, query: str, mode: str = "hybrid", l
         raise ValueError("empty query")
     limit = limit or config.retrieval()["search"]["limit"]
     run = SearchRun(str(uuid.uuid4()), query, mode, [])
-    for rank, point in enumerate(_points(store, embedder, query, mode, limit), start=1):
+    for rank, point in enumerate(_points(store, embedder, query, mode, limit, stage or _no_stage), start=1):
         p = point.payload
         run.chunk_text[p["chunk_id"]] = p["text"]
         run.results.append(Citation(

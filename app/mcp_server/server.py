@@ -70,6 +70,16 @@ class GuardedTool(Tool):
         writer = getattr(self.tool_context, "audit", None)
         run_id = current_run_id.get()
         approval_id = None
+        # p8: one span per call on the run's seeded trace (no run ID: no span). Name, outcome, ms, correlation ID
+        # and a validator's result status only; never arguments. Retrieval stages are its children.
+        tracer = getattr(self.tool_context, "tracer", None)
+        span_cm = None
+        if tracer is not None and run_id:
+            from app.observability.tracing import trace_id_for
+            span_cm = tracer.span(f"mcp_server.{self.name}", trace_id=trace_id_for(run_id), tool=self.name,
+                                  correlation_id=cid)
+        span = span_cm.__enter__() if span_cm is not None else None
+        result_status = None
         try:
             if ident is None:
                 raise ToolFailure("UNAUTHENTICATED")
@@ -92,6 +102,7 @@ class GuardedTool(Tool):
             handler = (functools.partial(self.handler, caller=sub) if getattr(self.handler, "needs_caller", False)
                        else self.handler)
             data = await anyio.to_thread.run_sync(handler, args, self.tool_context)
+            result_status = data.get("status") if isinstance(data.get("status"), str) else None
             outcome, out = "OK", _result({**data, "correlation_id": cid}, error=False)
         except ToolFailure as f:
             outcome, out = f.code, _result(envelope(f.code, cid, f.field_errors), error=True)
@@ -99,6 +110,11 @@ class GuardedTool(Tool):
             log.error("tool=%s correlation_id=%s internal error type=%s", self.name, cid, type(exc).__name__)
             outcome, out = "INTERNAL_ERROR", _result(envelope("INTERNAL_ERROR", cid), error=True)
         ms = int((time.perf_counter() - started) * 1000)
+        if span_cm is not None:
+            try:
+                span.set(outcome=outcome, ms=ms, result_status=result_status)
+            finally:
+                span_cm.__exit__(None, None, None)
         if writer is not None and not await audit_write(
                 writer, correlation_id=cid, sub=sub, role=role, tool=self.name, phase="result", outcome=outcome,
                 duration_ms=ms, run_id=run_id, approval_id=approval_id):
