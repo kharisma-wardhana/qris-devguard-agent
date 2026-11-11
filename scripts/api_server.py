@@ -107,8 +107,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"API on http://{api['host']}:{args.port} (loopback only; {mode})", flush=True)
     # Selector loop on every platform: psycopg async (the PostgreSQL checkpointer) cannot run on Windows' Proactor
     # loop, which uvicorn's "asyncio" setting picks on win32 (p6).
+    # proxy_headers=False: uvicorn otherwise trusts X-Forwarded-For from loopback, i.e. from every local caller,
+    # which could rotate it to dodge the per-address limit. No proxy exists (docs/p7-mcp-hardening/transport.md).
     uvicorn.run(app, host=api["host"], port=args.port, log_level="warning", access_log=False,
-                loop="asyncio:SelectorEventLoop")
+                loop="asyncio:SelectorEventLoop", proxy_headers=False)
     return 0
 
 

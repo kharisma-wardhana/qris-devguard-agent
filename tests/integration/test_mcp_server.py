@@ -319,6 +319,18 @@ def test_per_subject_tool_burst_is_throttled(tmp_path):
         assert other.ok
 
 
+def test_forwarded_for_header_cannot_buy_a_fresh_address_bucket(tmp_path):
+    """Regression (p7 step 11): uvicorn trusts X-Forwarded-For from loopback by default, so every local caller could
+    name a new client address per request and never hit the pre-auth limit. No proxy exists; the header is ignored."""
+    from app.security import security
+    n = security()["limits"]["rate"]["per_address"]["burst"] + 60
+    with _dedicated_server(tmp_path) as url:
+        with httpx.Client(timeout=10) as c:
+            statuses = [c.post(url, headers={**HEADERS, "X-Forwarded-For": ".".join(["198", "51", "100", str(i % 250)])},
+                               json=INIT).status_code for i in range(n)]
+    assert statuses[0] == 401 and 429 in statuses
+
+
 def test_per_address_flood_is_throttled_before_auth(tmp_path):
     from app.security import security
     n = security()["limits"]["rate"]["per_address"]["burst"] + 60

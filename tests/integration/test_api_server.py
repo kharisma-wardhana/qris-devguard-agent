@@ -197,6 +197,43 @@ def test_agent_run_route_burst_gets_429_and_other_subject_is_unaffected(api):
     assert post("api-burst-2").status_code == 200
 
 
+def test_forwarded_for_header_cannot_buy_a_fresh_address_bucket(tmp_path):
+    """Regression (p7 step 11): uvicorn trusts X-Forwarded-For from loopback by default, so every local caller could
+    name a new client address per request and never hit the pre-auth limit. A dedicated server: the per-address
+    bucket is shared by every loopback caller. The flood is unauthenticated, so no MCP server is needed."""
+    from app.security import security
+    n = security()["limits"]["rate"]["per_address"]["burst"] + 60
+    port = free_port()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("DEVGUARD_")}
+    env.pop("DATABASE_URL", None)
+    env.update({"MCP_AUTH_SECRET": SECRET, "DEVGUARD_DB_DOTENV": str(tmp_path / "no.env"), "DEVGUARD_TEST_BACKENDS": "1"})
+    log = (tmp_path / "api.log").open("w", encoding="utf-8")
+    proc = subprocess.Popen([sys.executable, str(ROOT / "scripts/api_server.py"), "--fake-llm", "--port", str(port),
+                             "--mcp-url", f"http://127.0.0.1:{free_port()}/mcp"], cwd=ROOT, env=env, stdout=log,
+                            stderr=log)
+    try:
+        deadline = time.time() + 90
+        while time.time() < deadline:
+            assert proc.poll() is None, (tmp_path / "api.log").read_text(encoding="utf-8")[-2000:]
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.2)
+        with httpx.Client(timeout=10) as c:
+            statuses = [c.post(f"http://127.0.0.1:{port}/api/v1/chat", json={"message": "hi"},
+                               headers={"X-Forwarded-For": ".".join(["198", "51", "100", str(i % 250)])}).status_code
+                        for i in range(n)]
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        log.close()
+    assert statuses[0] == 401 and 429 in statuses
+
+
 def test_oversized_body_gets_413_before_parsing(api):
     from app.security import security
     base = api[0]

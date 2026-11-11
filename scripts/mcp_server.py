@@ -65,7 +65,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     app = build_app(build_server(secret, ctx, port=args.port), port=args.port, audit=ctx.audit)
     print(f"MCP server on http://{cfg['host']}:{args.port}{cfg['path']} (loopback only)", flush=True)
-    uvicorn.run(app, host=cfg["host"], port=args.port, log_level="warning", access_log=False)
+    # proxy_headers=False: see scripts/api_server.py (X-Forwarded-For from loopback would dodge the per-address limit)
+    uvicorn.run(app, host=cfg["host"], port=args.port, log_level="warning", access_log=False, proxy_headers=False)
     return 0
 
 
