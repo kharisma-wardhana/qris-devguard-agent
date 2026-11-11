@@ -2,7 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Build. Written: 2026-11-11. Via /aspec:make-it-simple-v2.*
 *Implements: docs/p6-checkpoint-hitl/plan.md*
 
-- [ ] 1. Dependencies, config, the db test fixture — spec AC: #13
+- [x] 1. Dependencies, config, the db test fixture — spec AC: #13
 - [ ] 2. Schema, migrations, actions, store — spec AC: #1, #8, #11
 - [ ] 3. The create_support_ticket MCP tool — spec AC: #7, #8
 - [ ] 4. Evidence ordering — spec AC: #12

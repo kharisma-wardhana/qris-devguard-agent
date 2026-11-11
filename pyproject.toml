@@ -17,6 +17,8 @@ dependencies = [
     "langgraph==1.2.20",
     "fastapi==0.162.2",
     "openai==3.49.0",
+    "langgraph-checkpoint-postgres==3.2.0",
+    "psycopg-pool==3.3.3",
 ]
 
 [project.optional-dependencies]
@@ -44,3 +46,6 @@ explicit = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "db: needs a reachable PostgreSQL (DEVGUARD_TEST_DATABASE_URL or DATABASE_URL); skipped with a reason otherwise (p6)",
+]
