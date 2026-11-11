@@ -17,6 +17,12 @@ MESSAGES = {
     "INVALID_ARGUMENT": "one or more arguments are invalid",
     "SEARCH_UNAVAILABLE": "the knowledge base search is not available right now",
     "INTERNAL_ERROR": "the tool failed; quote the correlation_id when reporting it",
+    # p6: create_support_ticket refusals (no ticket is created for any of these)
+    "TICKET_STORE_UNAVAILABLE": "the sandbox ticket store is not available right now",
+    "APPROVAL_INVALID": "no usable approval exists for this user and thread",
+    "APPROVAL_MISMATCH": "the action differs from the one that was approved",
+    "APPROVAL_EXPIRED": "the approval has expired",
+    "APPROVAL_NOT_USABLE": "the approval is not in an approved, unused state",
 }
 
 

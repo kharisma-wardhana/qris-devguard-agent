@@ -62,4 +62,24 @@ class ResponseCodeArgs(BaseModel):
     spec_version: str = Field(pattern=VERSION)
 
 
+class TicketArgs(BaseModel):
+    """create_support_ticket (p6): the exact approved action plus its approval and idempotency key."""
+    model_config = _STRICT
+    approval_id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    thread_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,64}$")
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=4000)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=10)
+    priority: Literal["low", "medium", "high"]
+    idempotency_key: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("evidence_ids")
+    @classmethod
+    def _ids(cls, v: list[str]) -> list[str]:
+        import re
+        if any(not re.fullmatch(r"CIT-[0-9]{6}|VAL-[0-9]{1,2}", e) for e in v):
+            raise ValueError("evidence id must be CIT-nnnnnn or VAL-n")
+        return v
+
+
 assert set(Profile.__args__) == set(PROFILES)          # the enum and the implemented profiles never drift

@@ -13,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 MCP_CONFIG = ROOT / "configs" / "mcp.yaml"
 SECURITY_CONFIG = ROOT / "configs" / "security.yaml"
 
-TOOL_NAMES = ("search_qris_spec", "validate_request_payload", "validate_test_signature", "lookup_response_code")
+TOOL_NAMES = ("search_qris_spec", "validate_request_payload", "validate_test_signature", "lookup_response_code",
+              "create_support_ticket")      # p6: the one write tool, approval-checked
+READ_ONLY_TOOLS = TOOL_NAMES[:4]
 
 
 @lru_cache(maxsize=1)
