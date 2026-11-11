@@ -1,0 +1,55 @@
+name: container-scan
+# p7 (docs/p7-mcp-hardening/spec.md AC #24): Trivy over the seven docker-compose.yml images. New job, non-blocking
+# on first install, like pip-audit in security-scan.yml. Findings are triaged in docs/p7-mcp-hardening/security-report.md.
+on:
+  pull_request:
+    paths:
+      - docker-compose.yml
+      - .github/workflows/container-scan.yml
+  schedule:
+    - cron: "41 3 * * 1"      # Mondays 03:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true   # non-blocking on first install
+    strategy:
+      fail-fast: false
+      matrix:
+        include:              # must match docker-compose.yml; the first step fails a leg that has drifted
+          - { name: postgres, image: "docker.io/library/postgres:17.11" }
+          - { name: qdrant, image: "docker.io/qdrant/qdrant:v1.19.2" }
+          - { name: clickhouse, image: "docker.io/clickhouse/clickhouse-server:26.3.62.3" }
+          - { name: minio, image: "cgr.dev/chainguard/minio@sha256:053a21cc9dcf3db9f997b5f77f5b5b2973a754631e5369d27aea6341e151d790" }
+          - { name: redis, image: "docker.io/library/redis:7.4.12" }
+          - { name: langfuse-worker, image: "docker.io/langfuse/langfuse-worker:4.76.0" }
+          - { name: langfuse, image: "docker.io/langfuse/langfuse:4.76.0" }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image is still in docker-compose.yml
+        run: |
+          grep -qF "image: ${{ matrix.image }}" docker-compose.yml
+      # trivy-action v0.36.0, pinned by commit (its tags were force-pushed in a 2026 supply-chain incident)
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          version: v0.70.0
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          severity: HIGH,CRITICAL
+          format: table
+          output: trivy-${{ matrix.name }}.txt
+          exit-code: "1"
+      - name: Show findings
+        if: always()
+        run: cat "trivy-${{ matrix.name }}.txt" 2>/dev/null || echo "no report written"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-${{ matrix.name }}
+          path: trivy-${{ matrix.name }}.txt
+          if-no-files-found: ignore
