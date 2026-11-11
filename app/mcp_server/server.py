@@ -58,6 +58,7 @@ class GuardedTool(Tool):
     args_model: Any = Field(exclude=True)
     handler: Any = Field(exclude=True)
     tool_context: Any = Field(exclude=True)
+    limiter: Any = Field(default=None, exclude=True)     # p7: per-subject TokenBucket shared by every tool
 
     async def run(self, arguments: dict[str, Any], context: Any, convert_result: bool = False) -> Any:
         from app.db.audit import valid_uuid
@@ -72,6 +73,8 @@ class GuardedTool(Tool):
         try:
             if ident is None:
                 raise ToolFailure("UNAUTHENTICATED")
+            if self.limiter is not None and self.limiter.take(f"sub:{sub}") > 0:     # p7 (T12)
+                raise ToolFailure("RATE_LIMITED")
             if role not in config.tool_roles(self.name):
                 raise ToolFailure("FORBIDDEN")
             try:
@@ -104,7 +107,7 @@ class GuardedTool(Tool):
         return out
 
 
-def _guarded(name: str, ctx: ToolContext) -> GuardedTool:
+def _guarded(name: str, ctx: ToolContext, limiter: Any = None) -> GuardedTool:
     model, handler, description = TOOLS[name]
 
     def placeholder() -> None:      # signature unused: GuardedTool.run replaces argument handling
@@ -116,13 +119,17 @@ def _guarded(name: str, ctx: ToolContext) -> GuardedTool:
                                                           idempotent_hint=True, open_world_hint=False))
     fields = {k: getattr(base, k) for k in Tool.model_fields}
     fields["parameters"] = model.model_json_schema()
-    return GuardedTool(**fields, args_model=model, handler=handler, tool_context=ctx)
+    return GuardedTool(**fields, args_model=model, handler=handler, tool_context=ctx, limiter=limiter)
 
 
-def build_server(secret: str, ctx: ToolContext | None = None, *, port: int | None = None) -> MCPServer:
+def build_server(secret: str, ctx: ToolContext | None = None, *, port: int | None = None,
+                 tool_limiter: Any = None) -> MCPServer:
+    """`tool_limiter`: per-subject bucket for tools/call (default: security.yaml limits.rate.mcp_tool_call)."""
+    from app.security.ratelimit import TokenBucket
     cfg = config.mcp()
     host, port = cfg["server"]["host"], port or cfg["server"]["port"]
     ctx = ctx or default_context()
+    limiter = tool_limiter if tool_limiter is not None else TokenBucket.from_config("mcp_tool_call")
     base_url = f"http://{host}:{port}"
     return MCPServer(
         name=cfg["server"]["name"], version="0.1.0",
@@ -130,8 +137,79 @@ def build_server(secret: str, ctx: ToolContext | None = None, *, port: int | Non
         token_verifier=HS256Verifier(secret),
         auth=AuthSettings(issuer_url=base_url, resource_server_url=f"{base_url}{cfg['server']['path']}",
                           validate_token_resource=False),          # audience is checked by HS256Verifier
-        tools=[_guarded(name, ctx) for name in TOOLS],
+        tools=[_guarded(name, ctx, limiter) for name in TOOLS],
     )
+
+
+JSONRPC_MESSAGES = {-32700: "parse error", -32600: "invalid request", -32601: "method not found",
+                    -32602: "invalid params", -32603: "internal error"}
+
+
+def _scrub(doc: Any) -> Any:
+    """One JSON-RPC message with SDK-generated text replaced (p7 spec AC #10). The SDK puts submitted values into
+    error messages (parse/validation errors), `data` (unknown method) and "Unknown tool: <name>" results."""
+    if not isinstance(doc, dict):
+        return doc
+    err = doc.get("error")
+    if isinstance(err, dict):
+        code = err.get("code") if isinstance(err.get("code"), int) else -32603
+        doc = {**doc, "error": {"code": code, "message": JSONRPC_MESSAGES.get(code, "request refused")}}
+    result = doc.get("result")
+    if isinstance(result, dict) and result.get("isError"):
+        content = result.get("content") or []
+        text = content[0].get("text") if content and isinstance(content[0], dict) else None
+        try:
+            ours = isinstance(json.loads(text), dict) and "correlation_id" in json.loads(text)
+        except (TypeError, ValueError):
+            ours = False
+        if not ours:                                   # not a GuardedTool envelope: an SDK message, e.g. unknown tool
+            body = envelope("INVALID_ARGUMENT", new_correlation_id(), [{"field": "name", "reason": "unknown_tool"}])
+            doc = {**doc, "result": {"content": [{"type": "text", "text": json.dumps(body)}], "isError": True,
+                                     "structuredContent": body}}
+    return doc
+
+
+class SafeJsonRpcErrors:
+    """Rewrites JSON responses from the SDK so no submitted value is echoed back (p7). Only application/json
+    bodies are touched (the server runs with json_response=True); anything unparseable passes unchanged."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        start: dict[str, Any] = {}
+        chunks: list[bytes] = []
+
+        async def capture(message: dict[str, Any]) -> None:
+            if message["type"] == "http.response.start":
+                headers = dict(message.get("headers", []))
+                if not headers.get(b"content-type", b"").startswith(b"application/json"):
+                    start["pass"] = True
+                    await send(message)
+                    return
+                start["message"] = message
+                return
+            if start.get("pass"):
+                await send(message)
+                return
+            chunks.append(message.get("body", b""))
+            if message.get("more_body", False):
+                return
+            raw = b"".join(chunks)
+            try:
+                doc = json.loads(raw)
+                fixed = [_scrub(d) for d in doc] if isinstance(doc, list) else _scrub(doc)
+                raw = json.dumps(fixed, ensure_ascii=False).encode("utf-8")
+            except ValueError:
+                pass
+            headers = [(k, v) for k, v in start["message"].get("headers", []) if k != b"content-length"]
+            headers.append((b"content-length", str(len(raw)).encode()))
+            await send({**start["message"], "headers": headers})
+            await send({"type": "http.response.body", "body": raw})
+        await self.app(scope, receive, capture)
 
 
 class RunIdHeader:
@@ -174,8 +252,12 @@ async def refused(writer: Any, code: str) -> None:
         log.error("refusal outcome=%s audit row not written", code)
 
 
-def build_app(server: MCPServer, *, port: int | None = None, audit: Any = None):
-    """The Streamable HTTP app wrapped in the p7 layers, outermost first: RefusalAudit -> RunIdHeader -> SDK."""
+def build_app(server: MCPServer, *, port: int | None = None, audit: Any = None, address_limiter: Any = None):
+    """The Streamable HTTP app wrapped in the p7 layers, outermost first:
+    PerAddressLimit (429) -> BodyLimit (413) -> RefusalAudit (401 rows) -> RunIdHeader -> SafeJsonRpcErrors -> SDK.
+    Each refusal made by these layers is audited as phase "refused" with no tool."""
+    from app.security.body_limit import BodyLimit
+    from app.security.ratelimit import PerAddressLimit
     cfg = config.mcp()["server"]
     host, port = cfg["host"], port or cfg["port"]
     if host != "127.0.0.1":
@@ -188,4 +270,9 @@ def build_app(server: MCPServer, *, port: int | None = None, audit: Any = None):
             enable_dns_rebinding_protection=True, allowed_hosts=allowed,
             allowed_origins=[f"http://{h}" for h in allowed]),
     )
-    return RefusalAudit(RunIdHeader(app), audit)
+    async def on_refuse(code: str) -> None:
+        if audit is not None:
+            await refused(audit, code)
+    inner = BodyLimit(RefusalAudit(RunIdHeader(SafeJsonRpcErrors(app)), audit), cfg["max_body_bytes"],
+                      on_refuse=on_refuse)
+    return PerAddressLimit(inner, bucket=address_limiter, on_refuse=on_refuse)

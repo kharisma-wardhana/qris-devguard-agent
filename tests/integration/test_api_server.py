@@ -168,3 +168,49 @@ def test_api_with_database_but_no_role_password_refuses_to_start(tmp_path):
 def test_api_refuses_a_disallowed_destination(tmp_path, over, setting):
     r = _start_once(over, tmp_path)
     assert r.returncode == 1 and setting in r.stderr and list(over.values())[0] not in r.stderr
+
+
+
+# --- p7 step 5: limits against the real subprocess (spec AC #7, #9) ---------------------------------------
+
+def _tok(sub):
+    return {"Authorization": f"Bearer {auth.mint(sub, 'developer', secret=SECRET, audience=config.agent()['api']['audience'])}"}
+
+
+def test_agent_run_route_burst_gets_429_and_other_subject_is_unaffected(api):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.security import security
+    base = api[0]
+    burst = security()["limits"]["rate"]["api_agent_run"]["burst"]
+    body = {"message": "What does response code 4094700 mean for qris-mpm 0.1.0?"}
+
+    def post(sub):
+        return httpx.post(f"{base}/api/v1/chat", json=body, headers=_tok(sub), timeout=120)
+    with ThreadPoolExecutor(max_workers=burst + 3) as pool:           # concurrent: refill can't hide the limit
+        responses = list(pool.map(post, ["api-burst-1"] * (burst + 3)))
+    statuses = sorted(r.status_code for r in responses)
+    assert statuses.count(200) <= burst + 1 and 429 in statuses
+    r = next(r for r in responses if r.status_code == 429)
+    assert r.json()["code"] == "RATE_LIMITED" and int(r.headers["retry-after"]) >= 1
+    assert set(r.json()) == {"code", "message", "correlation_id"}
+    assert post("api-burst-2").status_code == 200
+
+
+def test_oversized_body_gets_413_before_parsing(api):
+    from app.security import security
+    base = api[0]
+    limit = security()["limits"]["max_request_bytes"]
+    big = b'{"message": "' + b"Z" * (limit + 10) + b'"}'
+    r = httpx.post(f"{base}/api/v1/chat", content=big, headers={**_tok("api-big"), "Content-Type": "application/json"},
+                   timeout=30)
+    assert r.status_code == 413 and r.json()["code"] == "PAYLOAD_TOO_LARGE" and "ZZZZ" not in r.text
+
+    def chunks():
+        yield b'{"message": "'
+        for _ in range(limit // 4096 + 2):
+            yield b"Z" * 4096
+        yield b'"}'
+    r = httpx.post(f"{base}/api/v1/chat", content=chunks(),
+                   headers={**_tok("api-big"), "Content-Type": "application/json"}, timeout=30)
+    assert r.status_code == 413 and r.json()["code"] == "PAYLOAD_TOO_LARGE"

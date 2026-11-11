@@ -12,6 +12,7 @@ Limits are per process and reset on restart: acceptable for one loopback process
 
 from __future__ import annotations
 
+import inspect
 import math
 import threading
 import time
@@ -67,7 +68,7 @@ class PerAddressLimit:
     EXEMPT = ("/health/live", "/health/ready")
 
     def __init__(self, app: Any, bucket: TokenBucket | None = None,
-                 on_refuse: Callable[[str], None] | None = None) -> None:
+                 on_refuse: Callable[[str], Any] | None = None) -> None:
         self.app = app
         # `is None`, not `or`: an empty TokenBucket has len() 0 and is falsy
         self.bucket = bucket if bucket is not None else TokenBucket.from_config("per_address")
@@ -81,7 +82,9 @@ class PerAddressLimit:
         wait = self.bucket.take(f"addr:{client[0]}")
         if wait > 0:
             if self.on_refuse:
-                self.on_refuse("RATE_LIMITED")
+                res = self.on_refuse("RATE_LIMITED")
+                if inspect.isawaitable(res):                 # the MCP server audits refusals asynchronously
+                    await res
             await send_envelope(send, 429, "RATE_LIMITED", {"Retry-After": retry_after(wait)})
             return
         await self.app(scope, receive, send)

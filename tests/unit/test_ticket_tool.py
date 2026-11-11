@@ -139,11 +139,11 @@ def test_wrong_idempotency_key_is_invalid_argument(server, conn):
 
 @pytest.mark.db
 def test_secret_in_text_is_refused_not_rewritten(server, conn):
-    payload = {**PAYLOAD, "body": "client_secret=SuperSecretSYN123"}
+    payload = {**PAYLOAD, "body": "client_secret=TicketToolOnlySYN456"}
     tid, aid = setup(conn, payload=payload)
     err, body = call(server, args(tid, aid, payload))
     assert err and body["field_errors"] == [{"field": "body", "reason": "contains_secret"}]
-    assert "SuperSecretSYN123" not in json.dumps(body) and tickets(conn, tid) == 0
+    assert "TicketToolOnlySYN456" not in json.dumps(body) and tickets(conn, tid) == 0
 
 
 def test_store_unavailable():

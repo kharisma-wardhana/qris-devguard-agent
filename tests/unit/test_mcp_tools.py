@@ -17,6 +17,7 @@ from qdrant_client import QdrantClient
 
 from app.mcp_server import config
 from app.mcp_server import server as srv
+from app.security.ratelimit import TokenBucket
 from app.mcp_server import tools as t
 from app.rag import ingest as ing
 from app.rag.embedding import FakeEmbedder
@@ -89,7 +90,8 @@ def ctx(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def server(ctx):
-    return srv.build_server(SECRET, ctx)
+    # p7: this suite tests tool behaviour, not throttling (real limits: test_security_suite.py)
+    return srv.build_server(SECRET, ctx, tool_limiter=TokenBucket(10**6, 10**6))
 
 
 def call(server, name, args, role="developer", sub="dev-1"):

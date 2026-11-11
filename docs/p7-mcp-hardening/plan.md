@@ -51,6 +51,7 @@ Edited
   - `create_support_ticket` fails closed with `AUDIT_UNAVAILABLE`.
   - The `run_id` header is read and validated as a UUID.
   - `build_app` wraps the app in the body-limit, pre-auth rate-limit and pre-tool-refusal audit middleware.
+  - (Step 5 finding) `SafeJsonRpcErrors` rewrites SDK JSON-RPC errors and "Unknown tool" results, because the SDK echoes submitted values (method name, tool name, validation input). `app/security/body_limit.py` drains a refused body (capped at 1 MiB), so Windows clients read the 413 instead of a connection reset.
 - `app/mcp_server/tools.py`: the ticket store connects as `devguard_ticket`; audit uses a separate `devguard_audit` factory.
 - `app/mcp_server/errors.py`: codes `RATE_LIMITED`, `AUDIT_UNAVAILABLE`, `PAYLOAD_TOO_LARGE`.
 - `app/agent/tools.py`: sends the run ID as an `X-DevGuard-Run-Id` header.
@@ -59,7 +60,7 @@ Edited
 - `app/api/app.py`: per-subject rate limits (agent-run routes costlier), the body-limit and pre-auth middleware, and the 429/413 envelopes.
 - `scripts/api_server.py`, `scripts/mcp_server.py`: connect as their roles and refuse the owner fallback; run the egress check at start-up.
 - `tests/unit/test_compose.py`: every port publishes on `127.0.0.1` (extended if not already complete), and the API and MCP refuse a non-loopback host.
-- `tests/unit/test_init_env.py`, `tests/unit/test_db_migrate.py`, `tests/unit/test_mcp_tools.py`, `tests/unit/test_api.py`, `tests/integration/test_mcp_server.py`, `tests/integration/test_api_server.py`, `tests/integration/test_crash_resume.py`, `tests/integration/test_db_migrate_cli.py`: regression updates. They switch to the role DSNs, and use distinct subjects where a module's call volume would hit the new per-subject limits.
+- `tests/unit/test_init_env.py`, `tests/unit/test_db_migrate.py`, `tests/unit/test_mcp_tools.py`, `tests/unit/test_api.py`, `tests/integration/test_mcp_server.py`, `tests/integration/test_api_server.py`, `tests/integration/test_crash_resume.py`, `tests/integration/test_db_migrate_cli.py`: regression updates. They switch to the role DSNs. (Step 5, as built:) the in-process P4–P6 suites (`test_mcp_tools.py`, `test_api.py`, `test_api_threads.py`) pass a deliberately lenient limiter to `build_server`/`create_app`, because they test behaviour, not throttling. The subprocess burst tests use a dedicated server, because the per-address bucket is shared by every loopback caller. `test_ticket_tool.py` uses its own secret marker, so the crash/resume dump of the shared test schema stays order-independent.
 - `app/db/connect.py` also honours `DEVGUARD_DB_DOTENV` (step 3), and `app/mcp_server/tools.py` gets `default_context(database=False)`, so tests and the harness never read the developer's `.env` database.
 - `tests/integration/test_api_server.py`, `tests/unit/test_ticket_tool.py`, `tests/unit/test_agent_hitl.py`, `tests/unit/test_api_threads.py`: (step 3) DB-less contexts, or the throwaway audit role, because the write tool fails closed without an audit writer.
 - `tests/conftest.py`: a `db_roles` fixture that creates random-named roles on the throwaway schema and drops them afterwards.

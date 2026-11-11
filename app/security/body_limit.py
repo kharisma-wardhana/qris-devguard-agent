@@ -9,25 +9,39 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from typing import Any
 
 from app.security import send_envelope
 
 BODY_METHODS = {"POST", "PUT", "PATCH"}
+DRAIN_CAP = 1 << 20      # read and discard at most 1 MiB of a refused body so the client can read the 413
 
 
 class BodyLimit:
-    def __init__(self, app: Any, max_bytes: int, on_refuse: Callable[[str], None] | None = None) -> None:
+    def __init__(self, app: Any, max_bytes: int, on_refuse: Callable[[str], Any] | None = None) -> None:
         if max_bytes < 1:
             raise ValueError("max_bytes must be positive")
         self.app = app
         self.max_bytes = max_bytes
         self.on_refuse = on_refuse
 
+    async def _drain(self, receive: Any, already: int) -> None:
+        """Discard the rest of a refused body (bounded). Without this, a client still sending gets a connection
+        reset instead of the 413 on Windows (found in p7 step 5)."""
+        seen = already
+        while seen <= DRAIN_CAP:
+            message = await receive()
+            if message["type"] != "http.request" or not message.get("more_body", False):
+                return
+            seen += len(message.get("body", b""))
+
     async def _refuse(self, send: Any) -> None:
         if self.on_refuse:
-            self.on_refuse("PAYLOAD_TOO_LARGE")
+            res = self.on_refuse("PAYLOAD_TOO_LARGE")
+            if inspect.isawaitable(res):                 # the MCP server audits refusals asynchronously
+                await res
         await send_envelope(send, 413, "PAYLOAD_TOO_LARGE", {"Connection": "close"})
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
@@ -41,6 +55,8 @@ class BodyLimit:
                 except ValueError:
                     declared = None
                 if declared is not None and declared > self.max_bytes:
+                    if declared <= DRAIN_CAP:
+                        await self._drain(receive, 0)
                     await self._refuse(send)
                     return
         chunks: list[bytes] = []
@@ -52,6 +68,8 @@ class BodyLimit:
             chunk = message.get("body", b"")
             size += len(chunk)
             if size > self.max_bytes:
+                if message.get("more_body", False):
+                    await self._drain(receive, size)
                 await self._refuse(send)
                 return
             chunks.append(chunk)
