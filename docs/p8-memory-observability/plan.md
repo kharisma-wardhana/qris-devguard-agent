@@ -65,7 +65,7 @@ Edited
   - memory routes (`/api/v1/memory/preferences[/{key}]`, `/api/v1/memory/patterns[/{id}[/decision]]`) and `/api/v1/threads/{id}/feedback`;
   - the crash handler sends the `api-error` trace;
   - the run responses include `memory_decision`, as today.
-- `app/api/models.py`: strict request models for the new routes.
+- `app/api/models.py`: strict request models for the new routes. (As built, step 3:) a 422 uses the API's existing `INVALID_ARGUMENT` code (P5 §18 envelope), not the `VALIDATION_ERROR` named in spec AC 2, so every route keeps one 422 code; a refused pattern lists `refused:<kind>` per field and never the value. Migration `0003` (unapplied outside test schemas) allows `-` in `api_family`, because the API's family values include `qris-mpm`.
 - `scripts/api_server.py`, `scripts/mcp_server.py`: initialise and flush tracing at start-up and shutdown.
 - `.env.example`: no new key (the `LANGFUSE_*` keys exist). `DEVGUARD_TEST_DELAY_MS` is documented as test-only, not added.
 - `tests/unit/test_db_roles.py`, `tests/unit/test_db_migrate.py`, `tests/integration/test_db_migrate_cli.py`: regression for `0003` and the new grants.

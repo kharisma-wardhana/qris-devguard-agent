@@ -13,7 +13,7 @@ CREATE TABLE long_term_memory (
     pref_key           text CHECK (pref_key IS NULL OR pref_key ~ '^[a-z_]{1,32}$'),
     title              text NOT NULL DEFAULT '' CHECK (char_length(title) <= 120),
     content_sanitized  text NOT NULL CHECK (char_length(content_sanitized) <= 1000),
-    api_family         text CHECK (api_family IS NULL OR api_family ~ '^[a-z0-9_]{1,64}$'),
+    api_family         text CHECK (api_family IS NULL OR api_family ~ '^[a-z0-9_-]{1,64}$'),
     intent             text CHECK (intent IS NULL OR intent ~ '^[a-z_]{1,32}$'),
     status             text NOT NULL CHECK (status IN ('active', 'pending', 'rejected')),
     confidence         text NOT NULL CHECK (confidence IN ('explicit', 'verified')),

@@ -20,12 +20,13 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Path, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.agent import config
-from app.api.models import ChatRequest, ChatResponse, DecisionRequest, MessageResponse
+from app.api.models import (PREF_KEY, ChatRequest, ChatResponse, DecisionRequest, FeedbackRequest, MessageResponse,
+                            PatternDecision, PatternProposal, PreferenceRequest)
 from app.mcp_server.auth import HS256Verifier
 
 log = logging.getLogger("devguard.api")
@@ -94,6 +95,7 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
     app = FastAPI(title="QRIS DevGuard AI", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None,
                   lifespan=lifespan)
     app.state.agent = agent
+    app.state.tracer = None                                # p8: set by the server (app/observability)
     approver_roles = set(config.security()["approver_roles"])
     # add_middleware wraps outside-in in reverse order: PerAddressLimit ends up outermost, then BodyLimit
     app.add_middleware(BodyLimit, max_bytes=config.security()["limits"]["max_request_bytes"])
@@ -273,6 +275,130 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         out = await app.state.agent.resume(thread_id)
         log_route("/api/v1/threads/{id}/resume", sub, role, out["status"], started, out.get("run_id"))
         return message_out(out)
+
+    # --- p8: long-term memory (spec Behaviour §1) and feedback (§3) --------------------------------
+
+    def iso(v: Any) -> str | None:
+        return v.isoformat() if v is not None else None
+
+    def pref_view(row: dict[str, Any]) -> dict[str, Any]:
+        return {"key": row["pref_key"], "value": row["content_sanitized"], "version": row["version"],
+                "updated_at": iso(row["updated_at"]), "expires_at": iso(row["expires_at"])}
+
+    def pattern_view(row: dict[str, Any]) -> dict[str, Any]:
+        return {"pattern_id": str(row["memory_id"]), "title": row["title"], "text": row["content_sanitized"],
+                "api_family": row["api_family"], "intent": row["intent"], "status": row["status"],
+                "proposed_by": row["proposed_by"], "approved_by": row["approved_by"],
+                "expires_at": iso(row["expires_at"])}
+
+    def refuse_unsafe(**fields: str | None) -> None:
+        """Pattern text is refused, never redacted, when it looks like a secret or personal data. The field
+        errors name the field and the kind, never the value."""
+        from app.memory import policy
+        errors = [{"field": name, "reason": f"refused:{kind}"}
+                  for name, value in fields.items() if value for kind in policy.refusal_kinds(value)]
+        if errors:
+            raise ApiError(422, "INVALID_ARGUMENT", errors)
+
+    @app.get("/api/v1/memory/preferences")
+    async def list_preferences(who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        from app.memory import store as memory
+        rows = await db(memory.list_preferences, who[0])
+        return {"preferences": [pref_view(r) for r in rows]}
+
+    @app.put("/api/v1/memory/preferences/{key}")
+    async def put_preference(body: PreferenceRequest, key: str = Path(pattern=PREF_KEY),
+                             who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        from app.memory import policy
+        from app.memory import store as memory
+        sub, role = who
+        started = time.perf_counter()
+        if not policy.is_allowed(key, body.value):
+            raise ApiError(422, "INVALID_ARGUMENT", [{"field": "value", "reason": "not_allowed"}])
+        reason, row = await db(memory.save_preference, sub, key, body.value)
+        log_route("/api/v1/memory/preferences/{key}", sub, role, reason, started)
+        return {**pref_view(row), "memory_decision": reason}
+
+    @app.delete("/api/v1/memory/preferences/{key}", status_code=204)
+    async def delete_preference(key: str = Path(pattern=PREF_KEY),
+                                who: tuple[str, str] = Depends(other_identity)) -> Response:
+        from app.memory import store as memory
+        sub, role = who
+        started = time.perf_counter()
+        if not await db(memory.delete_preference, sub, key):
+            raise ApiError(404, "NOT_FOUND")               # never saved, or someone else's: same answer (T11)
+        log_route("/api/v1/memory/preferences/{key}", sub, role, "deleted", started)
+        return Response(status_code=204)
+
+    @app.get("/api/v1/memory/patterns")
+    async def list_patterns(who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        from app.memory import store as memory
+        sub, role = who
+        rows = await db(lambda conn: memory.list_patterns(conn, sub, approver=role in approver_roles))
+        return {"patterns": [pattern_view(r) for r in rows]}
+
+    @app.post("/api/v1/memory/patterns", status_code=201)
+    async def propose_pattern(body: PatternProposal, who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        from app.memory import store as memory
+        sub, role = who
+        started = time.perf_counter()
+        thread = await owned_thread(body.thread_id, sub)
+        refuse_unsafe(title=body.title, text=body.text)
+        run_id = str(thread["last_run_id"]) if thread.get("last_run_id") else None
+        row = await db(lambda conn: memory.propose_pattern(
+            conn, proposer=sub, thread_id=body.thread_id, run_id=run_id, title=body.title, text=body.text,
+            api_family=body.api_family, intent=body.intent))
+        log_route("/api/v1/memory/patterns", sub, role, "proposed", started)
+        return pattern_view(row)
+
+    @app.post("/api/v1/memory/patterns/{pattern_id}/decision")
+    async def decide_pattern(body: PatternDecision, pattern_id: str = Path(pattern=APPROVAL_ID),
+                             who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        from app.memory import store as memory
+        sub, role = who
+        started = time.perf_counter()
+        if role not in approver_roles:
+            raise ApiError(403, "FORBIDDEN")
+        refuse_unsafe(reason=body.reason)
+        outcome, row = await db(lambda conn: memory.decide_pattern(
+            conn, pattern_id, approver=sub, approve=body.decision == "approve", reason=body.reason))
+        if outcome == memory.NOT_FOUND:
+            raise ApiError(404, "NOT_FOUND")
+        if outcome == memory.SELF:
+            raise ApiError(403, "FORBIDDEN")                # four eyes: never your own pattern, even as admin
+        if outcome == memory.NOT_PENDING:
+            raise ApiError(409, "CONFLICT")
+        log_route("/api/v1/memory/patterns/{id}/decision", sub, role, row["status"], started)
+        return pattern_view(row)
+
+    @app.delete("/api/v1/memory/patterns/{pattern_id}", status_code=204)
+    async def delete_pattern(pattern_id: str = Path(pattern=APPROVAL_ID),
+                             who: tuple[str, str] = Depends(other_identity)) -> Response:
+        from app.memory import store as memory
+        sub, role = who
+        started = time.perf_counter()
+        outcome = await db(lambda conn: memory.delete_pattern(conn, pattern_id, sub=sub, admin=role == "admin"))
+        if outcome == memory.NOT_FOUND:
+            raise ApiError(404, "NOT_FOUND")
+        if outcome == memory.FORBIDDEN:
+            raise ApiError(403, "FORBIDDEN")
+        log_route("/api/v1/memory/patterns/{id}", sub, role, "deleted", started)
+        return Response(status_code=204)
+
+    @app.post("/api/v1/threads/{thread_id}/feedback", status_code=204)
+    async def feedback(body: FeedbackRequest, thread_id: str = Path(pattern=THREAD_ID),
+                       who: tuple[str, str] = Depends(other_identity)) -> Response:
+        """user_feedback on the thread's last run (spec AC #19). Owner only. Stored only as a trace score."""
+        sub, role = who
+        started = time.perf_counter()
+        thread = await owned_thread(thread_id, sub)
+        if not thread.get("last_run_id"):
+            raise ApiError(409, "CONFLICT")
+        tracer = getattr(app.state, "tracer", None)
+        if tracer is not None:
+            tracer.score_run(str(thread["last_run_id"]), "user_feedback", body.rating, session_id=thread_id)
+        log_route("/api/v1/threads/{id}/feedback", sub, role, body.rating, started, str(thread["last_run_id"]))
+        return Response(status_code=204)
 
     return app
 
