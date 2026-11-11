@@ -29,8 +29,26 @@ class EgressRefused(RuntimeError):
         self.reason = reason
 
 
+def _check_conninfo(setting: str, info: str, names: set[str]) -> None:
+    """A libpq `key=value` connection string (tests pass these as DATABASE_URL): every host must pass."""
+    from psycopg.conninfo import conninfo_to_dict
+    try:
+        hosts = str(conninfo_to_dict(info).get("host") or "").split(",")
+    except Exception:  # noqa: BLE001 - psycopg raises ProgrammingError; any failure is "unparseable"
+        raise EgressRefused(setting, "unparseable") from None
+    for host in hosts:
+        host = host.strip()
+        if not host:
+            raise EgressRefused(setting, "no host")
+        if not host.startswith("/"):                     # a Unix socket path is not network egress
+            check(setting, f"postgresql://{host}/", names)
+
+
 def check(setting: str, url: str, allowlist: Iterable[str] | None = None) -> None:
     names = {n.lower() for n in (allowlist if allowlist is not None else security()["egress_allowlist"])}
+    if "://" not in url and "=" in url:
+        _check_conninfo(setting, url, names)
+        return
     try:
         parts = urlsplit(url)
         host = (parts.hostname or "").lower()

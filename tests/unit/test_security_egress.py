@@ -71,3 +71,90 @@ def test_custom_allowlist():
     check("X", "http://internal-llm:8000", allowlist=["internal-llm"])
     with pytest.raises(EgressRefused):
         check("X", "http://qdrant:6333", allowlist=["internal-llm"])
+
+
+
+def test_libpq_conninfo_form():
+    check("DATABASE_URL", f"host={LOOP} port=5432 dbname=devguard user=u password=SYNpw options='-c search_path=x'")
+    check("DATABASE_URL", "host=/var/run/postgresql dbname=devguard")              # Unix socket: no egress
+    for bad in (f"host={METADATA} dbname=x", f"host={LOOP},{ip(10, 0, 0, 1)} dbname=x", "dbname=x"):
+        with pytest.raises(EgressRefused) as exc:
+            check("DATABASE_URL", bad)
+        assert "SYNpw" not in str(exc.value)
+
+
+# --- no client follows a redirect (p7 spec AC #17) -------------------------------------------------------
+
+import asyncio  # noqa: E402
+import threading  # noqa: E402
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: E402
+
+
+class _Stub:
+    """A loopback HTTP server. `redirect_to` set: answers 302 to it; else 200. Records every hit."""
+
+    def __init__(self, redirect_to=None):
+        hits = self.hits = []
+
+        class H(BaseHTTPRequestHandler):
+            def _answer(self):
+                hits.append(self.path)
+                n = int(self.headers.get("content-length") or 0)
+                if n:
+                    self.rfile.read(n)
+                if redirect_to:
+                    self.send_response(302)
+                    self.send_header("Location", redirect_to + self.path)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                else:
+                    body = b'{"object": "list", "data": []}'
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+            do_GET = do_POST = _answer
+
+            def log_message(self, *a):
+                pass
+        self.server = ThreadingHTTPServer((LOOP, 0), H)
+        self.url = f"http://{LOOP}:{self.server.server_address[1]}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+
+
+@pytest.fixture
+def stubs():
+    target = _Stub()
+    bouncer = _Stub(redirect_to=target.url)
+    yield bouncer, target
+    bouncer.close()
+    target.close()
+
+
+def test_vllm_client_does_not_follow_redirects(stubs, monkeypatch):
+    from app.agent.llm import VllmLLM
+    bouncer, target = stubs
+    monkeypatch.setenv("VLLM_BASE_URL", bouncer.url + "/v1")
+    assert asyncio.run(VllmLLM().ping()) is False
+    assert bouncer.hits and target.hits == []
+
+
+def test_health_probe_does_not_follow_redirects(stubs):
+    from app.api.app import http_ping
+    bouncer, target = stubs
+    assert asyncio.run(http_ping(bouncer.url + "/mcp")) is True          # any answer means "up"
+    assert bouncer.hits and target.hits == []
+
+
+def test_mcp_tool_client_does_not_follow_redirects(stubs):
+    from app.agent.tools import ToolClient
+    bouncer, target = stubs
+    client = ToolClient(bouncer.url + "/mcp", "s" * 48)
+    client.retries = 0
+    (res,) = asyncio.run(client.call("dev-1", "developer", [("lookup_response_code", {"code": "1"})]))
+    assert res.ok is False and res.error_code == "TOOL_UNAVAILABLE"
+    assert bouncer.hits and target.hits == []

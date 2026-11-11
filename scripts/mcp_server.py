@@ -21,6 +21,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
+def destinations() -> dict[str, str | None]:
+    """Every outbound destination this process may contact (p7 egress check); unset ones are skipped."""
+    import os
+
+    from app.db.connect import DatabaseNotConfigured, dsn
+    from app.rag import config as rag_config
+    try:
+        db = dsn()
+    except DatabaseNotConfigured:
+        db = None
+    return {"QDRANT_URL": rag_config.qdrant_url(), "DATABASE_URL": db, "LANGFUSE_HOST": os.environ.get("LANGFUSE_HOST")}
+
+
 def main(argv: list[str] | None = None) -> int:
     from app.mcp_server import config
     from app.mcp_server.auth import AuthConfigError, load_secret
@@ -43,9 +56,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     import uvicorn
 
+    from app.security.egress import EgressRefused, check_all
     try:
+        check_all(destinations())                      # p7 (T9): configured outbound hosts only
         ctx = default_context()                         # p7: ticket and audit roles, never the owner
-    except RolePasswordMissing as exc:
+    except (RolePasswordMissing, EgressRefused) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     app = build_app(build_server(secret, ctx, port=args.port), port=args.port, audit=ctx.audit)

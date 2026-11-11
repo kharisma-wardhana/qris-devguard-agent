@@ -56,6 +56,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     _load_env_file()
 
+    from app.db.roles import RolePasswordMissing
+    from app.security.egress import EgressRefused, check_all
+    try:
+        check_all(destinations(args.mcp_url))           # p7 (T9): configured outbound hosts only
+        db_info = _database()                           # p7: devguard_app role, never the owner
+    except (EgressRefused, RolePasswordMissing) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
     import uvicorn
 
     from app.agent.graph import Agent
@@ -73,7 +82,6 @@ def main(argv: list[str] | None = None) -> int:
         llm = VllmLLM()
         llm_ping = llm.ping
     tools = ToolClient(args.mcp_url, secret)
-    db_info = _database()
     if db_info:
         # p6: durable threads and approvals. The checkpointer needs a running loop, so it opens in the lifespan.
         import contextlib
@@ -102,18 +110,37 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _database() -> str | None:
-    """The conninfo when PostgreSQL is reachable and migrated (agent_threads exists), else None. Never printed."""
+    """The devguard_app role's conninfo when PostgreSQL is reachable and migrated (agent_threads exists), else None.
+    Never printed. p7: never the owner role; a configured DATABASE_URL without DEVGUARD_APP_DB_PASSWORD raises
+    RolePasswordMissing (the caller refuses to start)."""
     import psycopg
 
-    from app.db.connect import DatabaseNotConfigured, conninfo
+    from app.db.connect import DatabaseNotConfigured, dsn, role_conninfo
     try:
-        info = conninfo()
+        dsn()
+    except DatabaseNotConfigured:
+        return None
+    info = role_conninfo("app")
+    try:
         with psycopg.connect(info) as c:
             if c.execute("select to_regclass('agent_threads')").fetchone()[0] is None:
                 return None
         return info
-    except (DatabaseNotConfigured, psycopg.Error):
+    except psycopg.Error:
         return None
+
+
+def destinations(mcp_url: str) -> dict[str, str | None]:
+    """Every outbound destination this process may contact (p7 egress check); unset ones are skipped."""
+    from app.agent import config
+    from app.db.connect import DatabaseNotConfigured, dsn
+    try:
+        db = dsn()
+    except DatabaseNotConfigured:
+        db = None
+    vllm = os.environ.get(config.agent()["llm"]["base_url_env"], "http://127.0.0.1:8080/v1")
+    return {"VLLM_BASE_URL": vllm, "--mcp-url": mcp_url, "DATABASE_URL": db,
+            "LANGFUSE_HOST": os.environ.get("LANGFUSE_HOST")}
 
 
 if __name__ == "__main__":

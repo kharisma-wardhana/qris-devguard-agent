@@ -251,7 +251,7 @@ async def http_ping(url: str) -> bool:
     """Any HTTP answer (even 401) means the service is up; a transport error means down."""
     import httpx
     try:
-        async with httpx.AsyncClient(timeout=3) as c:
+        async with httpx.AsyncClient(timeout=3, follow_redirects=False) as c:     # p7: never follow
             await c.post(url, json={})
         return True
     except httpx.HTTPError:

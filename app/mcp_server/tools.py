@@ -84,13 +84,16 @@ def default_context(*, database: bool = True) -> ToolContext:
 
 
 def _default_db() -> Callable[[], Any] | None:
-    """Connection factory for the ticket store, or None when no DATABASE_URL is configured (p6)."""
+    """Connection factory for the ticket store, or None when no DATABASE_URL is configured (p6). p7: it connects
+    as the least-privilege devguard_ticket role, never the owner; a configured database without that role's
+    password raises RolePasswordMissing, so the server refuses to start."""
     from app.db import store
-    from app.db.connect import DatabaseNotConfigured, conninfo
+    from app.db.connect import DatabaseNotConfigured, dsn, role_conninfo
     try:
-        info = conninfo()
+        dsn()
     except DatabaseNotConfigured:
         return None
+    info = role_conninfo("ticket")
     return lambda: store.connect(info)
 
 

@@ -135,3 +135,36 @@ def test_fake_llm_refused_without_test_flag():
     r = subprocess.run([sys.executable, str(ROOT / "scripts/api_server.py"), "--fake-llm", "--port", str(free_port())],
                        cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert r.returncode == 1 and "--fake-llm is for tests only" in r.stderr
+
+
+
+# --- p7 step 4: start-up refusals (spec AC #12, #16) ----------------------------------------------------
+
+def _ip(*parts):
+    return ".".join(str(p) for p in parts)
+
+
+def _start_once(env_over, tmp_path):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("DEVGUARD_")}
+    env.pop("DATABASE_URL", None)
+    env.update({"MCP_AUTH_SECRET": SECRET, "DEVGUARD_DB_DOTENV": str(tmp_path / "no.env"),
+                "DEVGUARD_TEST_BACKENDS": "1", **env_over})
+    return subprocess.run([sys.executable, str(ROOT / "scripts/api_server.py"), "--fake-llm", "--port",
+                           str(free_port())], cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
+                          timeout=60)
+
+
+def test_api_with_database_but_no_role_password_refuses_to_start(tmp_path):
+    owner = f"postgresql://devguard:SYNowner77@{_ip(127, 0, 0, 1)}:1/devguard"
+    r = _start_once({"DATABASE_URL": owner}, tmp_path)
+    assert r.returncode == 1 and "DEVGUARD_APP_DB_PASSWORD" in r.stderr
+    assert "SYNowner77" not in r.stderr + r.stdout and "Traceback" not in r.stderr
+
+
+@pytest.mark.parametrize("over,setting", [
+    ({"VLLM_BASE_URL": "http://" + ".".join(["10", "0", "0", "8"]) + ":8080/v1"}, "VLLM_BASE_URL"),
+    ({"LANGFUSE_HOST": "https://cloud.langfuse.example"}, "LANGFUSE_HOST"),
+])
+def test_api_refuses_a_disallowed_destination(tmp_path, over, setting):
+    r = _start_once(over, tmp_path)
+    assert r.returncode == 1 and setting in r.stderr and list(over.values())[0] not in r.stderr
