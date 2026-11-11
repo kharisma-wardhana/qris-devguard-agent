@@ -13,4 +13,4 @@
 - [ ] 9. Container scan job and pip-audit record — spec AC: #24
 - [x] 10. Live injection run (pod) — spec AC: #20
 - [ ] 11. Security report, transport note, threat model and docs — spec AC: #25
-- [ ] 12. `CLAUDE.md` merge — spec AC: #26 (agent configuration)
+- [x] 12. `CLAUDE.md` merge — spec AC: #26 (agent configuration)
