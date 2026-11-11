@@ -457,7 +457,19 @@ class Agent:
                 await self._db(store.set_thread, thread_id, "completed", run_id)
             result = self._result(out, started)
             self._trace_outcome(root, result)
+        self._send_scores(run_id, out)
         return result
+
+    def _send_scores(self, seed: str, state: dict[str, Any], **kw: Any) -> None:
+        """p8: deterministic scores (app.observability.scores) on the run's trace. Never fails a request."""
+        if not self.tracer.enabled:
+            return
+        from app.observability import scores
+        try:
+            for name, value, comment in scores.compute(state, **kw):
+                self.tracer.score_run(seed, name, value, comment=comment)
+        except Exception:  # noqa: BLE001 - tracing never fails a request
+            return
 
     @staticmethod
     def _trace_meta(thread_id: str) -> dict[str, Any]:
@@ -496,6 +508,9 @@ class Agent:
             await self._approval_wait_span((out.get("approval") or {}).get("approval_id"))
             result = self._result(out, started)
             self._trace_outcome(root, result)
+        # only the calls this resume made; the answer scores went with the first run
+        self._send_scores(f"{run_id}:resume", out, since_call=len(before.get("tool_calls") or []),
+                          answer_scores=False)
         return result
 
     async def _approval_wait_span(self, approval_id: str | None) -> None:

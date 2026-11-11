@@ -119,6 +119,14 @@ Not changed: `app/validators/*`, the MCP tool argument models, `app/db/store.py`
      - The tracer method is `score_run`, matching the feedback route from step 3. `app/agent/config.py` gains `model_identity()`.
      - Both server scripts load `LANGFUSE_*` from `.env`, and `DEVGUARD_TRACING=0` turns tracing off. `tests/conftest.py` sets it, so no test process or server subprocess exports to the local Langfuse.
 7. **Scores.** `app/observability/scores.py`; sending scores after finalize; `incident_event` in `tools.py` and the API crash handler; feedback → `user_feedback`. (AC 18, 19, 20)
+   - (As built:)
+     - `citation_valid` is measured on the composed answer, before `policy_check`. Rule 1 already removes unresolved citations from the final answer, so measured there the score could never be 0.
+     - `answer_supported` and `citation_valid` are sent for read runs only, and `answer_supported` is not sent for an abstention, whose next steps are fixed text with nothing to cite.
+     - `policy_pass` is 0 for rules 1–5 and 7. Rule 6 (version-conflict note) and rule 8 (abstention) correct no claim.
+     - `answer_echo` is not sent until fencing sets it in step 8, so no unmeasured 0 is reported.
+     - `incident_event` comes from the run's recorded tool outcomes in `scores.py`, not from `tools.py`; same codes, one score per occurrence.
+     - A resume scores only its own calls, on the resume trace.
+     - The `api-error` trace is seeded from `api-error:<correlation_id>`, so the response's correlation ID finds it.
 8. **Fencing.**
    - `app/agent/fence.py` wired into `compose_diagnosis`, with `answer_echo` measured before the answer fence.
    - `scripts/scan_markers.py`; `eval_security.py` records pre-fence echo.

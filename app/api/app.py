@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import uuid
@@ -120,7 +121,25 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
     @app.exception_handler(Exception)
     async def _crash(_: Request, exc: Exception) -> JSONResponse:
         log.error("internal error type=%s", type(exc).__name__)
-        return envelope(500, "INTERNAL_ERROR")
+        resp = envelope(500, "INTERNAL_ERROR")
+        api_error_trace(json.loads(resp.body)["correlation_id"])
+        return resp
+
+    def api_error_trace(cid: str) -> None:
+        """p8 (spec Behaviour §5): a one-span `api-error` trace and an incident_event score, code only: no
+        exception text, no stack trace, no request content. Never fails the response."""
+        tracer = getattr(app.state, "tracer", None)
+        if tracer is None or not getattr(tracer, "enabled", False):
+            return
+        from app.observability.tracing import trace_id_for
+        seed = f"api-error:{cid}"
+        try:
+            with tracer.span("api-error", trace_id=trace_id_for(seed), error_code="INTERNAL_ERROR",
+                             correlation_id=cid):
+                pass
+            tracer.score_run(seed, "incident_event", 1, comment="INTERNAL_ERROR")
+        except Exception:  # noqa: BLE001
+            log.warning("api-error trace not recorded")
 
     def identity(request: Request) -> tuple[str, str]:
         header = request.headers.get("authorization", "")

@@ -204,3 +204,88 @@ def test_chat_returns_200_when_langfuse_never_answers(blackhole):
     stopper = threading.Thread(target=tracer.shutdown, daemon=True)   # bounded by the export timeout
     stopper.start()
     stopper.join(timeout=30)
+
+
+# --- scores on the run's trace (AC #18, #20) --------------------------------------------------------------
+
+def _scores_for(agent_side, h, message, context):
+    agent = Agent(ToolClient(h.url, h.secret), FakeLLM(), tracer=agent_side.tracer)
+    out = asyncio.run(agent.run(sub="dev-1", role="developer", message=message, context=context))
+    mine = {s["name"]: s for s in agent_side.scores if s["trace_id"] == tracing.trace_id_for(out["run_id"])}
+    assert all(v["data_type"] == "BOOLEAN" for v in mine.values())
+    return out, {k: v["value"] for k, v in mine.items()}
+
+
+def test_a_read_run_with_evidence_scores_one_everywhere(pair):
+    agent_side, _, h = pair
+    out, got = _scores_for(agent_side, h, "What does the QR MPM generate endpoint need?", {"api_family": "qris-mpm"})
+    assert out["answer"]["sources"]
+    assert got == {"citation_valid": 1, "answer_supported": 1, "policy_pass": 1, "tool_success": 1}
+
+
+def test_a_next_step_with_nothing_to_cite_scores_answer_supported_zero(pair):
+    """The harness corpus has no SNAP signature document: no evidence, so the fake LLM's next step cites
+    nothing. The finding rests on the validator; the next step on nothing, which is what the score reports."""
+    agent_side, _, h = pair
+    out, got = _scores_for(agent_side, h, QUESTION, SIG_CTX)
+    assert not any(s["citation_ids"] for s in out["answer"]["next_steps"])
+    assert got == {"citation_valid": 1, "answer_supported": 0, "policy_pass": 1, "tool_success": 1}
+
+
+@pytest.mark.db
+def test_an_approval_mismatch_gives_exactly_one_incident_event(migrated_db_url, db_roles):
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    agent_side = Traced()
+    with McpHarness(db_conninfo=migrated_db_url, audit_conninfo=db_roles.url("audit"), rate_limits=False) as h:
+        async def go(fn):
+            async with AsyncPostgresSaver.from_conn_string(migrated_db_url) as saver:
+                agent = Agent(ToolClient(h.url, h.secret), FakeLLM(), checkpointer=saver, db_conninfo=migrated_db_url,
+                              tracer=agent_side.tracer)
+                return await fn(agent)
+        first = asyncio.run(go(lambda a: a.run(sub="dev-1", role="developer", message=ESCALATE, context=SIG_CTX)))
+        aid = first["approval"]["approval_id"]
+        with store.connect(migrated_db_url) as c:
+            assert store.decide(c, aid, "sup-1", "approve")[0] == store.DECIDED
+            # the stored action changes after approval: the tool must refuse it (action hash mismatch)
+            c.execute("UPDATE approval_requests SET action_payload = jsonb_set(action_payload, '{title}', "
+                      "'\"Escalation: changed after approval\"') WHERE approval_id = %s", (aid,))
+            c.commit()
+        done = asyncio.run(go(lambda a: a.resume(first["thread_id"])))
+    code = done["tool_calls"][-1]["outcome"]
+    assert code.startswith("APPROVAL_")
+    seed = tracing.trace_id_for(f"{first['run_id']}:resume")
+    incidents = [s for s in agent_side.scores if s["name"] == "incident_event"]
+    assert incidents == [{"name": "incident_event", "value": 1, "trace_id": seed, "data_type": "BOOLEAN",
+                          "comment": code}]
+    assert [s["value"] for s in agent_side.scores if s["name"] == "tool_success" and s["trace_id"] == seed] == [0]
+    agent_side.tracer.shutdown()
+
+
+ESCALATE = "My access-token signature keeps failing, please create a ticket for this."
+
+
+def test_an_api_crash_gives_an_api_error_trace_with_the_code_only():
+    t = Traced()
+
+    class Boom:
+        async def run(self, **kw):
+            raise RuntimeError("client_secret=" + CLIENT_SECRET + " crashed while handling the message")
+
+    async def up() -> bool:
+        return True
+    app = create_app(agent=Boom(), secret="s" * 48, mcp_ping=up, llm_ping=up)
+    app.state.tracer = t.tracer
+    tok = auth.mint("dev-1", "developer", secret="s" * 48, audience=config.agent()["api"]["audience"])
+    r = TestClient(app, raise_server_exceptions=False).post(
+        "/api/v1/chat", json={"message": QUESTION, "context": SIG_CTX}, headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 500 and r.json()["code"] == "INTERNAL_ERROR"
+    cid = r.json()["correlation_id"]
+    spans = t.spans()
+    assert [s.name for s in spans] == ["api-error"]
+    trace_id = tracing.trace_id_for(f"api-error:{cid}")
+    assert tid(spans[0]) == trace_id
+    assert t.scores == [{"name": "incident_event", "value": 1, "trace_id": trace_id, "data_type": "BOOLEAN",
+                         "comment": "INTERNAL_ERROR"}]
+    out = dump(t)
+    assert CLIENT_SECRET not in out and "crashed" not in out and "RuntimeError" not in out and "Traceback" not in out
+    t.tracer.shutdown()
