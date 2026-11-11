@@ -27,3 +27,13 @@
 | G-ERRORS | §13.4 Error handling | A crashing tool handler; a crashing API route | INTERNAL_ERROR envelope with only a correlation ID; no trace, type or value | 3 tests passed | `unit/test_mcp_tools.py::test_internal_error_is_safe`<br>`unit/test_api.py::test_internal_error_is_safe`<br>`unit/test_audit.py::test_internal_error_is_audited` | **PASS** |
 
 <!-- security-matrix:end -->
+
+## Dependency scan: pip-audit
+
+*Recorded 2026-11-11 (spec AC #24). Hand-written; outside the generated block.*
+
+- **Run:** `security-scan.yml`, dispatched on `feature/p7-mcp-hardening` at `839adbe`, [run 42966372952](https://github.com/kharisma-wardhana/qris-devguard-agent/actions/runs/42966372952). Conclusion: success.
+- **Scope:** `uv export --locked --all-extras` (every locked dependency, including the `embed` extra), audited with `pip-audit==2.9.0`.
+- **Result:** `No known vulnerabilities found`. No HIGH or CRITICAL findings to fix or triage.
+- **Not audited:** `torch 2.15.0+cpu`. It comes from the PyTorch CPU index rather than PyPI, so pip-audit cannot look it up. It is used offline only, by the `embed` extra (ingest, search and rerank on CPU), and never by the API or MCP request path. This is recorded as a gap, not a pass.
+- **Not yet run:** the container half (`container-scan.yml`). It can't be dispatched until the workflow exists on `main`; it runs when the P7 PR opens, and its findings are triaged here in step 11.
