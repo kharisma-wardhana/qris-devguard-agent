@@ -102,7 +102,9 @@ class Agent:
         family = ctx.get("api_family")
         if not family and ctx.get("endpoint_id") in mcp_config.mcp()["validators"]["endpoints"]:
             family = mcp_config.mcp()["validators"]["endpoints"][ctx["endpoint_id"]]["api_family"]
-        return {"user_query": msg, "sanitized_context": ctx, "secret_detected": bool(found),
+        # run() already sanitized (raw input must never reach a checkpoint); this second pass is a safety net and
+        # keeps the flag from the first pass.
+        return {"user_query": msg, "sanitized_context": ctx, "secret_detected": bool(found) or bool(s.get("secret_detected")),
                 "api_family": family, "requested_spec_version": ctx.get("spec_version") or classify.extract_version(msg),
                 "approval_status": "not_required", "draft_action": None, "idempotency_key": None, "error": None,
                 "limitations": [], "policy_actions": [], "tool_calls": [], "validator_results": [],
@@ -382,9 +384,12 @@ class Agent:
                     store.create_thread(conn, thread_id, sub)
                 store.set_thread(conn, thread_id, "running", run_id)
             await self._db(ensure)
+        # Sanitize BEFORE the graph: LangGraph checkpoints the raw input before any node runs, so an unsanitized
+        # message would be persisted in the first checkpoint and its writes (p6 step 7 finding).
+        msg, ctx, found = sanitize(message, context or {})
         state: DevGuardState = {"thread_id": thread_id, "run_id": run_id, "user_id": sub, "role": role,
-                                "user_query": message, "sanitized_context": context or {}, "trace": {},
-                                "hitl": hitl}
+                                "user_query": msg, "sanitized_context": ctx, "secret_detected": bool(found),
+                                "trace": {}, "hitl": hitl}
         started = time.perf_counter()
         out = await self.graph.ainvoke(state, config={"configurable": {"thread_id": thread_id}})
         if self.db_conninfo and not out.get("__interrupt__") and not out.get("action_result"):

@@ -190,3 +190,23 @@ def test_low_risk_run_with_store_is_unchanged(migrated_db_url, harness):
     out = with_agent(migrated_db_url, harness, lambda a: a.run(sub="dev-1", role="developer",
                                                                message="why is my signature rejected?", context=SIG_CTX))
     assert out["status"] == "completed" and out["approval"] is None and counts(migrated_db_url, out["thread_id"]) == (0, 0)
+
+
+def test_no_secret_in_any_checkpoint_of_the_history():
+    """p6 step-7 regression: LangGraph checkpoints the raw input before any node runs, so run() sanitizes first.
+    P5's test only looked at the final state; this walks every checkpoint and pending write (in-memory saver)."""
+    import json as _json
+
+    from app.agent import answer as _answer
+
+    pem = "-" * 5 + "BEGIN PRIVATE KEY" + "-" * 5 + "\nSYNTHETICKEYMATERIALxyz\n" + "-" * 5 + "END PRIVATE KEY" + "-" * 5
+    msg = f"why invalid? client_secret=SuperSecretSYN123 {pem}"
+    with McpHarness() as h:
+        agent = Agent(ToolClient(h.url, h.secret), FakeLLM())
+        out = asyncio.run(agent.run(sub="dev-1", role="developer", message=msg, context=SIG_CTX))
+    history = list(agent.checkpointer.list({"configurable": {"thread_id": out["thread_id"]}}))
+    assert len(history) > 3
+    blob = _json.dumps([(t.checkpoint, t.pending_writes) for t in history], default=str)
+    for s in ("SuperSecretSYN123", "SYNTHETICKEYMATERIALxyz"):
+        assert s not in blob
+    assert out["answer"]["limitations"][0] == _answer.KEY_WARNING        # the flag survives the early sanitize
