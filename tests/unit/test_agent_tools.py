@@ -15,7 +15,7 @@ from app.mcp_server import config as mcp_config
 
 @pytest.fixture(scope="module")
 def harness():
-    with McpHarness() as h:
+    with McpHarness(rate_limits=False) as h:
         yield h
 
 

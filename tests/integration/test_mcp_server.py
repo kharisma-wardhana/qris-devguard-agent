@@ -309,7 +309,7 @@ def test_per_subject_tool_burst_is_throttled(tmp_path):
         client.retries = 0
         return await client.call(sub, "developer", [call] * n)
     with _dedicated_server(tmp_path) as url:
-        results = asyncio.run(go(url, "burst-sub-1", burst + 3))
+        results = asyncio.run(go(url, "burst-sub-1", burst * 2))         # 2x: refill under load cannot hide it
         codes = [r.data.get("code") if not r.ok else "OK" for r in results]
         assert codes[:burst - 2].count("OK") == burst - 2           # refill may add one or two, never fewer
         assert "RATE_LIMITED" in codes and "TOOL_UNAVAILABLE" not in codes

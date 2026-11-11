@@ -69,7 +69,7 @@ ESCALATE = "My access-token signature keeps failing, please create a ticket for 
 @pytest.fixture(scope="module")
 def harness(migrated_db_url, db_roles):
     # p7: the write tool fails closed without an audit trail, so the harness gets the throwaway audit role
-    with McpHarness(db_conninfo=migrated_db_url, audit_conninfo=db_roles.url("audit")) as h:
+    with McpHarness(db_conninfo=migrated_db_url, audit_conninfo=db_roles.url("audit"), rate_limits=False) as h:
         yield h
 
 
@@ -202,7 +202,7 @@ def test_no_secret_in_any_checkpoint_of_the_history():
 
     pem = "-" * 5 + "BEGIN PRIVATE KEY" + "-" * 5 + "\nSYNTHETICKEYMATERIALxyz\n" + "-" * 5 + "END PRIVATE KEY" + "-" * 5
     msg = f"why invalid? client_secret=SuperSecretSYN123 {pem}"
-    with McpHarness() as h:
+    with McpHarness(rate_limits=False) as h:
         agent = Agent(ToolClient(h.url, h.secret), FakeLLM())
         out = asyncio.run(agent.run(sub="dev-1", role="developer", message=msg, context=SIG_CTX))
     history = list(agent.checkpointer.list({"configurable": {"thread_id": out["thread_id"]}}))

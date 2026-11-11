@@ -32,7 +32,7 @@ async def up() -> bool:
 @pytest.fixture(scope="module")
 def harness(migrated_db_url, db_roles):
     # p7: the write tool fails closed without an audit trail, so the harness gets the throwaway audit role
-    with McpHarness(db_conninfo=migrated_db_url, audit_conninfo=db_roles.url("audit")) as h:
+    with McpHarness(db_conninfo=migrated_db_url, audit_conninfo=db_roles.url("audit"), rate_limits=False) as h:
         yield h
 
 

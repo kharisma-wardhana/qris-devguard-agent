@@ -27,7 +27,7 @@ CODE_CTX = {"api_family": "qris-mpm", "spec_version": "0.1.0", "response_code": 
 
 @pytest.fixture(scope="module")
 def harness():
-    with McpHarness() as h:
+    with McpHarness(rate_limits=False) as h:
         yield h
 
 

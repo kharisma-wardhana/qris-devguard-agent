@@ -29,7 +29,7 @@ async def down() -> bool:
 
 @pytest.fixture(scope="module")
 def harness():
-    with McpHarness() as h:
+    with McpHarness(rate_limits=False) as h:
         yield h
 
 
