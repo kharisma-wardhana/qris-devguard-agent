@@ -52,6 +52,32 @@ def _family_docs() -> dict[str, list[str]]:
     return mcp_config.mcp()["search"]["api_families"]
 
 
+def _in_section(section_id: str, prefix: str) -> bool:
+    return section_id == prefix or section_id.startswith((prefix + ".", prefix + "#"))
+
+
+def order_evidence(chunks: list[dict[str, Any]], *, api_family: str | None, endpoint_id: str | None,
+                   profile: str | None) -> list[dict[str, Any]]:
+    """Stable re-sort of the fused evidence (p6 flow-1 fix; configs/agent.yaml evidence_order):
+    0 = the endpoint's own section (endpoint_id, or implied by the signature profile),
+    1 = other chunks of the requested API family's documents, 2 = the rest; ties keep fused rank."""
+    eo = config.agent()["evidence_order"]
+    endpoint = endpoint_id or eo["profile_endpoints"].get(profile or "")
+    section = eo["endpoint_sections"].get(endpoint or "")
+    family = set(_family_docs().get(api_family or "", []))
+    if section:
+        family.add(section["document_id"])
+
+    def key(item: tuple[int, dict[str, Any]]) -> tuple[int, int]:
+        i, c = item
+        if section and c["document_id"] == section["document_id"] and _in_section(str(c.get("section_id", "")),
+                                                                                  section["section_prefix"]):
+            return 0, i
+        return (1 if c["document_id"] in family else 2), i
+
+    return [c for _, c in sorted(enumerate(chunks), key=key)]
+
+
 class Agent:
     def __init__(self, tools: ToolClient, llm: Any, checkpointer: Any | None = None) -> None:
         self.tools = tools
@@ -94,10 +120,15 @@ class Agent:
 
     async def rerank_evidence(self, s: DevGuardState) -> dict[str, Any]:
         # Reranking happens inside search_qris_spec when configs/mcp.yaml enables it; this node never runs the
-        # CPU cross-encoder itself (p3: ~160 s/query). Fused order passes through, marked not reranked.
+        # CPU cross-encoder itself (p3: ~160 s/query). p6: the fused order is re-sorted so the endpoint's own
+        # section, then the requested API family's documents, come first (flow-1 fix); still marked not reranked.
         flags = dict(s["evidence_flags"])
         flags["not_reranked"] = not flags.get("reranked")
-        return {"reranked_chunks": list(s["retrieved_chunks"]), "evidence_flags": flags}
+        ctx = s["sanitized_context"]
+        profile = (ctx.get("signature") or {}).get("canonicalization_profile")
+        ordered = order_evidence(s["retrieved_chunks"], api_family=s.get("api_family"),
+                                 endpoint_id=ctx.get("endpoint_id"), profile=profile)
+        return {"reranked_chunks": ordered, "evidence_flags": flags}
 
     async def validate_evidence(self, s: DevGuardState) -> dict[str, Any]:
         chunks, flags = s["reranked_chunks"], dict(s["evidence_flags"])
