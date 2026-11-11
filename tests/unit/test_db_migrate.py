@@ -44,3 +44,33 @@ def test_db_fixture_gives_an_isolated_schema(db_url):
     with psycopg.connect(db_url) as c:
         schema = c.execute("select current_schema()").fetchone()[0]
     assert schema.startswith("p6test_")
+
+
+# --- migrations (step 2) ---------------------------------------------------------------------------
+
+def _tables(url):
+    import psycopg
+    with psycopg.connect(url) as c:
+        return {r[0] for r in c.execute("select table_name from information_schema.tables "
+                                        "where table_schema = current_schema()").fetchall()}
+
+
+@pytest.mark.db
+def test_migrations_apply_once_then_nothing(fresh_db_url):
+    import psycopg
+
+    from app.db import migrate
+    with psycopg.connect(fresh_db_url, autocommit=True) as c:
+        applied, skipped = migrate.apply(c)
+        assert applied == ["0001_threads_approvals_tickets"] and skipped == []
+        assert migrate.apply(c) == ([], ["0001_threads_approvals_tickets"])
+        assert c.execute("select count(*) from schema_migrations").fetchone()[0] == 1
+    assert {"agent_threads", "approval_requests", "sandbox_tickets", "schema_migrations"} <= _tables(fresh_db_url)
+
+
+@pytest.mark.db
+def test_checkpointer_setup_creates_its_tables(fresh_db_url):
+    from app.db import migrate
+    asyncio.run(migrate.setup_checkpointer(fresh_db_url))
+    asyncio.run(migrate.setup_checkpointer(fresh_db_url))                   # idempotent
+    assert {"checkpoints", "checkpoint_blobs", "checkpoint_writes", "checkpoint_migrations"} <= _tables(fresh_db_url)

@@ -3,7 +3,7 @@
 *Implements: docs/p6-checkpoint-hitl/plan.md*
 
 - [x] 1. Dependencies, config, the db test fixture — spec AC: #13
-- [ ] 2. Schema, migrations, actions, store — spec AC: #1, #8, #11
+- [x] 2. Schema, migrations, actions, store — spec AC: #1, #8, #11
 - [ ] 3. The create_support_ticket MCP tool — spec AC: #7, #8
 - [ ] 4. Evidence ordering — spec AC: #12
 - [ ] 5. Graph HITL and the PostgreSQL checkpointer — spec AC: #3, #6, #9, #14
