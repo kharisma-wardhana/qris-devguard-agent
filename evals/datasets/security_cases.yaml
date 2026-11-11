@@ -262,7 +262,7 @@ controls:
     pass_condition: Known critical vulnerabilities are remediated or documented with mitigations
     cases: []
     cap: PARTIAL
-    cap_reason: "pip-audit: no known vulnerabilities; torch 2.15.0+cpu checked by hand, 0 advisories (recorded below). The container scan has not run yet: it runs when the P7 PR opens."
+    cap_reason: "pip-audit: no known vulnerabilities; torch 2.15.0+cpu checked by hand, 0 advisories. Trivy (PR #9): HIGH/CRITICAL findings in all 7 upstream images, each triaged below with reachability and mitigation; the image-tag bumps that would fix them are deferred to P9 (user decision), so not yet remediated."
   - control: Observability
     pass_condition: Every tool call is traceable without logging secrets
     cases: [G-AUDIT, S07]

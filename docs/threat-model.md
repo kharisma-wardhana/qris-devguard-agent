@@ -84,4 +84,5 @@ No connection exists to any bank, ASPI, merchant or production host.
   - Qdrant has no API key, so any local process can read the corpus. It is loopback-only (T13), and the corpus holds no secrets.
   - On the live model, the answer text repeated an injected or planted attack phrase in 5 of 10 cases, without any authority gain. Fencing retrieved instructions in the composed answer, and scoring echo in Langfuse, are P8/P9 inputs.
   - `torch` (CPU wheel, PyTorch index) cannot be audited by `pip-audit`. It is on the MCP search path when the `embed` extra is installed, and was checked by hand against GitHub advisories (0 for 2.15.0, 2026-11-11).
+  - The seven upstream compose images carry HIGH/CRITICAL findings (Trivy, PR #9). All are triaged in `docs/p7-mcp-hardening/security-report.md` with reachability (loopback-only, synthetic data) and mitigation; the image-tag bumps that would fix them are deferred to P9 (user decision, 2026-11-11).
   - No general-purpose secret scanner runs over the history. The hygiene tests cover PEM blocks, key files, derived data and IPs, and the §13.4 Secret management control is PARTIAL for that reason.
