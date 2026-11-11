@@ -43,7 +43,7 @@ def test_role_matrix_comes_from_security_yaml():
     assert config.roles() == {"developer", "support_engineer", "kb_maintainer", "admin"}
     assert "kb_maintainer" not in config.tool_roles("validate_test_signature")
     assert "kb_maintainer" in config.tool_roles("search_qris_spec")
-    assert config.tool_roles("create_support_ticket")          # exists in the matrix, but no P4 tool
+    assert config.tool_roles("create_support_ticket")          # the p6 write tool
     assert config.tool_roles("no_such_tool") == frozenset()
 
 
@@ -79,6 +79,7 @@ def ctx(tmp_path_factory):
     c.keystore = keys.Keystore(tmp / "keys")
     store, emb = _store(tmp / "kb")
     c.backends = lambda: (store, emb)
+    c.db = None                                              # ticket store off here; tested in test_ticket_tool.py
 
     def no_reranker():
         raise AssertionError("reranker must not be built when search.rerank is false")
@@ -111,15 +112,24 @@ GOOD = {
                                 "canonicalization_profile": "synthetic-snap-symmetric-v1",
                                 "test_payload_ref": "sig-gen-valid"},
     "lookup_response_code": {"code": "4014700", "api_family": "qris-mpm", "spec_version": "0.1.0"},
+    "create_support_ticket": {"approval_id": "00000000-0000-4000-8000-000000000000", "thread_id": "t" * 32,
+                              "title": "SYN ticket", "body": "SYN body", "evidence_ids": [], "priority": "low",
+                              "idempotency_key": __import__("app.db.actions", fromlist=["x"]).idempotency_key(
+                                  "t" * 32, {"title": "SYN ticket", "body": "SYN body", "evidence_ids": [],
+                                             "priority": "low"})},
 }
 
 
 def test_exactly_four_read_only_tools(server):
-    tools = asyncio.run(server.list_tools())
-    assert sorted(x.name for x in tools) == sorted(config.TOOL_NAMES)
-    assert all(x.annotations.read_only_hint and not x.annotations.destructive_hint for x in tools)
-    banned = ("ticket", "payment", "refund", "url", "sql", "shell", "path", "file", "exec")
-    assert not [x.name for x in tools if any(b in x.name for b in banned)]
+    """p6 regression: the four P4 tools stay read-only; the only addition is the approval-checked ticket tool."""
+    tools = {x.name: x for x in asyncio.run(server.list_tools())}
+    assert sorted(tools) == sorted(config.TOOL_NAMES) and len(tools) == 5
+    assert all(tools[n].annotations.read_only_hint for n in config.READ_ONLY_TOOLS) and len(config.READ_ONLY_TOOLS) == 4
+    assert tools["create_support_ticket"].annotations.read_only_hint is False
+    assert not any(x.annotations.destructive_hint for x in tools.values())
+    banned = ("payment", "refund", "url", "sql", "shell", "path", "file", "exec", "delete", "update")
+    assert not [n for n in tools if any(b in n for b in banned)]
+    assert [n for n in tools if "ticket" in n] == ["create_support_ticket"]
 
 
 @pytest.mark.parametrize("role", sorted(config.roles()))
@@ -127,7 +137,10 @@ def test_exactly_four_read_only_tools(server):
 def test_role_matrix(server, tool, role):
     is_error, body = call(server, tool, GOOD[tool], role=role)
     if role in config.tool_roles(tool):
-        assert not is_error, body
+        if tool in config.READ_ONLY_TOOLS:
+            assert not is_error, body
+        else:                                                  # p6: reached the handler; store off here
+            assert body.get("code") == "TICKET_STORE_UNAVAILABLE", body
     else:
         assert is_error and body["code"] == "FORBIDDEN" and set(body) == {"code", "message", "correlation_id"}
 

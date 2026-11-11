@@ -14,7 +14,7 @@ Phase P0 (§27, scope and source inventory) is signed off (2026-11-06). The deci
 - `configs/security.yaml` defines the role/tool matrix, redaction fields and egress allowlist.
 - `configs/eval_thresholds.yaml` defines the release gates.
 
-Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_server/` (P4), and `app/agent/` and `app/api/` (P5). The checkpointer and approvals arrive in P6, and memory in P8.
+Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_server/` (P4), `app/agent/` and `app/api/` (P5), and `app/db/` (P6: PostgreSQL checkpointer, approvals, sandbox tickets). Memory and Langfuse arrive in P8.
 
 ## Commands
 
@@ -42,6 +42,8 @@ uv run python scripts/mint_dev_token.py --sub dev-1 --role developer --audience 
 uv run python scripts/api_server.py                      # /api/v1 on 127.0.0.1:8000; needs the MCP server and the vLLM tunnel
 uv run python scripts/eval_agent.py                      # scripted agent flows, CI mode (MCP harness + fake LLM, no services)
 uv run python scripts/eval_agent.py --live --api-smoke   # the same flows on the real MCP server, Qdrant and vLLM (pod + tunnel)
+podman compose up -d postgres && uv run python scripts/db_migrate.py   # P6 schema + LangGraph checkpoint tables (re-runnable)
+uv run pytest -m db                                      # PostgreSQL tests (throwaway schema); skipped with a reason without Postgres
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -116,6 +118,7 @@ All documentation lives under `docs/`, and `docs/index.md` is the table of conte
 - Database (PostgreSQL): add a regression test whenever a step changes the schema or an existing query or behaviour around stored data.
 - Qdrant collection config or payload fields: add a regression test when either changes (`tests/unit/test_rag_store_ingest.py` pins them).
 - Roles/permissions (MCP tools, later the API): add authentication and authorization integration tests against the real server subprocess (`tests/integration/test_mcp_server.py`), plus the role × tool matrix unit test.
+- PostgreSQL tests: mark them `@pytest.mark.db` and use the throwaway-schema fixtures in `tests/conftest.py`. CI has no PostgreSQL, so they skip there; paste the local `uv run pytest -m db` run in the PR.
 
 Run `uv run pytest` before reporting a task complete, and paste the output.
 
@@ -133,3 +136,7 @@ Nothing is implemented without an accepted plan. Each feature follows `intent.md
 - The hygiene tests read *tracked* files only, so a new file with a PEM header or an IP passes them until it is committed. Stage new files (`git add`) before running the gate. Build PEM headers in tests from parts too.
 - On this Windows machine a refused loopback port can hang (probably the Podman/WSL relay) instead of refusing, while Linux CI refuses instantly. Any "service down" test or readiness probe needs a short client timeout.
 - `redact_fields` in `configs/security.yaml` includes `signature`, which is also the name of the API's `signature` context block. Redaction applies inside context blocks, never to the block names.
+- LangGraph checkpoints the graph's raw input before any node runs. Sanitize before `graph.ainvoke`, not only in `sanitize_input`. A secrets test that reads only the final state misses this; walk the whole checkpoint history or dump the tables.
+- A node that calls `interrupt()` re-runs from its first line on resume. Create side-effect records (like the approval) in an earlier node, keep them idempotent, and read the decision from the database, not the resume value.
+- uvicorn's `asyncio` loop is the Proactor loop on Windows, which psycopg's async driver cannot use. The API passes `loop="asyncio:SelectorEventLoop"`, and `tests/conftest.py` sets the selector policy.
+- Text like `validate_test_signature: INVALID` reads as a `signature: <value>` secret pair to the redaction rules, and the ticket tool refuses it. Write `tool -> result` in generated ticket text.

@@ -72,11 +72,48 @@ def main(argv: list[str] | None = None) -> int:
         from app.agent.llm import VllmLLM
         llm = VllmLLM()
         llm_ping = llm.ping
-    app = create_app(agent=Agent(ToolClient(args.mcp_url, secret), llm), secret=secret,
-                     mcp_ping=lambda: http_ping(args.mcp_url), llm_ping=llm_ping)
-    print(f"API on http://{api['host']}:{args.port} (loopback only)", flush=True)
-    uvicorn.run(app, host=api["host"], port=args.port, log_level="warning", access_log=False)
+    tools = ToolClient(args.mcp_url, secret)
+    db_info = _database()
+    if db_info:
+        # p6: durable threads and approvals. The checkpointer needs a running loop, so it opens in the lifespan.
+        import contextlib
+
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+        @contextlib.asynccontextmanager
+        async def lifespan(app_):
+            async with AsyncPostgresSaver.from_conn_string(db_info) as saver:
+                app_.state.agent = Agent(tools, llm, checkpointer=saver, db_conninfo=db_info)
+                yield
+
+        app = create_app(agent=None, secret=secret, mcp_ping=lambda: http_ping(args.mcp_url), llm_ping=llm_ping,
+                         db_conninfo=db_info, lifespan=lifespan)
+        mode = "PostgreSQL checkpointer, approvals on"
+    else:
+        app = create_app(agent=Agent(tools, llm), secret=secret, mcp_ping=lambda: http_ping(args.mcp_url),
+                         llm_ping=llm_ping)
+        mode = "no database reachable: in-memory, approvals off (run scripts/db_migrate.py with Postgres up)"
+    print(f"API on http://{api['host']}:{args.port} (loopback only; {mode})", flush=True)
+    # Selector loop on every platform: psycopg async (the PostgreSQL checkpointer) cannot run on Windows' Proactor
+    # loop, which uvicorn's "asyncio" setting picks on win32 (p6).
+    uvicorn.run(app, host=api["host"], port=args.port, log_level="warning", access_log=False,
+                loop="asyncio:SelectorEventLoop")
     return 0
+
+
+def _database() -> str | None:
+    """The conninfo when PostgreSQL is reachable and migrated (agent_threads exists), else None. Never printed."""
+    import psycopg
+
+    from app.db.connect import DatabaseNotConfigured, conninfo
+    try:
+        info = conninfo()
+        with psycopg.connect(info) as c:
+            if c.execute("select to_regclass('agent_threads')").fetchone()[0] is None:
+                return None
+        return info
+    except (DatabaseNotConfigured, psycopg.Error):
+        return None
 
 
 if __name__ == "__main__":

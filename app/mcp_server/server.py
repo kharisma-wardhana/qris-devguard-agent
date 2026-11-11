@@ -9,6 +9,7 @@ a submitted value, a stack trace or an environment value. One log line per call,
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import time
@@ -55,7 +56,9 @@ class GuardedTool(Tool):
                 args = self.args_model.model_validate(arguments)
             except ValidationError as exc:
                 raise ToolFailure("INVALID_ARGUMENT", field_errors_from(exc)) from None
-            data = await anyio.to_thread.run_sync(self.handler, args, self.tool_context)
+            handler = (functools.partial(self.handler, caller=sub) if getattr(self.handler, "needs_caller", False)
+                       else self.handler)
+            data = await anyio.to_thread.run_sync(handler, args, self.tool_context)
             outcome, out = "OK", _result({**data, "correlation_id": cid}, error=False)
         except ToolFailure as f:
             outcome, out = f.code, _result(envelope(f.code, cid, f.field_errors), error=True)
@@ -73,8 +76,9 @@ def _guarded(name: str, ctx: ToolContext) -> GuardedTool:
     def placeholder() -> None:      # signature unused: GuardedTool.run replaces argument handling
         return None
 
+    read_only = name in config.READ_ONLY_TOOLS      # p6: create_support_ticket writes (idempotent by key)
     base = Tool.from_function(placeholder, name=name, description=description, structured_output=False,
-                              annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False,
+                              annotations=ToolAnnotations(read_only_hint=read_only, destructive_hint=False,
                                                           idempotent_hint=True, open_world_hint=False))
     fields = {k: getattr(base, k) for k in Tool.model_fields}
     fields["parameters"] = model.model_json_schema()

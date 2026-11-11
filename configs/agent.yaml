@@ -45,3 +45,23 @@ classify:
   verb_window: 4
   prohibited_objects: [payment, pembayaran, refund, reversal, settlement, merchant activation, aktivasi merchant, transfer, transfer dana]
   prohibited_phrases: [production api, production endpoint, production key, production credential, live secret, private key produksi, kredensial produksi, api produksi]
+
+database:                              # p6: local PostgreSQL (docker-compose.yml, 127.0.0.1:5432)
+  url_env: DATABASE_URL                # postgresql+psycopg://... in .env (scripts/init_env.py)
+  test_url_env: DEVGUARD_TEST_DATABASE_URL
+  pool_max_size: 5
+  connect_timeout_seconds: 3           # refused loopback ports can hang on this machine (CLAUDE.md)
+
+evidence_order:                        # p6 flow-1 fix: endpoint section first, then the api family's documents
+  endpoint_sections:
+    access-token-b2b: {document_id: snap-technical-security-standard, section_prefix: "2.1.5"}
+    qr-mpm-generate: {document_id: synthetic-qris-mpm-service-spec, section_prefix: "2"}
+    qr-mpm-query: {document_id: synthetic-qris-mpm-service-spec, section_prefix: "3"}
+  profile_endpoints:
+    snap-asymmetric-access-token-v1: access-token-b2b
+
+ticket_draft:                          # p6: the only side effect; values are sanitized before drafting
+  title_max_chars: 200
+  body_max_chars: 4000
+  max_evidence_ids: 10
+  default_priority: medium

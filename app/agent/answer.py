@@ -116,6 +116,24 @@ def abstention(reason: str) -> dict[str, Any]:
                  ["Provide the API family, endpoint and spec version, and a fixture or test-case reference."])
 
 
+def with_action(final: dict[str, Any], approval: dict[str, Any] | None, result: dict[str, Any]) -> dict[str, Any]:
+    """The answer after the approval step (p6): what happened to the one side effect, stated by code."""
+    out = dict(final)
+    status = result.get("status")
+    out["action"] = {"type": "create_support_ticket", "target": "local sandbox_tickets table", "status": status,
+                     "ticket_id": result.get("ticket_id"),
+                     "approval_id": (approval or {}).get("approval_id")}
+    notes = {
+        "created": "A sandbox ticket was created after human approval.",
+        "already_created": "The approved sandbox ticket already existed; no second ticket was created.",
+        "rejected": "The approver rejected the action; nothing was created.",
+        "expired": "The approval expired before a decision; nothing was created.",
+    }
+    out["limitations"] = [*out.get("limitations", []),
+                          notes.get(status, f"The action was not executed ({status}); nothing was created.")]
+    return out
+
+
 def fallback(results: list[dict[str, Any]]) -> dict[str, Any]:
     """Deterministic answer when the model fails: verdicts only, from validator output."""
     findings = []
