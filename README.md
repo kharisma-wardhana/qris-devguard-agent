@@ -11,7 +11,7 @@ A self-hosted agentic assistant for diagnosing **sandbox** QRIS/SNAP API integra
 
 ## Status
 
-Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is complete: 7/7 health checks passed on 2026-11-07 (`docs/p1-infrastructure/`). Phases P2 (knowledge pipeline) and P3 (reranking and eval) are complete; see their folders under `docs/`. Phase P4 (deterministic MCP tools) is complete. Phase P5 (LangGraph agent) is in review: `docs/p5-langgraph-agent/`. Live flows pass 3/4; flow 1 is a recorded fail carried into P6.
+Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is complete: 7/7 health checks passed on 2026-11-07 (`docs/p1-infrastructure/`). Phases P2 (knowledge pipeline) and P3 (reranking and eval) are complete; see their folders under `docs/`. Phase P4 (deterministic MCP tools) is complete. Phase P5 (LangGraph agent) is complete. Phase P6 (checkpoint and human approval) is in review: `docs/p6-checkpoint-hitl/`. Crash/resume passes locally with exactly one ticket. Live flows pass 3/4; flow 1 is still a recorded fail.
 
 ## Development
 
@@ -63,5 +63,15 @@ uv run python scripts/mint_dev_token.py --sub dev-1 --role developer --audience 
 uv run python scripts/eval_agent.py                                   # scripted flows, CI mode (no services)
 uv run python scripts/eval_agent.py --live --api-smoke                # scripted flows against the real stack
 ```
+
+## Threads and approvals (P6)
+
+```bash
+podman compose up -d postgres
+uv run python scripts/db_migrate.py                                   # once
+uv run python scripts/api_server.py                                   # prints "PostgreSQL checkpointer, approvals on"
+```
+
+`POST /api/v1/threads`, `POST /api/v1/threads/{id}/messages` and `GET /api/v1/threads/{id}` are owner-only. A request to create a ticket is diagnosed first, then pauses at `awaiting_approval`. A different user with the `support_engineer` or `admin` role decides with `POST /api/v1/approvals/{id}/decision`, and the approval expires after 30 minutes. `POST /api/v1/threads/{id}/resume` finishes a run after a crash. The only side effect is one row in the local `sandbox_tickets` table, at most once.
 
 `POST /api/v1/chat` takes `{message, context}`. The context can carry `api_family`, `spec_version`, `endpoint_id`, a sanitized `payload`, a `signature` test case or a `response_code`. The reply is a PRD §5 answer: summary, findings, validation results, next steps, sources, confidence and limitations.
