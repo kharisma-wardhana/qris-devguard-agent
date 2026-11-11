@@ -6,6 +6,7 @@
 *Amended: 2026-11-10 for p4-deterministic-mcp-tools.*
 *Amended: 2026-11-10 for p5-langgraph-agent.*
 *Amended: 2026-11-11 for p6-checkpoint-hitl.*
+*Amended: 2026-11-11 for p7-mcp-hardening.*
 
 Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` and the feature's `docs/<feature-name>/spec.md` first. The review checks the diff against the spec's acceptance criteria.
 
@@ -41,6 +42,10 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P6:** `app/db/actions.py` is the only place the payload is normalized and hashed. The agent and the ticket tool must both use it. A change to normalization changes every hash, so it needs a migration note.
 - **P6:** a node that calls `interrupt()` re-runs from its first line on resume. Side-effect records are created in an earlier, checkpointed node and are idempotent.
 - **P6:** a PR touching `app/db/`, `app/agent/graph.py`, the ticket tool or the thread/approval routes pastes the local `uv run pytest -m db` run. CI skips these tests, so CI green proves nothing about them.
+- **P7:** every MCP tool registers through `GuardedTool`, which writes one audit row per call. `create_support_ticket` writes `attempt` before it touches the ticket store and refuses with `AUDIT_UNAVAILABLE` if that insert fails. A tool or code path that skips the audit is a blocker.
+- **P7:** a change to security behaviour updates the cases that prove it in `evals/datasets/security_cases.yaml` and re-renders `docs/p7-mcp-hardening/security-report.md` with `scripts/eval_security.py`. The generated block is never edited by hand, and a case or a test node is never removed to turn the report green.
+- **P7:** a burst or flood test gets a dedicated server or a lenient limiter, because every loopback caller shares one address bucket. A test that relies on ordering to stay under a limit is a bug.
+- **P7:** a PR touching `app/db/roles.py`, `app/db/audit.py`, a migration, the role DSNs or `GuardedTool` pastes the local `uv run pytest -m db` run and `uv run python scripts/eval_security.py` output. The role matrix and audit tests skip in CI.
 
 ### Security
 - Nothing under `knowledge_base/sources/` may be tracked except `.gitkeep`. No `.env*` file other than `.env.example`, and no `*.pem`, `*.key` or `*.p12` file, may be added anywhere.
@@ -74,6 +79,12 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P6:** every thread, approval and ticket lookup is owner-scoped: someone else's thread gets 404. `/api/v1/chat` stays one-shot and never creates an approval (`hitl=False`).
 - **P6:** `Agent.run` sanitizes before `graph.ainvoke`, because LangGraph checkpoints raw input. The secrets dump (`test_crash_resume.py`) and the history walk (`test_agent_hitl.py`) stay.
 - **P6:** PostgreSQL stays on `127.0.0.1`. No DSN, password or connection string is printed, logged or committed.
+- **P7:** services connect as `devguard_app`, `devguard_ticket` or `devguard_audit`, never as the owner, and refuse to start without their role password. A new grant is justified against the role table in `docs/p7-mcp-hardening/spec.md` (Behaviour §4) and adds a may / may-not assertion to `test_db_roles.py`. Giving a runtime role the owner role, DDL, `TRUNCATE` or read access to the audit table is a blocker.
+- **P7:** the audit table has no argument, message, payload or free-text column. Adding one is a blocker.
+- **P7:** every outbound destination comes from configuration and passes `app/security/egress.py` at start-up, and HTTP clients keep redirects off. A tool argument that becomes a URL, host or path is a blocker.
+- **P7:** both servers keep `proxy_headers=False` and a loopback host. Trusting forwarded headers needs the proxy design in `docs/p7-mcp-hardening/transport.md` and a threat-model change.
+- **P7:** the body-size and pre-auth limits run before authentication and parsing. Raising a value in `limits.*` (`configs/security.yaml`) needs a stated reason.
+- **P7:** a GitHub Action added for scanning or security is pinned by full commit SHA, not by tag (the `trivy-action` tags were force-pushed in 2026).
 
 ### Compliance
 - Public ASPI/SNAP documents are `reference_only`: they are never committed, and any quoted excerpt is at most `citations.max_excerpt_chars.reference_only` (300) characters.
@@ -95,6 +106,9 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P5:** only sanitized, synthetic text is sent to the model on the RunPod pod, through the SSH tunnel; no new egress host is added.
 - **P6:** tables and checkpoints hold sanitized synthetic text, IDs and hashes only (TRD §17). Ticket title and body that look like secrets are refused, not rewritten. Retention (30-day checkpoints, 90-day audit) is not yet enforced; P8 owns it.
 - **P6:** crash/resume and approval results are labelled measured, with the process IDs and ticket counts. "No duplicate action" is claimed only from the recorded run.
+- **P7:** `security-report.md` results are measured and dated. A PARTIAL §13.4 control stays PARTIAL until the missing evidence exists, and the live-injection echo finding (5/10) is reported as measured, never reworded.
+- **P7:** audit rows hold pseudonymous synthetic `sub` values and IDs only. Retention is 90 days through the developer-run `scripts/purge_audit.py`; nothing deletes rows automatically.
+- **P7:** every HIGH or CRITICAL scan finding (pip-audit, Trivy) is fixed by a version bump or listed in `security-report.md` with its code path, reachability and mitigation. An untriaged finding fails the dependency-hygiene control.
 
 ## Severity levels
 
@@ -126,6 +140,9 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P5:** the keyword lists in `configs/agent.yaml`. Check only that a change keeps `test_agent_classify.py` green and adds a row for the new case.
 - **P6:** LangGraph's own checkpoint tables and migrations (`langgraph-checkpoint-postgres` 3.2.0 is pinned). Check only that `scripts/db_migrate.py` still calls `setup()`.
 - **P6:** the wording of the ticket title and body drafts (check only that they are built from sanitized text and pass the tool's checks).
+- **P7:** the wording of attack phrases in `evals/datasets/injection_cases.yaml` and `tests/fixtures/injection/`. Check only that they are synthetic, keep the SYNTHETIC marker and never reach the approved corpus or Qdrant.
+- **P7:** Trivy findings inside third-party images we don't build. Check only that each HIGH or CRITICAL finding is triaged in `security-report.md`.
+- **P7:** the formatting of the generated block in `security-report.md`. Check only that it was regenerated by the script, not edited.
 
 ## What a human must decide
 
