@@ -14,9 +14,10 @@ PASSING = "tests/unit/test_security_egress.py::test_custom_allowlist"
 MISSING = "tests/unit/test_security_egress.py::test_this_node_does_not_exist"
 
 
-def run(tmp_path, cases):
+def run(tmp_path, cases, controls=None):
     path = tmp_path / "cases.yaml"
-    path.write_text(yaml.safe_dump({"version": 9, "cases": cases}), encoding="utf-8")
+    data = {"version": 9, "cases": cases, **({"controls": controls} if controls is not None else {})}
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
     report = tmp_path / "report.md"
     report.write_text("# Kept heading\n\nhand-written text\n\n<!-- security-matrix:start -->\nold\n"
                       "<!-- security-matrix:end -->\n\nhand-written tail\n", encoding="utf-8")
@@ -39,6 +40,32 @@ def test_all_pass_exits_zero_and_replaces_only_the_generated_block(tmp_path):
     assert "| C1 | §22.5 bullet C1 | a \\| b |" in report and "**PASS**" in report
     data = json.loads(evidence[0].read_text(encoding="utf-8"))
     assert data["dataset_version"] == 9 and data["results"][0]["status"] == "PASS"
+
+
+def control(name, cases, **extra):
+    return {"control": name, "pass_condition": f"pc {name}", "cases": cases, **extra}
+
+
+def test_controls_take_the_worst_case_and_a_cap_never_raises(tmp_path):
+    controls = [control("Measured", ["C1"]),
+                control("Capped", ["C1"], cap="PARTIAL", cap_reason="half the condition"),
+                control("Broken", ["C1", "C2"], cap="PARTIAL", cap_reason="not shown when worse"),
+                control("By hand", [], cap="PARTIAL", cap_reason="scan pending")]
+    r, report, evidence = run(tmp_path, [case("C1", PASSING), case("C2", MISSING)], controls)
+    assert r.returncode == 1
+    got = {c["control"]: (c["status"], c["basis"]) for c in json.loads(evidence[0].read_text(encoding="utf-8"))["controls"]}
+    assert got == {"Measured": ("PASS", "measured"), "Capped": ("PARTIAL", "measured"),
+                   "Broken": ("NOT RUN", "measured"), "By hand": ("PARTIAL", "recorded by hand")}
+    assert "### TRD §13.4 go-live checklist" in report and "| Capped | pc Capped | C1 | measured | **PARTIAL** | " \
+        "half the condition |" in report
+    assert "not shown when worse" not in report
+
+
+def test_dataset_mistake_exits_2_before_running_pytest(tmp_path):
+    for bad in ([control("Typo", ["C9"])], [control("Empty", [])], [control("Cap", ["C1"], cap="MAYBE")]):
+        r, _, evidence = run(tmp_path, [case("C1", PASSING)], bad)
+        assert r.returncode == 2 and r.stderr.startswith("error: control ") and evidence == [], r.stderr
+        assert "passed" not in r.stdout                               # pytest never ran
 
 
 def test_live_injection_loads_vllm_settings_before_the_ping(tmp_path, monkeypatch):

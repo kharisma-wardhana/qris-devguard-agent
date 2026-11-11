@@ -11,7 +11,7 @@ A self-hosted agentic assistant for diagnosing **sandbox** QRIS/SNAP API integra
 
 ## Status
 
-Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is complete: 7/7 health checks passed on 2026-11-07 (`docs/p1-infrastructure/`). Phases P2 (knowledge pipeline) and P3 (reranking and eval) are complete; see their folders under `docs/`. Phase P4 (deterministic MCP tools) is complete. Phase P5 (LangGraph agent) is complete. Phase P6 (checkpoint and human approval) is in review: `docs/p6-checkpoint-hitl/`. Crash/resume passes locally with exactly one ticket. Live flows pass 3/4; flow 1 is still a recorded fail.
+Phase P0 (scope and source inventory) is signed off. Phase P1 (infrastructure) is complete: 7/7 health checks passed on 2026-11-07 (`docs/p1-infrastructure/`). Phases P2 (knowledge pipeline) and P3 (reranking and eval) are complete; see their folders under `docs/`. Phase P4 (deterministic MCP tools) is complete. Phase P5 (LangGraph agent) is complete. Phase P6 (checkpoint and human approval) is in review: `docs/p6-checkpoint-hitl/`. Crash/resume passes locally with exactly one ticket. Live flows pass 3/4; flow 1 is still a recorded fail. Phase P7 (MCP hardening) is in progress: `docs/p7-mcp-hardening/`, with the measured §13.4 checklist in its security report.
 
 ## Development
 
@@ -20,6 +20,7 @@ uv sync                                   # install deps (.venv)
 uv run pytest                             # all tests
 uv run python scripts/check_sources.py    # validate the source manifest
 uv run python scripts/init_env.py         # once: create .env with random secrets
+uv run python scripts/init_env.py --add-missing   # after pulling a phase that adds keys (P7: role passwords)
 podman compose up -d                      # local PostgreSQL, Qdrant, Langfuse
 uv run python scripts/healthcheck.py      # PASS/FAIL per service
 ```
@@ -75,3 +76,14 @@ uv run python scripts/api_server.py                                   # prints "
 `POST /api/v1/threads`, `POST /api/v1/threads/{id}/messages` and `GET /api/v1/threads/{id}` are owner-only. A request to create a ticket is diagnosed first, then pauses at `awaiting_approval`. A different user with the `support_engineer` or `admin` role decides with `POST /api/v1/approvals/{id}/decision`, and the approval expires after 30 minutes. `POST /api/v1/threads/{id}/resume` finishes a run after a crash. The only side effect is one row in the local `sandbox_tickets` table, at most once.
 
 `POST /api/v1/chat` takes `{message, context}`. The context can carry `api_family`, `spec_version`, `endpoint_id`, a sanitized `payload`, a `signature` test case or a `response_code`. The reply is a PRD §5 answer: summary, findings, validation results, next steps, sources, confidence and limitations.
+
+## Hardening (P7)
+
+```bash
+uv run python scripts/init_env.py --add-missing                      # once after pulling P7: the three role passwords
+uv run python scripts/db_migrate.py                                   # creates the roles and the audit table
+uv run python scripts/eval_security.py                                # §22.5 suite + §13.4 checklist -> security-report.md
+uv run python scripts/purge_audit.py                                  # audit rows older than 90 days
+```
+
+The API and the MCP server now connect to PostgreSQL as least-privilege roles, and refuse to start without their role passwords rather than fall back to the owner. Every MCP tool call is audited. Both servers rate-limit (per address before auth, per subject after) and refuse oversized bodies, and outbound destinations are checked at start-up. Evidence and the measured go-live checklist are in [`docs/p7-mcp-hardening/security-report.md`](docs/p7-mcp-hardening/security-report.md).

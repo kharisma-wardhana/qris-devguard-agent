@@ -100,6 +100,8 @@ Not changed: `app/validators/*`, `app/rag/*`, `app/db/store.py` queries, the `00
     - **You:** terminate the pod.
     - First to cut if time runs short (spec Flagged concerns). (AC #20)
 11. **Report and docs.** `security-report.md` rendered from the evidence, plus triage of the scan findings; `transport.md`; threat model; tech, structure, README and index. (AC #25)
+    - (As built) `security_cases.yaml` gains `controls:` (the 16 §13.4 controls) and a `G-SECRETS` case; `eval_security.py` grades and renders the §13.4 table from the case results (with `cap` for evidence that covers only part of a pass condition) and exits 2 on a dataset mistake; `test_eval_security_cli.py` covers both.
+    - (Step 11 finding) uvicorn trusts `X-Forwarded-For` from loopback by default, so any local caller could rotate it past the per-address limit (AC #8). `scripts/api_server.py` and `scripts/mcp_server.py` now pass `proxy_headers=False`; `test_api_server.py` and `test_mcp_server.py` gain a rotating-header flood test (failed before the fix).
 12. **`CLAUDE.md` merge.** Shown as a diff, written only after `approve write`. (Agent configuration)
 
 AC #26 (full suite and the `-m db` run, outputs pasted) is checked at every step and again in Phase 4.
