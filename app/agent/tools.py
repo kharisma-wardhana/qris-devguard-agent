@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import time
@@ -17,6 +18,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.agent import config
+
+# p7: the run whose tool calls these are; set by the graph before each call, sent as X-DevGuard-Run-Id
+current_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("devguard_agent_run_id",
+                                                                           default=None)
 
 log = logging.getLogger("devguard.agent")
 
@@ -50,12 +55,16 @@ class ToolClient:
         return mint(sub, role, secret=self._secret, ttl_minutes=self.ttl)       # MCP audience (default)
 
     async def _session_calls(self, token: str, calls: list[tuple[str, dict[str, Any]]]) -> list[ToolResult]:
+        headers = {"Authorization": f"Bearer {token}"}
+        run_id = current_run_id.get()
+        if run_id:
+            headers["X-DevGuard-Run-Id"] = run_id               # p7: joins audit rows to the run
         import httpx2
         from mcp.client.session import ClientSession
         from mcp.client.streamable_http import streamable_http_client
 
         out: list[ToolResult] = []
-        async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {token}"}, timeout=self.timeout) as hc:
+        async with httpx2.AsyncClient(headers=headers, timeout=self.timeout, follow_redirects=False) as hc:
             async with streamable_http_client(self.url, http_client=hc) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()

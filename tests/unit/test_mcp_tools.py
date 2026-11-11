@@ -17,6 +17,7 @@ from qdrant_client import QdrantClient
 
 from app.mcp_server import config
 from app.mcp_server import server as srv
+from app.security.ratelimit import TokenBucket
 from app.mcp_server import tools as t
 from app.rag import ingest as ing
 from app.rag.embedding import FakeEmbedder
@@ -74,7 +75,7 @@ def _store(tmp_path):
 @pytest.fixture(scope="module")
 def ctx(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("mcp")
-    c = t.default_context()
+    c = t.default_context(database=False)
     keys.generate(tmp / "keys", c.signature_cases["keys"])
     c.keystore = keys.Keystore(tmp / "keys")
     store, emb = _store(tmp / "kb")
@@ -89,7 +90,8 @@ def ctx(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def server(ctx):
-    return srv.build_server(SECRET, ctx)
+    # p7: this suite tests tool behaviour, not throttling (real limits: test_security_suite.py)
+    return srv.build_server(SECRET, ctx, tool_limiter=TokenBucket(10**6, 10**6))
 
 
 def call(server, name, args, role="developer", sub="dev-1"):
@@ -305,6 +307,6 @@ def test_default_backends_probe_qdrant_briefly_before_loading_anything(monkeypat
     monkeypatch.setattr(store_mod, "make_client", must_not_build)
     monkeypatch.setattr(emb_mod, "BgeM3Embedder", must_not_build)
     with pytest.raises(ConnectionError):
-        t.default_context().backends()
+        t.default_context(database=False).backends()
     assert seen == {"timeout": config.mcp()["search"]["qdrant_probe_timeout_seconds"], "check_compatibility": False}
     assert seen["timeout"] <= 5

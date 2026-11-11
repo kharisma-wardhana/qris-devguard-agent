@@ -52,3 +52,55 @@ def test_refuses_to_overwrite(tmp_path):
     result = run(out)
     assert result.returncode == 1
     assert out.read_text(encoding="utf-8") == "KEEP=me\n"
+
+
+# --- p7: --add-missing --------------------------------------------------------------------------------
+
+def run_add(out: Path):
+    return subprocess.run([sys.executable, str(SCRIPT), "--example", str(EXAMPLE), "--out", str(out), "--add-missing"],
+                          capture_output=True, text=True, encoding="utf-8")
+
+
+ROLE_KEYS = ("DEVGUARD_APP_DB_PASSWORD", "DEVGUARD_TICKET_DB_PASSWORD", "DEVGUARD_AUDIT_DB_PASSWORD")
+
+
+def test_add_missing_appends_only_absent_keys_and_keeps_bytes(tmp_path):
+    out = tmp_path / ".env"
+    assert run(out).returncode == 0
+    lines = out.read_bytes().decode("utf-8").splitlines(keepends=True)
+    old = [l for l in lines if l.split("=", 1)[0] not in ROLE_KEYS]      # a pre-P7 .env
+    old[0] = old[0].rstrip("\n") + "\r\n"                                # odd line ending must survive
+    before = "".join(old).encode("utf-8")
+    out.write_bytes(before)
+    r = run_add(out)
+    assert r.returncode == 0, r.stderr
+    after = out.read_bytes()
+    assert after.startswith(before)                                       # every existing byte unchanged
+    env = parse(out)
+    for key in ROLE_KEYS:
+        assert re.fullmatch(r"[0-9a-f]{48}", env[key].strip())
+        assert env[key].strip() not in r.stdout + r.stderr               # names printed, never values
+        assert key in r.stdout
+        assert after.decode("utf-8").count(f"{key}=") == 1
+
+
+def test_add_missing_twice_adds_nothing(tmp_path):
+    out = tmp_path / ".env"
+    run(out)
+    before = out.read_bytes()
+    r = run_add(out)
+    assert r.returncode == 0 and "nothing added" in r.stdout and out.read_bytes() == before
+
+
+def test_add_missing_never_changes_an_existing_value(tmp_path):
+    out = tmp_path / ".env"
+    out.write_text("DEVGUARD_APP_DB_PASSWORD=mine\nMCP_AUTH_SECRET=keep\n", encoding="utf-8")
+    run_add(out)
+    env = parse(out)
+    assert env["DEVGUARD_APP_DB_PASSWORD"] == "mine" and env["MCP_AUTH_SECRET"] == "keep"
+
+
+def test_without_flag_still_refuses(tmp_path):
+    out = tmp_path / ".env"
+    out.write_text("KEEP=me\n", encoding="utf-8")
+    assert run(out).returncode == 1 and out.read_text(encoding="utf-8") == "KEEP=me\n"

@@ -50,7 +50,9 @@ def api(tmp_path_factory):
     keys.generate(keys_dir, wanted)
     mcp_port, api_port = free_port(), free_port()
     env = {**os.environ, "MCP_AUTH_SECRET": SECRET, "DEVGUARD_TEST_KEYS_DIR": str(keys_dir),
-           "QDRANT_URL": f"http://127.0.0.1:{free_port()}", "DEVGUARD_TEST_BACKENDS": "1"}
+           "QDRANT_URL": f"http://127.0.0.1:{free_port()}", "DEVGUARD_TEST_BACKENDS": "1",
+           "DEVGUARD_DB_DOTENV": str(keys_dir / "no.env")}           # p7: never the developer's database
+    env.pop("DATABASE_URL", None)
     procs = []
     mcp = subprocess.Popen([sys.executable, str(ROOT / "scripts/mcp_server.py"), "--port", str(mcp_port)], cwd=ROOT,
                            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
@@ -133,3 +135,119 @@ def test_fake_llm_refused_without_test_flag():
     r = subprocess.run([sys.executable, str(ROOT / "scripts/api_server.py"), "--fake-llm", "--port", str(free_port())],
                        cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert r.returncode == 1 and "--fake-llm is for tests only" in r.stderr
+
+
+
+# --- p7 step 4: start-up refusals (spec AC #12, #16) ----------------------------------------------------
+
+def _ip(*parts):
+    return ".".join(str(p) for p in parts)
+
+
+def _start_once(env_over, tmp_path):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("DEVGUARD_")}
+    env.pop("DATABASE_URL", None)
+    env.update({"MCP_AUTH_SECRET": SECRET, "DEVGUARD_DB_DOTENV": str(tmp_path / "no.env"),
+                "DEVGUARD_TEST_BACKENDS": "1", **env_over})
+    return subprocess.run([sys.executable, str(ROOT / "scripts/api_server.py"), "--fake-llm", "--port",
+                           str(free_port())], cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
+                          timeout=60)
+
+
+def test_api_with_database_but_no_role_password_refuses_to_start(tmp_path):
+    owner = f"postgresql://devguard:SYNowner77@{_ip(127, 0, 0, 1)}:1/devguard"
+    r = _start_once({"DATABASE_URL": owner}, tmp_path)
+    assert r.returncode == 1 and "DEVGUARD_APP_DB_PASSWORD" in r.stderr
+    assert "SYNowner77" not in r.stderr + r.stdout and "Traceback" not in r.stderr
+
+
+@pytest.mark.parametrize("over,setting", [
+    ({"VLLM_BASE_URL": "http://" + ".".join(["10", "0", "0", "8"]) + ":8080/v1"}, "VLLM_BASE_URL"),
+    ({"LANGFUSE_HOST": "https://cloud.langfuse.example"}, "LANGFUSE_HOST"),
+])
+def test_api_refuses_a_disallowed_destination(tmp_path, over, setting):
+    r = _start_once(over, tmp_path)
+    assert r.returncode == 1 and setting in r.stderr and list(over.values())[0] not in r.stderr
+
+
+
+# --- p7 step 5: limits against the real subprocess (spec AC #7, #9) ---------------------------------------
+
+def _tok(sub):
+    return {"Authorization": f"Bearer {auth.mint(sub, 'developer', secret=SECRET, audience=config.agent()['api']['audience'])}"}
+
+
+def test_agent_run_route_burst_gets_429_and_other_subject_is_unaffected(api):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.security import security
+    base = api[0]
+    burst = security()["limits"]["rate"]["api_agent_run"]["burst"]
+    body = {"message": "What does response code 4094700 mean for qris-mpm 0.1.0?"}
+
+    def post(sub):
+        return httpx.post(f"{base}/api/v1/chat", json=body, headers=_tok(sub), timeout=120)
+    with ThreadPoolExecutor(max_workers=burst + 3) as pool:           # concurrent: refill can't hide the limit
+        responses = list(pool.map(post, ["api-burst-1"] * (burst + 3)))
+    statuses = sorted(r.status_code for r in responses)
+    assert statuses.count(200) <= burst + 1 and 429 in statuses
+    r = next(r for r in responses if r.status_code == 429)
+    assert r.json()["code"] == "RATE_LIMITED" and int(r.headers["retry-after"]) >= 1
+    assert set(r.json()) == {"code", "message", "correlation_id"}
+    assert post("api-burst-2").status_code == 200
+
+
+def test_forwarded_for_header_cannot_buy_a_fresh_address_bucket(tmp_path):
+    """Regression (p7 step 11): uvicorn trusts X-Forwarded-For from loopback by default, so every local caller could
+    name a new client address per request and never hit the pre-auth limit. A dedicated server: the per-address
+    bucket is shared by every loopback caller. The flood is unauthenticated, so no MCP server is needed."""
+    from app.security import security
+    n = security()["limits"]["rate"]["per_address"]["burst"] + 60
+    port = free_port()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("DEVGUARD_")}
+    env.pop("DATABASE_URL", None)
+    env.update({"MCP_AUTH_SECRET": SECRET, "DEVGUARD_DB_DOTENV": str(tmp_path / "no.env"), "DEVGUARD_TEST_BACKENDS": "1"})
+    log = (tmp_path / "api.log").open("w", encoding="utf-8")
+    proc = subprocess.Popen([sys.executable, str(ROOT / "scripts/api_server.py"), "--fake-llm", "--port", str(port),
+                             "--mcp-url", f"http://127.0.0.1:{free_port()}/mcp"], cwd=ROOT, env=env, stdout=log,
+                            stderr=log)
+    try:
+        deadline = time.time() + 90
+        while time.time() < deadline:
+            assert proc.poll() is None, (tmp_path / "api.log").read_text(encoding="utf-8")[-2000:]
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.2)
+        with httpx.Client(timeout=10) as c:
+            statuses = [c.post(f"http://127.0.0.1:{port}/api/v1/chat", json={"message": "hi"},
+                               headers={"X-Forwarded-For": ".".join(["198", "51", "100", str(i % 250)])}).status_code
+                        for i in range(n)]
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        log.close()
+    assert statuses[0] == 401 and 429 in statuses
+
+
+def test_oversized_body_gets_413_before_parsing(api):
+    from app.security import security
+    base = api[0]
+    limit = security()["limits"]["max_request_bytes"]
+    big = b'{"message": "' + b"Z" * (limit + 10) + b'"}'
+    r = httpx.post(f"{base}/api/v1/chat", content=big, headers={**_tok("api-big"), "Content-Type": "application/json"},
+                   timeout=30)
+    assert r.status_code == 413 and r.json()["code"] == "PAYLOAD_TOO_LARGE" and "ZZZZ" not in r.text
+
+    def chunks():
+        yield b'{"message": "'
+        for _ in range(limit // 4096 + 2):
+            yield b"Z" * 4096
+        yield b'"}'
+    r = httpx.post(f"{base}/api/v1/chat", content=chunks(),
+                   headers={**_tok("api-big"), "Content-Type": "application/json"}, timeout=30)
+    assert r.status_code == 413 and r.json()["code"] == "PAYLOAD_TOO_LARGE"

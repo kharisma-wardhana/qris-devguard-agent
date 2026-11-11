@@ -29,14 +29,14 @@ async def down() -> bool:
 
 @pytest.fixture(scope="module")
 def harness():
-    with McpHarness() as h:
+    with McpHarness(rate_limits=False) as h:
         yield h
 
 
 @pytest.fixture(scope="module")
 def client(harness):
     app = create_app(agent=Agent(ToolClient(harness.url, harness.secret), FakeLLM()), secret=harness.secret,
-                     mcp_ping=up, llm_ping=up)
+                     mcp_ping=up, llm_ping=up, limits=lenient_limits())
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -122,3 +122,10 @@ def test_internal_error_is_safe(harness):
                    raise_server_exceptions=False).post("/api/v1/chat", json=CODE,
                                                        headers={"Authorization": f"Bearer {token(harness)}"})
     assert r.status_code == 500 and r.json()["code"] == "INTERNAL_ERROR" and "secret detail" not in r.text
+
+
+def lenient_limits():
+    """p7: these suites test route behaviour, not throttling; a bucket no test volume can empty.
+    The real limits are tested in tests/integration/test_security_suite.py and test_security_ratelimit.py."""
+    from app.security.ratelimit import TokenBucket
+    return {name: TokenBucket(10**6, 10**6) for name in ("per_address", "api_agent_run", "api_other")}

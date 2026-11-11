@@ -14,7 +14,7 @@ Phase P0 (§27, scope and source inventory) is signed off (2026-11-06). The deci
 - `configs/security.yaml` defines the role/tool matrix, redaction fields and egress allowlist.
 - `configs/eval_thresholds.yaml` defines the release gates.
 
-Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_server/` (P4), `app/agent/` and `app/api/` (P5), and `app/db/` (P6: PostgreSQL checkpointer, approvals, sandbox tickets). Memory and Langfuse arrive in P8.
+Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_server/` (P4), `app/agent/` and `app/api/` (P5), `app/db/` (P6: PostgreSQL checkpointer, approvals, sandbox tickets; P7: least-privilege roles, MCP audit), and `app/security/` (P7: rate limits, body-size limit, egress check). Memory and Langfuse arrive in P8.
 
 ## Commands
 
@@ -42,8 +42,12 @@ uv run python scripts/mint_dev_token.py --sub dev-1 --role developer --audience 
 uv run python scripts/api_server.py                      # /api/v1 on 127.0.0.1:8000; needs the MCP server and the vLLM tunnel
 uv run python scripts/eval_agent.py                      # scripted agent flows, CI mode (MCP harness + fake LLM, no services)
 uv run python scripts/eval_agent.py --live --api-smoke   # the same flows on the real MCP server, Qdrant and vLLM (pod + tunnel)
-podman compose up -d postgres && uv run python scripts/db_migrate.py   # P6 schema + LangGraph checkpoint tables (re-runnable)
+podman compose up -d postgres && uv run python scripts/db_migrate.py   # P6 schema + LangGraph checkpoint tables; P7 roles, grants, audit table (re-runnable)
 uv run pytest -m db                                      # PostgreSQL tests (throwaway schema); skipped with a reason without Postgres
+uv run python scripts/init_env.py --add-missing          # after pulling P7: append missing keys (role passwords) to .env; prints names only
+uv run python scripts/purge_audit.py                     # MCP audit rows older than audit.retention_days (90), as the owner role
+uv run python scripts/eval_security.py                   # §22.5 suite + §13.4 checklist -> docs/p7-mcp-hardening/security-report.md
+uv run python scripts/eval_security.py --live-injection  # the 10 injection cases on the real vLLM (pod + tunnel)
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -140,3 +144,9 @@ Nothing is implemented without an accepted plan. Each feature follows `intent.md
 - A node that calls `interrupt()` re-runs from its first line on resume. Create side-effect records (like the approval) in an earlier node, keep them idempotent, and read the decision from the database, not the resume value.
 - uvicorn's `asyncio` loop is the Proactor loop on Windows, which psycopg's async driver cannot use. The API passes `loop="asyncio:SelectorEventLoop"`, and `tests/conftest.py` sets the selector policy.
 - Text like `validate_test_signature: INVALID` reads as a `signature: <value>` secret pair to the redaction rules, and the ticket tool refuses it. Write `tool -> result` in generated ticket text.
+- Tests must never `CREATE`/`ALTER ROLE` the real `devguard_app`, `devguard_ticket` or `devguard_audit`: that would change the developer's passwords. Use the `db_roles` fixture (random throwaway names, dropped afterwards).
+- The pre-auth rate limit keys on client address, and every caller here is `127.0.0.1`, so one test's burst throttles every other test on that server. Burst tests get a dedicated server; behaviour suites pass a lenient limiter or `McpHarness(rate_limits=False)`.
+- uvicorn trusts `X-Forwarded-For` from loopback by default, which lets any local client dodge the per-address limit. Run every server with `proxy_headers=False` until a real proxy exists (`docs/p7-mcp-hardening/transport.md`).
+- A `--live` script must load `VLLM_*` from `.env` (`api_server._load_env_file`) before pinging vLLM, and a live-mode socket guard must allow the configured `VLLM_BASE_URL` port. CI mode (fake LLM) catches neither.
+- `scripts/eval_security.py` grades a skipped test NOT RUN, never PASS. Start Postgres first, or every database case reads NOT RUN.
+- `gh workflow run` only works for a workflow that already exists on `main`. A new workflow first runs through its `pull_request` trigger.

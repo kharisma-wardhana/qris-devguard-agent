@@ -51,6 +51,10 @@ database:                              # p6: local PostgreSQL (docker-compose.ym
   test_url_env: DEVGUARD_TEST_DATABASE_URL
   pool_max_size: 5
   connect_timeout_seconds: 3           # refused loopback ports can hang on this machine (CLAUDE.md)
+  roles:                               # p7: least-privilege runtime roles (docs/p7-mcp-hardening/spec.md Behaviour §4)
+    app:    {name: devguard_app,    password_env: DEVGUARD_APP_DB_PASSWORD}      # API + agent + checkpointer
+    ticket: {name: devguard_ticket, password_env: DEVGUARD_TICKET_DB_PASSWORD}   # MCP create_support_ticket only
+    audit:  {name: devguard_audit,  password_env: DEVGUARD_AUDIT_DB_PASSWORD}    # MCP audit writer, insert-only
 
 evidence_order:                        # p6 flow-1 fix: endpoint section first, then the api family's documents
   endpoint_sections:

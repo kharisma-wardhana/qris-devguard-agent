@@ -23,6 +23,9 @@ MESSAGES = {
     "APPROVAL_MISMATCH": "the action differs from the one that was approved",
     "APPROVAL_EXPIRED": "the approval has expired",
     "APPROVAL_NOT_USABLE": "the approval is not in an approved, unused state",
+    # p7
+    "RATE_LIMITED": "too many tool calls; retry later",
+    "AUDIT_UNAVAILABLE": "the audit trail is not available, so no action was taken",
 }
 
 

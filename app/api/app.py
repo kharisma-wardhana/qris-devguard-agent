@@ -5,6 +5,9 @@
 - Every error is the §18 envelope (`code`, `message`, `correlation_id`, optional `field_errors`), with no
   stack trace and no submitted value.
 - One log line per request: route, sub, role, intent, risk, outcome, run_id, duration. Never message text.
+- p7: a body over `limits.max_request_bytes` gets 413 before parsing; a client address over `limits.rate.per_address`
+  gets 429 before authentication; an authenticated subject over its per-route bucket gets 429 (agent-run routes
+  `api_agent_run`, everything else `api_other`). 429 carries `Retry-After`. Health routes are not limited.
 """
 
 from __future__ import annotations
@@ -38,6 +41,9 @@ MESSAGES = {
     "CONFLICT": "the thread or approval is not in a state that allows this",
     "APPROVAL_EXPIRED": "the approval has expired; nothing was executed",
     "SERVICE_UNAVAILABLE": "the thread and approval store is not available",
+    # p7
+    "RATE_LIMITED": "too many requests; retry after the number of seconds in Retry-After",
+    "PAYLOAD_TOO_LARGE": "the request body is larger than allowed",
 }
 THREAD_ID = r"^[A-Za-z0-9_-]{16,64}$"
 APPROVAL_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -59,8 +65,9 @@ def approval_view(row: dict[str, Any]) -> dict[str, Any]:
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, code: str, field_errors: list[dict[str, str]] | None = None):
-        self.status, self.code, self.field_errors = status, code, field_errors or []
+    def __init__(self, status: int, code: str, field_errors: list[dict[str, str]] | None = None,
+                 headers: dict[str, str] | None = None):
+        self.status, self.code, self.field_errors, self.headers = status, code, field_errors or [], headers
 
 
 def envelope(status: int, code: str, field_errors: list[dict[str, str]] | None = None,
@@ -73,18 +80,28 @@ def envelope(status: int, code: str, field_errors: list[dict[str, str]] | None =
 
 def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool]],
                llm_ping: Callable[[], Awaitable[bool]], db_conninfo: str | None = None,
-               lifespan: Any = None) -> FastAPI:
+               lifespan: Any = None, limits: dict[str, Any] | None = None) -> FastAPI:
     """`agent` may be None when `lifespan` sets `app.state.agent` (the PostgreSQL checkpointer needs a running
-    loop). Without `db_conninfo` the thread and approval routes answer 503 and /chat runs in P5 mode."""
+    loop). Without `db_conninfo` the thread and approval routes answer 503 and /chat runs in P5 mode.
+    `limits` (tests): TokenBuckets keyed per_address / api_agent_run / api_other; default from security.yaml."""
+    from app.security.body_limit import BodyLimit
+    from app.security.ratelimit import PerAddressLimit, TokenBucket, retry_after
+
+    given = limits or {}
+    buckets = {name: given[name] if given.get(name) is not None else TokenBucket.from_config(name)   # not `or`:
+               for name in ("per_address", "api_agent_run", "api_other")}                         # empty = falsy
     verifier = HS256Verifier(secret, audience=config.agent()["api"]["audience"])
     app = FastAPI(title="QRIS DevGuard AI", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None,
                   lifespan=lifespan)
     app.state.agent = agent
     approver_roles = set(config.security()["approver_roles"])
+    # add_middleware wraps outside-in in reverse order: PerAddressLimit ends up outermost, then BodyLimit
+    app.add_middleware(BodyLimit, max_bytes=config.security()["limits"]["max_request_bytes"])
+    app.add_middleware(PerAddressLimit, bucket=buckets["per_address"])
 
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, exc: ApiError) -> JSONResponse:
-        headers = {"WWW-Authenticate": "Bearer"} if exc.status == 401 else None
+        headers = {"WWW-Authenticate": "Bearer"} if exc.status == 401 else exc.headers
         return envelope(exc.status, exc.code, exc.field_errors, headers)
 
     @app.exception_handler(RequestValidationError)
@@ -111,6 +128,18 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
             raise ApiError(401, "UNAUTHENTICATED")
         return claims["sub"], claims["role"]
 
+    def limited(bucket_name: str) -> Callable[..., tuple[str, str]]:
+        def dependency(who: tuple[str, str] = Depends(identity)) -> tuple[str, str]:
+            wait = buckets[bucket_name].take(f"sub:{who[0]}")
+            if wait > 0:
+                log.info("rate_limited bucket=%s sub=%s role=%s", bucket_name, who[0], who[1])
+                raise ApiError(429, "RATE_LIMITED", headers={"Retry-After": retry_after(wait)})
+            return who
+        return dependency
+
+    run_identity = limited("api_agent_run")             # routes that run the agent (LLM + tools)
+    other_identity = limited("api_other")
+
     @app.get("/health/live")
     async def live() -> dict[str, str]:
         return {"status": "live"}
@@ -122,7 +151,7 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         return JSONResponse({"status": "ready" if ok else "not_ready", "checks": checks}, status_code=200 if ok else 503)
 
     @app.post("/api/v1/chat", response_model=ChatResponse)
-    async def chat(body: ChatRequest, who: tuple[str, str] = Depends(identity)) -> dict[str, Any]:
+    async def chat(body: ChatRequest, who: tuple[str, str] = Depends(run_identity)) -> dict[str, Any]:
         sub, role = who
         started = time.perf_counter()
         # One-shot and unchanged since P5: no thread routes, so no approval is ever created here (hitl=False);
@@ -165,7 +194,7 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         return {k: out.get(k) for k in ("thread_id", "run_id", "status", "intent", "risk_level", "answer", "approval")}
 
     @app.post("/api/v1/threads", status_code=201)
-    async def create_thread(who: tuple[str, str] = Depends(identity)) -> dict[str, Any]:
+    async def create_thread(who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
         import secrets
 
         from app.db import store
@@ -177,7 +206,7 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
 
     @app.post("/api/v1/threads/{thread_id}/messages", response_model=MessageResponse)
     async def post_message(body: ChatRequest, thread_id: str = Path(pattern=THREAD_ID),
-                           who: tuple[str, str] = Depends(identity)) -> dict[str, Any]:
+                           who: tuple[str, str] = Depends(run_identity)) -> dict[str, Any]:
         sub, role = who
         started = time.perf_counter()
         thread = await owned_thread(thread_id, sub)
@@ -189,7 +218,7 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         return message_out(out)
 
     @app.get("/api/v1/threads/{thread_id}")
-    async def get_thread(thread_id: str = Path(pattern=THREAD_ID), who: tuple[str, str] = Depends(identity)) -> dict[str, Any]:
+    async def get_thread(thread_id: str = Path(pattern=THREAD_ID), who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
         sub, _ = who
         thread = await owned_thread(thread_id, sub)
         snap = await app.state.agent.snapshot(thread_id) or {}
@@ -198,7 +227,7 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
 
     @app.get("/api/v1/approvals/{approval_id}")
     async def get_approval(approval_id: str = Path(pattern=APPROVAL_ID),
-                           who: tuple[str, str] = Depends(identity)) -> dict[str, Any]:
+                           who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
         from app.db import store
         sub, role = who
         row = await db(store.get_approval, approval_id)
@@ -208,7 +237,7 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
 
     @app.post("/api/v1/approvals/{approval_id}/decision")
     async def decide(body: DecisionRequest, approval_id: str = Path(pattern=APPROVAL_ID),
-                     who: tuple[str, str] = Depends(identity)) -> Any:
+                     who: tuple[str, str] = Depends(other_identity)) -> Any:
         from app.db import store
         sub, role = who
         started = time.perf_counter()
@@ -228,7 +257,8 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         return {"approval": approval_view(await db(store.get_approval, approval_id)), "run": message_out(out)}
 
     @app.post("/api/v1/threads/{thread_id}/resume")
-    async def resume(thread_id: str = Path(pattern=THREAD_ID), who: tuple[str, str] = Depends(identity)) -> dict[str, Any]:
+    async def resume(thread_id: str = Path(pattern=THREAD_ID),
+                     who: tuple[str, str] = Depends(run_identity)) -> dict[str, Any]:
         """Finish a run whose approval was decided but whose resume did not complete (crash, restart)."""
         from app.db import store
         sub, role = who
@@ -251,7 +281,7 @@ async def http_ping(url: str) -> bool:
     """Any HTTP answer (even 401) means the service is up; a transport error means down."""
     import httpx
     try:
-        async with httpx.AsyncClient(timeout=3) as c:
+        async with httpx.AsyncClient(timeout=3, follow_redirects=False) as c:     # p7: never follow
             await c.post(url, json={})
         return True
     except httpx.HTTPError:

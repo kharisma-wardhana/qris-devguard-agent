@@ -27,8 +27,12 @@ class DatabaseNotConfigured(RuntimeError):
     """No DSN in the environment or .env. The message never holds a DSN."""
 
 
+DOTENV_OVERRIDE = "DEVGUARD_DB_DOTENV"      # p7: path of the .env to read database settings from (tests: none)
+
+
 def _from_env_file(key: str) -> str | None:
-    env = ROOT / ".env"
+    override = os.environ.get(DOTENV_OVERRIDE)
+    env = Path(override) if override else ROOT / ".env"
     if not env.is_file():
         return None
     for line in env.read_text(encoding="utf-8").splitlines():
@@ -54,6 +58,32 @@ def conninfo(url: str | None = None, *, schema: str | None = None) -> str:
     if schema:
         kw["options"] = f"-c search_path={schema}"
     return make_conninfo(url or dsn(), **kw)
+
+
+def role_password(key: str) -> str:
+    """A runtime role's password (p7) from the environment, else `.env`. Raises RolePasswordMissing (names the key)."""
+    from app.db.roles import RolePasswordMissing
+
+    value = os.environ.get(key) or _from_env_file(key)
+    if not value or "replace-me" in value:
+        raise RolePasswordMissing(key)
+    return value
+
+
+def role_conninfo(role: str, *, url: str | None = None, schema: str | None = None,
+                  name: str | None = None, password: str | None = None) -> str:
+    """Conninfo for runtime role `role` ('app' | 'ticket' | 'audit'): DATABASE_URL's host, port and database with
+    the role's user and password swapped in (p7 spec Architecture). Never falls back to the owner role.
+    `name`/`password` override the configured ones (tests use throwaway roles)."""
+    from psycopg.conninfo import conninfo_to_dict
+
+    from app.db.roles import role_config
+
+    cfg = role_config()[role]
+    parts = conninfo_to_dict(conninfo(url or dsn(), schema=schema))
+    parts["user"] = name or cfg["name"]
+    parts["password"] = password if password is not None else role_password(cfg["password_env"])
+    return make_conninfo(**parts)
 
 
 def use_selector_loop() -> None:

@@ -82,9 +82,15 @@ class VllmLLM:
         cfg = config.agent()["llm"]
         self.cfg = cfg
         self.model = config.served_model_name()
+        import httpx
+
+        # p7 (T9): the OpenAI library follows redirects by default; a redirect could bounce a request off the
+        # tunnel to another host, so this client never follows one.
         self._client = AsyncOpenAI(base_url=os.environ.get(cfg["base_url_env"], "http://127.0.0.1:8080/v1"),
                                    api_key=os.environ.get(cfg["api_key_env"], "missing"),
-                                   timeout=cfg["timeout_seconds"], max_retries=0)
+                                   timeout=cfg["timeout_seconds"], max_retries=0,
+                                   http_client=httpx.AsyncClient(follow_redirects=False,
+                                                                 timeout=cfg["timeout_seconds"]))
 
     def __repr__(self) -> str:
         return f"VllmLLM(model={self.model!r})"

@@ -33,8 +33,13 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def build_corpus(workdir: Path):
-    """(store, embedder): the two committed synthetic documents plus two versions of one conflict document."""
+PLANT_TARGET = "synthetic-qris-mpm-service-spec"
+
+
+def build_corpus(workdir: Path, planted: list[Path] | None = None):
+    """(store, embedder): the two committed synthetic documents plus two versions of one conflict document.
+    p7: `planted` files are appended to this harness's copy of the synthetic QR MPM spec (checksum cleared), to
+    test injection carried inside an approved, retrieved document. The committed file is never changed."""
     from qdrant_client import QdrantClient
 
     from app.rag import ingest as ing
@@ -48,7 +53,13 @@ def build_corpus(workdir: Path):
         dest = workdir / real[doc]["local_path"]
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / real[doc]["local_path"], dest)
-        entries.append(real[doc])
+        entry = real[doc]
+        if planted and doc == PLANT_TARGET:
+            with dest.open("a", encoding="utf-8") as fh:
+                for extra in planted:
+                    fh.write("\n" + extra.read_text(encoding="utf-8"))
+            entry = {**entry, "checksum_sha256": None}
+        entries.append(entry)
     sop = real["synthetic-qris-troubleshooting-sop"]
     for version, name in CONFLICT_FILES.items():
         rel = f"knowledge_base/synthetic/{CONFLICT_DOC}-{version}.md"
@@ -67,8 +78,15 @@ def build_corpus(workdir: Path):
 
 
 class McpHarness:
-    def __init__(self, db_conninfo: str | None = None) -> None:
+    def __init__(self, db_conninfo: str | None = None, audit_conninfo: str | None = None,
+                 planted: list[Path] | None = None, rate_limits: bool = True) -> None:
+        self.planted = planted                             # p7: injection sections appended to the corpus copy
+        # p7: False gives buckets no test volume can empty, for suites that test behaviour, not throttling. Every
+        # harness caller is 127.0.0.1, so the per-address bucket is shared by the whole module.
+        self.rate_limits = rate_limits
         self.db_conninfo = db_conninfo                     # p6: ticket store for create_support_ticket, or none
+        self.audit_conninfo = audit_conninfo               # p7: audit writer's conninfo, or none
+        self.audit: Any = None
         self.secret = secrets.token_hex(24)
         self.port = free_port()
         self.url = ""
@@ -86,10 +104,10 @@ class McpHarness:
 
         self._tmp = tempfile.TemporaryDirectory(prefix="devguard-harness-")
         work = Path(self._tmp.name)
-        ctx = default_context()
+        ctx = default_context(database=False)
         keys.generate(work / "keys", ctx.signature_cases["keys"])
         ctx.keystore = keys.Keystore(work / "keys")
-        store, emb = build_corpus(work / "kb")
+        store, emb = build_corpus(work / "kb", self.planted)
         ctx.backends = lambda: (store, emb)
         ctx.reranker = None
         if self.db_conninfo:
@@ -98,7 +116,15 @@ class McpHarness:
             ctx.db = lambda: store.connect(info)
         else:
             ctx.db = None
-        app = build_app(build_server(self.secret, ctx, port=self.port), port=self.port)
+        if self.audit_conninfo:
+            from app.db.audit import AuditWriter, connector
+            ctx.audit = self.audit = AuditWriter(connector(self.audit_conninfo))
+        lenient = None
+        if not self.rate_limits:
+            from app.security.ratelimit import TokenBucket
+            lenient = TokenBucket(10**6, 10**6)
+        app = build_app(build_server(self.secret, ctx, port=self.port, tool_limiter=lenient), port=self.port,
+                        audit=ctx.audit, address_limiter=lenient)
         self._server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=self.port, log_level="warning",
                                                      access_log=False))
         self._thread = threading.Thread(target=self._server.run, name="mcp-harness", daemon=True)

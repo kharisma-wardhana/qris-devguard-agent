@@ -30,24 +30,27 @@ async def up() -> bool:
 
 
 @pytest.fixture(scope="module")
-def harness(migrated_db_url):
-    with McpHarness(db_conninfo=migrated_db_url) as h:
+def harness(migrated_db_url, db_roles):
+    # p7: the write tool fails closed without an audit trail, so the harness gets the throwaway audit role
+    with McpHarness(db_conninfo=migrated_db_url, audit_conninfo=db_roles.url("audit"), rate_limits=False) as h:
         yield h
 
 
 @pytest.fixture(scope="module")
-def client(harness, migrated_db_url):
+def client(harness, db_roles):
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    app_role = db_roles.url("app")                     # p7: the API and agent run as devguard_app, never the owner
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
-        async with AsyncPostgresSaver.from_conn_string(migrated_db_url) as saver:
+        async with AsyncPostgresSaver.from_conn_string(app_role) as saver:
             app.state.agent = Agent(ToolClient(harness.url, harness.secret), FakeLLM(), checkpointer=saver,
-                                    db_conninfo=migrated_db_url)
+                                    db_conninfo=app_role)
             yield
 
-    app = create_app(agent=None, secret=harness.secret, mcp_ping=up, llm_ping=up, db_conninfo=migrated_db_url,
-                     lifespan=lifespan)
+    app = create_app(agent=None, secret=harness.secret, mcp_ping=up, llm_ping=up, db_conninfo=app_role,
+                     lifespan=lifespan, limits=lenient_limits())
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 
@@ -200,3 +203,10 @@ def test_malformed_ids_are_422(harness):
     c = TestClient(app)
     assert c.get("/api/v1/threads/../etc", headers=hdr(harness)).status_code in (404, 422)
     assert c.get(f"/api/v1/approvals/{uuid.uuid4().hex}", headers=hdr(harness)).status_code == 422
+
+
+def lenient_limits():
+    """p7: these suites test route behaviour, not throttling; a bucket no test volume can empty.
+    The real limits are tested in tests/integration/test_security_suite.py and test_security_ratelimit.py."""
+    from app.security.ratelimit import TokenBucket
+    return {name: TokenBucket(10**6, 10**6) for name in ("per_address", "api_agent_run", "api_other")}
