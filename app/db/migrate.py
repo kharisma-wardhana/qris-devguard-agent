@@ -1,4 +1,7 @@
-"""Apply app/db/migrations/NNNN_*.sql in order, once each, recorded in schema_migrations (p6 spec AC #1)."""
+"""Apply app/db/migrations/NNNN_*.sql in order, once each, recorded in schema_migrations (p6 spec AC #1).
+
+p7: `apply_roles` creates and aligns the least-privilege runtime roles (app/db/roles.py) after the
+migrations and the checkpoint tables exist."""
 
 from __future__ import annotations
 
@@ -38,3 +41,14 @@ async def setup_checkpointer(conninfo: str) -> None:
 
     async with AsyncPostgresSaver.from_conn_string(conninfo) as saver:
         await saver.setup()
+
+
+def apply_roles(conn: psycopg.Connection, conninfo: str | None = None) -> list[tuple[str, str]]:
+    """The configured runtime roles with passwords from the environment / .env (p7). Raises RolePasswordMissing."""
+    from app.db import roles
+    from app.db.connect import role_password
+
+    cfg = roles.role_config()
+    names = {k: v["name"] for k, v in cfg.items()}
+    passwords = {k: role_password(v["password_env"]) for k, v in cfg.items()}
+    return roles.apply(conn, names, passwords, conninfo)

@@ -7,6 +7,8 @@
     db_url           session schema, empty
     fresh_db_url     a new empty schema per test (migration tests)
     migrated_db_url  session schema with our migrations and the LangGraph checkpoint tables
+    db_roles         (p7) throwaway least-privilege roles on migrated_db_url: names devguard_<key>_t<hex>,
+                     random passwords, dropped afterwards. Never the real roles (their passwords are in .env).
 """
 
 from __future__ import annotations
@@ -64,3 +66,38 @@ def migrated_db_url():
             migrate.apply(conn)
         asyncio.run(migrate.setup_checkpointer(url))
         yield url
+
+
+class DbRoles:
+    """Throwaway runtime roles for one test session (p7). `url(key)` is that role's conninfo on the schema."""
+
+    def __init__(self, owner_url: str, suffix: str, names: dict[str, str], passwords: dict[str, str]):
+        self.owner_url, self.suffix, self.names, self.passwords = owner_url, suffix, names, passwords
+
+    def url(self, key: str) -> str:
+        from app.db.connect import role_conninfo
+        return role_conninfo(key, url=self.owner_url, name=self.names[key], password=self.passwords[key])
+
+    def env(self) -> dict[str, str]:
+        """Environment for a subprocess that must connect as these roles."""
+        from app.db.roles import SUFFIX_ENV, role_config
+        cfg = role_config()
+        return {SUFFIX_ENV: self.suffix, **{cfg[k]["password_env"]: v for k, v in self.passwords.items()}}
+
+
+@pytest.fixture(scope="session")
+def db_roles(migrated_db_url):
+    import psycopg
+
+    from app.db import roles
+
+    suffix = f"_t{secrets.token_hex(4)}"
+    names = {k: v["name"] + suffix for k, v in roles.role_config().items()}
+    passwords = {k: secrets.token_hex(16) for k in names}
+    with psycopg.connect(migrated_db_url, autocommit=True) as conn:
+        roles.apply(conn, names, passwords)
+    try:
+        yield DbRoles(migrated_db_url, suffix, names, passwords)
+    finally:
+        with psycopg.connect(migrated_db_url, autocommit=True) as conn:
+            roles.drop(conn, list(names.values()))

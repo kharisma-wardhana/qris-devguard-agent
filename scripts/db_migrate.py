@@ -5,8 +5,10 @@ Usage:
   uv run python scripts/db_migrate.py
 
 Applies app/db/migrations/NNNN_*.sql once each (recorded in schema_migrations), then LangGraph's own
-checkpoint tables (AsyncPostgresSaver.setup). Safe to re-run. Reads DATABASE_URL from the environment or
-.env; never prints it.
+checkpoint tables (AsyncPostgresSaver.setup), then (p7) the least-privilege runtime roles devguard_app,
+devguard_ticket and devguard_audit with their grants; passwords come from DEVGUARD_*_DB_PASSWORD
+(`init_env.py --add-missing` adds them to an existing .env). Safe to re-run: an unchanged password is left alone.
+Reads DATABASE_URL (the owner role) from the environment or .env; never prints it or a password.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from app.db import migrate
     from app.db.connect import DatabaseNotConfigured, conninfo, use_selector_loop
+    from app.db.roles import RolePasswordMissing
 
     sys.stdout.reconfigure(encoding="utf-8")
     use_selector_loop()
@@ -32,7 +35,9 @@ def main(argv: list[str] | None = None) -> int:
         with psycopg.connect(info, autocommit=True) as conn:
             applied, skipped = migrate.apply(conn)
         asyncio.run(migrate.setup_checkpointer(info))
-    except DatabaseNotConfigured as exc:
+        with psycopg.connect(info, autocommit=True) as conn:
+            roles = migrate.apply_roles(conn, info)
+    except (DatabaseNotConfigured, RolePasswordMissing) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except psycopg.Error as exc:
@@ -41,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"applied {len(applied)} ({', '.join(applied) or '-'}), already applied {len(skipped)}; "
           "checkpoint tables ready")
+    print("roles: " + ", ".join(f"{name} {status}" for name, status in roles))
     return 0
 
 
