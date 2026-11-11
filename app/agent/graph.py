@@ -114,7 +114,7 @@ class Agent:
 
     async def classify_risk(self, s: DevGuardState) -> dict[str, Any]:
         risk = classify.classify_risk(s["user_query"])
-        if risk == "high" and self.db_conninfo:            # p6: diagnose first, then ask a human to approve
+        if risk == "high" and self.db_conninfo and s.get("hitl", True):   # p6: diagnose, then ask a human
             return {"risk_level": risk, "route": "read", "escalate": True}
         return {"risk_level": risk, "route": {"prohibited": "refuse", "high": "draft"}.get(risk, "read")}
 
@@ -370,7 +370,7 @@ class Agent:
                 "memory_decision": out.get("memory_decision"), "trace": trace}
 
     async def run(self, *, sub: str, role: str, message: str, context: dict[str, Any] | None = None,
-                  thread_id: str | None = None) -> dict[str, Any]:
+                  thread_id: str | None = None, hitl: bool = True) -> dict[str, Any]:
         """A new run on `thread_id` (or a new thread). With an approval store the thread row is created if absent;
         ownership is checked by the caller (API) before this is called."""
         thread_id, run_id = thread_id or secrets.token_urlsafe(24), str(uuid.uuid4())
@@ -383,7 +383,8 @@ class Agent:
                 store.set_thread(conn, thread_id, "running", run_id)
             await self._db(ensure)
         state: DevGuardState = {"thread_id": thread_id, "run_id": run_id, "user_id": sub, "role": role,
-                                "user_query": message, "sanitized_context": context or {}, "trace": {}}
+                                "user_query": message, "sanitized_context": context or {}, "trace": {},
+                                "hitl": hitl}
         started = time.perf_counter()
         out = await self.graph.ainvoke(state, config={"configurable": {"thread_id": thread_id}})
         if self.db_conninfo and not out.get("__interrupt__") and not out.get("action_result"):

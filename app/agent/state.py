@@ -40,6 +40,7 @@ class DevGuardState(TypedDict, total=False):
     planned_calls: list[list[Any]]           # [tool, args] chosen by select_tools; cleared after execution
     # p6
     escalate: bool                           # high risk with an approval store: draft a ticket after diagnosis
+    hitl: bool                               # False for the one-shot /chat: high risk stays draft-only (P5)
     approval: dict[str, Any] | None          # approval_id, status, expires_at, action (type, target, payload)
     action_result: dict[str, Any] | None     # status (created | already_created | rejected | expired | <code>)
     secret_detected: bool

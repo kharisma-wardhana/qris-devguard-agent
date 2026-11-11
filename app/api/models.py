@@ -59,3 +59,21 @@ class ChatResponse(BaseModel):
     intent: str
     risk_level: str
     answer: dict[str, Any]
+
+
+class MessageResponse(BaseModel):
+    """POST /api/v1/threads/{id}/messages (p6)."""
+    thread_id: str
+    run_id: str
+    status: Literal["completed", "awaiting_approval"]
+    intent: str
+    risk_level: str
+    answer: dict[str, Any]
+    approval: dict[str, Any] | None = None
+
+
+class DecisionRequest(BaseModel):
+    """POST /api/v1/approvals/{id}/decision (p6)."""
+    model_config = _STRICT
+    decision: Literal["approve", "reject"]
+    reason: str | None = Field(None, max_length=500)
