@@ -10,7 +10,7 @@ llm:
   timeout_seconds: 60
   json_retries: 1                      # one retry on malformed JSON, then the deterministic fallback
   enable_thinking: false               # Qwen3 chat template; no reasoning tokens in the answer
-  prompt_version: compose-v1
+  prompt_version: compose-v2           # p8: fenced evidence, preference notes, verified-patterns block
 
 tools:
   mcp_url: http://127.0.0.1:8765/mcp   # configs/mcp.yaml server host/port/path

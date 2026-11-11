@@ -98,6 +98,7 @@ Not changed: `app/validators/*`, the MCP tool argument models, `app/db/store.py`
    - Load preferences and patterns in `run`, apply the `memory_decision` policy, and add the prompt `compose-v2` notes and patterns block.
    - Update `state.py` and `answer.py`.
    - (AC 3, 9, 11)
+   - (As built:) one reason code beyond spec Behaviour §1, `not_saved:store_unavailable`, for a matched phrase when no memory store is configured or the save fails; a memory error never fails a diagnosis. The message response gained `memory_decision` here (it was not returned before P8). `answer_echo` in `state.py` lands with fencing in step 8.
 5. **Tracing core.** `app/observability/tracing.py`: client, no-op, seeded ID, allowlist, mask hook, egress check. (AC 14, 15, 16, 17)
 6. **Agent and MCP spans.**
    - Hook `_timed` and add the generation; MCP call spans in `tools.py`.

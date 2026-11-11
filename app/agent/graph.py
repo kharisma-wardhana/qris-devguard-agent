@@ -40,6 +40,7 @@ from app.agent.state import DevGuardState
 from app.agent.tools import ToolClient
 from app.agent.tools import current_run_id as tool_run_id
 from app.mcp_server import config as mcp_config
+from app.memory import policy as mpolicy
 
 Node = Callable[[DevGuardState], Awaitable[dict[str, Any]]]
 
@@ -110,7 +111,8 @@ class Agent:
                 "approval_status": "not_required", "draft_action": None, "idempotency_key": None, "error": None,
                 "limitations": [], "policy_actions": [], "tool_calls": [], "validator_results": [],
                 "retrieved_chunks": [], "reranked_chunks": [], "evidence_flags": {}, "clarification": [],
-                "planned_calls": [], "escalate": False, "approval": None, "action_result": None}
+                "planned_calls": [], "escalate": False, "approval": None, "action_result": None,
+                "patterns_shown": [], "memory_decision": None}       # p8: per run, never carried from the last run
 
     async def classify_intent(self, s: DevGuardState) -> dict[str, Any]:
         return {"intent": classify.classify_intent(s["user_query"], s["sanitized_context"])}
@@ -219,13 +221,31 @@ class Agent:
             notes.append("Documentation search was unavailable; only validator results are available.")
         evidence = s["reranked_chunks"]
         results = s["validator_results"]
-        user = build_user_turn(s["user_query"], evidence, results, notes)
+        notes += mpolicy.note_lines(s.get("preferences") or {})        # p8: trusted fixed text from configs
+        patterns = await self._patterns(s)
+        user = build_user_turn(s["user_query"], evidence, results, notes, patterns)
         res = await compose(self.llm, SYSTEM_PROMPT, user, {"evidence": evidence, "validator_results": results})
         trace = {"llm": {"prompt_version": PROMPT_VERSION, "attempts": res.attempts, "ms": res.ms, **res.usage,
                          "error": res.error}}
+        shown: dict[str, Any] = {"patterns_shown": [str(p["memory_id"]) for p in patterns]}
+        if patterns:
+            shown["limitations"] = [*s.get("limitations", []), answer.PATTERNS_SHOWN]
         if res.data is None:
-            return {"composed": answer.fallback(results), "evidence_flags": {**flags, "fallback": True}, "trace": trace}
-        return {"composed": res.data, "trace": trace}
+            return {"composed": answer.fallback(results), "evidence_flags": {**flags, "fallback": True}, "trace": trace,
+                    **shown}
+        return {"composed": res.data, "trace": trace, **shown}
+
+    async def _patterns(self, s: DevGuardState) -> list[dict[str, Any]]:
+        """p8: active verified patterns tagged with this run's API family or intent. No store, or a database
+        error, shows none: a diagnosis never fails because of memory."""
+        if not self.db_conninfo:
+            return []
+        from app.memory import store as memory
+        try:
+            return await self._db(lambda conn: memory.patterns_for_run(conn, api_family=s.get("api_family"),
+                                                                       intent=s.get("intent")))
+        except Exception:  # noqa: BLE001 - memory is optional for a diagnosis
+            return []
 
     async def policy_check(self, s: DevGuardState) -> dict[str, Any]:
         if s["route"] != "read":                         # fixed answers (draft) carry no generated claims
@@ -310,7 +330,25 @@ class Agent:
         return {"action_result": result, "tool_calls": calls, "approval_status": status}
 
     async def memory_decision(self, s: DevGuardState) -> dict[str, Any]:
-        return {"memory_decision": "not_saved"}          # TRD §16 default; the policy arrives in P8
+        """TRD §16 / p8 spec Behaviour §1: default no save. Only a configured explicit phrase saves an allowed
+        preference, never when the run's input held a secret; the model takes no part. Patterns are never
+        saved here (they go through the review routes)."""
+        reason, hit = mpolicy.decide(s["user_query"], route=s["route"], secret_detected=bool(s.get("secret_detected")))
+        update: dict[str, Any] = {"memory_decision": reason}
+        if reason == mpolicy.NOT_UNRECOGNISED:
+            update["limitations"] = [*s.get("limitations", []), mpolicy.saveable_hint()]
+        if hit is None:
+            return update
+        if not self.db_conninfo:
+            return {"memory_decision": mpolicy.NOT_STORE}
+        from app.memory import store as memory
+        key, value = hit
+        try:
+            reason, _ = await self._db(memory.save_preference, s["user_id"], key, value, run_id=s["run_id"],
+                                       thread_id=s["thread_id"])
+        except Exception:  # noqa: BLE001 - a failed save never fails the diagnosis
+            return {"memory_decision": mpolicy.NOT_STORE}
+        return {"memory_decision": reason, "preferences": {**(s.get("preferences") or {}), key: value}}
 
     async def finalize(self, s: DevGuardState) -> dict[str, Any]:
         route, final = s["route"], s.get("final_answer")
@@ -331,7 +369,7 @@ class Agent:
             final = answer.with_action(final, s["approval"], s["action_result"])
         if s.get("secret_detected"):
             final["limitations"] = [answer.KEY_WARNING, *final.get("limitations", [])]
-        return {"final_answer": final, "memory_decision": s.get("memory_decision") or "not_saved"}
+        return {"final_answer": final, "memory_decision": s.get("memory_decision") or mpolicy.NOT_ROUTE}
 
     # --- wiring -------------------------------------------------------------------------------
 
@@ -393,13 +431,24 @@ class Agent:
         msg, ctx, found = sanitize(message, context or {})
         state: DevGuardState = {"thread_id": thread_id, "run_id": run_id, "user_id": sub, "role": role,
                                 "user_query": msg, "sanitized_context": ctx, "secret_detected": bool(found),
-                                "trace": {}, "hitl": hitl}
+                                "trace": {}, "hitl": hitl, "preferences": await self._preferences(sub)}
         started = time.perf_counter()
         out = await self.graph.ainvoke(state, config={"configurable": {"thread_id": thread_id}})
         if self.db_conninfo and not out.get("__interrupt__") and not out.get("action_result"):
             from app.db import store
             await self._db(store.set_thread, thread_id, "completed", run_id)
         return self._result(out, started)
+
+    async def _preferences(self, sub: str) -> dict[str, str]:
+        """p8: the caller's own active preferences (owner-scoped, T11). No store, or a database error: none,
+        and the run goes on."""
+        if not self.db_conninfo:
+            return {}
+        from app.memory import store as memory
+        try:
+            return await self._db(memory.get_preferences, sub)
+        except Exception:  # noqa: BLE001
+            return {}
 
     async def resume(self, thread_id: str) -> dict[str, Any]:
         """Continue an interrupted run (after a decision, or after a crash). Exactly-once is enforced by the tool."""

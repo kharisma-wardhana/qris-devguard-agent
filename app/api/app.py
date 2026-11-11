@@ -193,7 +193,8 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
                  (time.perf_counter() - started) * 1000)
 
     def message_out(out: dict[str, Any]) -> dict[str, Any]:
-        return {k: out.get(k) for k in ("thread_id", "run_id", "status", "intent", "risk_level", "answer", "approval")}
+        return {k: out.get(k) for k in ("thread_id", "run_id", "status", "intent", "risk_level", "answer", "approval",
+                                        "memory_decision")}
 
     @app.post("/api/v1/threads", status_code=201)
     async def create_thread(who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:

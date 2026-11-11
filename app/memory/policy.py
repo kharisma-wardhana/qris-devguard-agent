@@ -18,7 +18,8 @@ from app.agent.sanitize import redact_text
 SAVED, UPDATED, UNCHANGED = "saved_preference", "updated_preference", "unchanged_preference"
 NOT_DEFAULT, NOT_SECRET = "not_saved:default", "not_saved:secret_detected"
 NOT_UNRECOGNISED, NOT_ROUTE = "not_saved:unrecognised_preference", "not_saved:route"
-REASONS = (SAVED, UPDATED, UNCHANGED, NOT_DEFAULT, NOT_SECRET, NOT_UNRECOGNISED, NOT_ROUTE)
+NOT_STORE = "not_saved:store_unavailable"          # p8 as built: a matched phrase but no memory store / DB error
+REASONS = (SAVED, UPDATED, UNCHANGED, NOT_DEFAULT, NOT_SECRET, NOT_UNRECOGNISED, NOT_ROUTE, NOT_STORE)
 
 
 def cfg() -> dict[str, Any]:

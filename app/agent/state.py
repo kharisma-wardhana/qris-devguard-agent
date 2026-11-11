@@ -50,3 +50,6 @@ class DevGuardState(TypedDict, total=False):
     policy_actions: list[dict[str, Any]]
     memory_decision: str
     trace: dict[str, Any]                    # node timings (ms), LLM usage
+    # p8
+    preferences: dict[str, str]              # the caller's active preferences: allowed keys and enum values only
+    patterns_shown: list[str]                # memory IDs of verified patterns shown in the prompt (never their text)

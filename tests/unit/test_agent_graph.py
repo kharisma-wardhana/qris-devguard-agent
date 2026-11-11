@@ -48,7 +48,7 @@ def test_contract_and_unique_ids(harness):
     one, two = ask(a, "why is my signature rejected?", SIG_CTX), ask(a, "why is my signature rejected?", SIG_CTX)
     assert set(answer.SECTIONS) <= set(one["answer"])
     assert one["run_id"] != two["run_id"] and one["thread_id"] != two["thread_id"]
-    assert one["memory_decision"] == "not_saved"
+    assert one["memory_decision"] == "not_saved:default"          # p8: a reason code (was "not_saved"); still no save
     assert set(one["trace"]["nodes"]) >= {"sanitize_input", "policy_check", "finalize"}
 
 

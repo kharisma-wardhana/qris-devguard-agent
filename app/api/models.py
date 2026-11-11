@@ -70,6 +70,7 @@ class MessageResponse(BaseModel):
     risk_level: str
     answer: dict[str, Any]
     approval: dict[str, Any] | None = None
+    memory_decision: str | None = None       # p8
 
 
 class DecisionRequest(BaseModel):

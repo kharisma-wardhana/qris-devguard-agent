@@ -5,7 +5,7 @@
 - [x] 1. Dependency, configs and migration `0003` with grants — spec AC: #27
 - [x] 2. Memory policy and store — spec AC: #1, #4, #5, #6, #7, #8, #10
 - [x] 3. Memory routes and feedback route — spec AC: #1, #2, #4, #6, #7, #8, #10, #19
-- [ ] 4. Memory in the graph (`compose-v2`) — spec AC: #3, #9, #11
+- [x] 4. Memory in the graph (`compose-v2`) — spec AC: #3, #9, #11
 - [ ] 5. Tracing core (allowlist, mask hook, no-op, egress) — spec AC: #14, #15, #16, #17
 - [ ] 6. Agent and MCP spans — spec AC: #12, #13, #14, #16
 - [ ] 7. Scores — spec AC: #18, #19, #20
