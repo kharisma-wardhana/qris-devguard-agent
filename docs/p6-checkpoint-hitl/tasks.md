@@ -6,7 +6,7 @@
 - [x] 2. Schema, migrations, actions, store — spec AC: #1, #8, #11
 - [x] 3. The create_support_ticket MCP tool — spec AC: #7, #8
 - [x] 4. Evidence ordering — spec AC: #12
-- [ ] 5. Graph HITL and the PostgreSQL checkpointer — spec AC: #3, #6, #9, #14
+- [x] 5. Graph HITL and the PostgreSQL checkpointer — spec AC: #3, #6, #9, #14
 - [ ] 6. API routes — spec AC: #2, #4, #5
 - [ ] 7. Crash/resume and the secrets dump — spec AC: #10, #11
 - [ ] 8. Live re-measure — spec AC: #12

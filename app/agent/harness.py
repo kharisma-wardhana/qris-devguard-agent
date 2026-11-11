@@ -67,7 +67,8 @@ def build_corpus(workdir: Path):
 
 
 class McpHarness:
-    def __init__(self) -> None:
+    def __init__(self, db_conninfo: str | None = None) -> None:
+        self.db_conninfo = db_conninfo                     # p6: ticket store for create_support_ticket, or none
         self.secret = secrets.token_hex(24)
         self.port = free_port()
         self.url = ""
@@ -91,6 +92,12 @@ class McpHarness:
         store, emb = build_corpus(work / "kb")
         ctx.backends = lambda: (store, emb)
         ctx.reranker = None
+        if self.db_conninfo:
+            from app.db import store
+            info = self.db_conninfo
+            ctx.db = lambda: store.connect(info)
+        else:
+            ctx.db = None
         app = build_app(build_server(self.secret, ctx, port=self.port), port=self.port)
         self._server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=self.port, log_level="warning",
                                                      access_log=False))

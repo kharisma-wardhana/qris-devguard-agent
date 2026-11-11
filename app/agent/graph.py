@@ -1,16 +1,22 @@
-"""The P5 LangGraph agent (TRD §11.2-11.3; p5 spec Behaviour; AC #5, #6, #11-#14).
+"""The LangGraph agent (TRD §11.2-11.4; p5 + p6 specs).
 
   sanitize_input -> classify_intent -> classify_risk
      prohibited -> finalize (refusal)
-     high       -> compose_diagnosis (draft only, no tools) -> policy_check -> memory_decision -> finalize
-     low        -> retrieve_evidence -> rerank_evidence -> validate_evidence
+     high, no approval store (P5 mode) -> compose_diagnosis (draft only, no tools) -> policy_check -> ... -> finalize
+     low, or high with an approval store (P6)
+                -> retrieve_evidence -> rerank_evidence -> validate_evidence
                      version mismatch -> finalize (clarification)
                    -> select_tools
                      missing argument -> finalize (clarification)
-                   -> execute_read_tools -> compose_diagnosis -> policy_check -> memory_decision -> finalize
+                   -> execute_read_tools -> compose_diagnosis -> policy_check
+                     high (escalate) -> draft_action -> request_human_approval [interrupt]
+                                        -> execute_approved_action -> memory_decision -> finalize
+                     otherwise       -> memory_decision -> finalize
 
 No model chooses a node, a tool or a tool argument. The model only writes prose in compose_diagnosis.
-P5 compiles with InMemorySaver; P6 swaps in the PostgreSQL checkpointer and adds the approval nodes.
+draft_action creates the approval (idempotent) and is checkpointed before request_human_approval interrupts;
+on resume only the interrupting node re-runs. execute_approved_action reads the decision from the database
+(authoritative), never from the resume payload, and the MCP tool enforces exactly-once by idempotency key.
 """
 
 from __future__ import annotations
@@ -21,13 +27,15 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import anyio
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
 
 from app.agent import answer, classify, config, policy
 from app.agent.llm import compose
 from app.agent.prompts import PROMPT_VERSION, SYSTEM_PROMPT, build_user_turn
-from app.agent.sanitize import sanitize
+from app.agent.sanitize import redact_text, sanitize
 from app.agent.state import DevGuardState
 from app.agent.tools import ToolClient
 from app.mcp_server import config as mcp_config
@@ -79,9 +87,11 @@ def order_evidence(chunks: list[dict[str, Any]], *, api_family: str | None, endp
 
 
 class Agent:
-    def __init__(self, tools: ToolClient, llm: Any, checkpointer: Any | None = None) -> None:
+    def __init__(self, tools: ToolClient, llm: Any, checkpointer: Any | None = None,
+                 db_conninfo: str | None = None) -> None:
         self.tools = tools
         self.llm = llm
+        self.db_conninfo = db_conninfo                     # p6: approval store; None = P5 draft-only mode
         self.checkpointer = checkpointer or InMemorySaver()
         self.graph = self._build().compile(checkpointer=self.checkpointer)
 
@@ -97,13 +107,15 @@ class Agent:
                 "approval_status": "not_required", "draft_action": None, "idempotency_key": None, "error": None,
                 "limitations": [], "policy_actions": [], "tool_calls": [], "validator_results": [],
                 "retrieved_chunks": [], "reranked_chunks": [], "evidence_flags": {}, "clarification": [],
-                "planned_calls": []}
+                "planned_calls": [], "escalate": False, "approval": None, "action_result": None}
 
     async def classify_intent(self, s: DevGuardState) -> dict[str, Any]:
         return {"intent": classify.classify_intent(s["user_query"], s["sanitized_context"])}
 
     async def classify_risk(self, s: DevGuardState) -> dict[str, Any]:
         risk = classify.classify_risk(s["user_query"])
+        if risk == "high" and self.db_conninfo:            # p6: diagnose first, then ask a human to approve
+            return {"risk_level": risk, "route": "read", "escalate": True}
         return {"risk_level": risk, "route": {"prohibited": "refuse", "high": "draft"}.get(risk, "read")}
 
     async def retrieve_evidence(self, s: DevGuardState) -> dict[str, Any]:
@@ -218,6 +230,79 @@ class Agent:
                                       flags=s["evidence_flags"], code=code)
         return {"final_answer": final, "policy_actions": actions}
 
+    # --- p6: approval and the one side effect ---------------------------------------------------
+
+    async def _db(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        from app.db import store
+
+        def call() -> Any:
+            with store.connect(self.db_conninfo) as conn:
+                return fn(conn, *args, **kwargs)
+        return await anyio.to_thread.run_sync(call)
+
+    def _ticket_payload(self, s: DevGuardState) -> dict[str, Any]:
+        lim = config.agent()["ticket_draft"]
+        final = s.get("final_answer") or {}
+        first = next((ln.strip() for ln in s["user_query"].splitlines() if ln.strip()), "support request")
+        cites = sorted({src["citation_id"] for src in final.get("sources", [])})
+        vals = [f"VAL-{i}" for i, r in enumerate(s["validator_results"]) if answer.decisive(r)]
+        # "tool -> result", not "tool: result": `validate_test_signature: X` reads as a `signature: value` secret pair
+        checks = "; ".join(f"{v['tool']} -> {v['result']}" for v in final.get("validation_results", [])) or "none"
+        body = (f"Question: {s['user_query']}\n\nDiagnosis: {final.get('summary', '')}\n\nValidation: {checks}")
+        # The tool refuses secret-looking text; redact with the same rules before hashing so the approved payload
+        # is exactly what the tool will accept and store.
+        title = redact_text(f"Escalation: {first}"[: lim["title_max_chars"]])[0]
+        return {"title": title[: lim["title_max_chars"]], "body": redact_text(body[: lim["body_max_chars"]])[0][: lim["body_max_chars"]],
+                "evidence_ids": (cites + vals)[: lim["max_evidence_ids"]], "priority": lim["default_priority"]}
+
+    async def draft_action(self, s: DevGuardState) -> dict[str, Any]:
+        """Draft the ticket and create its pending approval (idempotent), or stay draft-only for a role that may
+        not use create_support_ticket. Checkpointed before request_human_approval interrupts."""
+        from app.db import actions, store
+
+        payload = self._ticket_payload(s)
+        if s["role"] not in mcp_config.tool_roles(actions.ACTION_TYPE):
+            final = dict(s.get("final_answer") or {})
+            final["limitations"] = [*final.get("limitations", []),
+                                    "Your role may not create sandbox tickets; this is a draft only."]
+            final["draft"] = {"action": actions.ACTION_TYPE, "status": "draft_only", "payload": actions.normalize(payload)}
+            return {"final_answer": final, "escalate": False}
+        ttl = mcp_config.security()["approval_ttl_minutes"]
+        row = await self._db(store.get_or_create_pending, thread_id=s["thread_id"], run_id=s["run_id"],
+                             requester_id=s["user_id"], requester_role=s["role"], payload=payload, ttl_minutes=ttl)
+        await self._db(store.set_thread, s["thread_id"], "awaiting_approval", s["run_id"])
+        approval = {"approval_id": str(row["approval_id"]), "status": row["status"],
+                    "expires_at": row["expires_at"].isoformat(), "action_hash": row["action_hash"],
+                    "action": {"type": actions.ACTION_TYPE, "target": "local sandbox_tickets table",
+                               "payload": dict(row["action_payload"])}}
+        return {"approval": approval, "approval_status": "pending", "draft_action": approval["action"]}
+
+    async def request_human_approval(self, s: DevGuardState) -> dict[str, Any]:
+        # Pauses here until /approvals/{id}/decision (or /threads/{id}/resume) resumes the thread. The resume
+        # value is ignored: execute_approved_action reads the decision from the database.
+        interrupt({"approval_id": s["approval"]["approval_id"], "action": s["approval"]["action"]})
+        return {"approval_status": "decided"}
+
+    async def execute_approved_action(self, s: DevGuardState) -> dict[str, Any]:
+        from app.db import actions, store
+
+        appr = await self._db(store.get_approval, s["approval"]["approval_id"])
+        status = appr["status"] if appr else "missing"
+        result: dict[str, Any] = {"approval_status": status}
+        calls = list(s["tool_calls"])
+        if status in ("approved", "executed"):                # executed: a crash after the insert; tool says so
+            payload = dict(appr["action_payload"])
+            args = {"approval_id": str(appr["approval_id"]), "thread_id": s["thread_id"], **payload,
+                    "idempotency_key": actions.idempotency_key(s["thread_id"], payload)}
+            (res,) = await self.tools.call(s["user_id"], s["role"], [(actions.ACTION_TYPE, args)])
+            calls.append({"tool": res.tool, "outcome": res.error_code or "OK", "ms": res.ms})
+            result.update({"status": res.data.get("status") if res.ok else res.error_code,
+                           "ticket_id": res.data.get("ticket_id") if res.ok else None})
+        else:
+            result["status"] = {"rejected": "rejected", "expired": "expired"}.get(status, "not_executed")
+        await self._db(store.set_thread, s["thread_id"], "completed", s["run_id"])
+        return {"action_result": result, "tool_calls": calls, "approval_status": status}
+
     async def memory_decision(self, s: DevGuardState) -> dict[str, Any]:
         return {"memory_decision": "not_saved"}          # TRD §16 default; the policy arrives in P8
 
@@ -236,6 +321,8 @@ class Agent:
         final = dict(final or answer.abstention("No answer was produced."))
         if route == "read" and s.get("limitations"):
             final["limitations"] = list(dict.fromkeys([*final.get("limitations", []), *s["limitations"]]))
+        if s.get("action_result"):
+            final = answer.with_action(final, s["approval"], s["action_result"])
         if s.get("secret_detected"):
             final["limitations"] = [answer.KEY_WARNING, *final.get("limitations", [])]
         return {"final_answer": final, "memory_decision": s.get("memory_decision") or "not_saved"}
@@ -246,7 +333,7 @@ class Agent:
         g = StateGraph(DevGuardState)
         names = ["sanitize_input", "classify_intent", "classify_risk", "retrieve_evidence", "rerank_evidence",
                  "validate_evidence", "select_tools", "execute_read_tools", "compose_diagnosis", "policy_check",
-                 "memory_decision", "finalize"]
+                 "draft_action", "request_human_approval", "execute_approved_action", "memory_decision", "finalize"]
         for n in names:
             g.add_node(n, _timed(n, getattr(self, n)))
         g.add_edge(START, "sanitize_input")
@@ -260,19 +347,64 @@ class Agent:
         g.add_conditional_edges("select_tools", lambda s: s["route"], {"clarify": "finalize", "read": "execute_read_tools"})
         g.add_edge("execute_read_tools", "compose_diagnosis")
         g.add_edge("compose_diagnosis", "policy_check")
-        g.add_edge("policy_check", "memory_decision")
+        g.add_conditional_edges("policy_check", lambda s: "draft_action" if s.get("escalate") else "memory_decision",
+                                {"draft_action": "draft_action", "memory_decision": "memory_decision"})
+        g.add_conditional_edges("draft_action", lambda s: "request_human_approval" if s.get("approval") else "memory_decision",
+                                {"request_human_approval": "request_human_approval", "memory_decision": "memory_decision"})
+        g.add_edge("request_human_approval", "execute_approved_action")
+        g.add_edge("execute_approved_action", "memory_decision")
         g.add_edge("memory_decision", "finalize")
         g.add_edge("finalize", END)
         return g
 
-    async def run(self, *, sub: str, role: str, message: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
-        thread_id, run_id = secrets.token_urlsafe(24), str(uuid.uuid4())
+    @staticmethod
+    def _result(out: dict[str, Any], started: float) -> dict[str, Any]:
+        trace = {**out.get("trace", {}), "total_ms": int((time.perf_counter() - started) * 1000)}
+        waiting = bool(out.get("__interrupt__"))
+        return {"run_id": out["run_id"], "thread_id": out["thread_id"], "intent": out["intent"],
+                "risk_level": out["risk_level"], "route": out["route"],
+                "status": "awaiting_approval" if waiting else "completed",
+                "approval": out.get("approval"), "action_result": out.get("action_result"),
+                "answer": out["final_answer"], "tool_calls": out.get("tool_calls", []),
+                "policy_actions": out.get("policy_actions", []), "evidence_flags": out.get("evidence_flags", {}),
+                "memory_decision": out.get("memory_decision"), "trace": trace}
+
+    async def run(self, *, sub: str, role: str, message: str, context: dict[str, Any] | None = None,
+                  thread_id: str | None = None) -> dict[str, Any]:
+        """A new run on `thread_id` (or a new thread). With an approval store the thread row is created if absent;
+        ownership is checked by the caller (API) before this is called."""
+        thread_id, run_id = thread_id or secrets.token_urlsafe(24), str(uuid.uuid4())
+        if self.db_conninfo:
+            from app.db import store
+
+            def ensure(conn: Any) -> None:
+                if store.thread_owner(conn, thread_id) is None:
+                    store.create_thread(conn, thread_id, sub)
+                store.set_thread(conn, thread_id, "running", run_id)
+            await self._db(ensure)
         state: DevGuardState = {"thread_id": thread_id, "run_id": run_id, "user_id": sub, "role": role,
                                 "user_query": message, "sanitized_context": context or {}, "trace": {}}
         started = time.perf_counter()
         out = await self.graph.ainvoke(state, config={"configurable": {"thread_id": thread_id}})
-        trace = {**out.get("trace", {}), "total_ms": int((time.perf_counter() - started) * 1000)}
-        return {"run_id": run_id, "thread_id": thread_id, "intent": out["intent"], "risk_level": out["risk_level"],
-                "route": out["route"], "answer": out["final_answer"], "tool_calls": out.get("tool_calls", []),
-                "policy_actions": out.get("policy_actions", []), "evidence_flags": out.get("evidence_flags", {}),
-                "memory_decision": out.get("memory_decision"), "trace": trace}
+        if self.db_conninfo and not out.get("__interrupt__") and not out.get("action_result"):
+            from app.db import store
+            await self._db(store.set_thread, thread_id, "completed", run_id)
+        return self._result(out, started)
+
+    async def resume(self, thread_id: str) -> dict[str, Any]:
+        """Continue an interrupted run (after a decision, or after a crash). Exactly-once is enforced by the tool."""
+        started = time.perf_counter()
+        out = await self.graph.ainvoke(Command(resume={"resumed": True}),
+                                       config={"configurable": {"thread_id": thread_id}})
+        return self._result(out, started)
+
+    async def snapshot(self, thread_id: str) -> dict[str, Any] | None:
+        """The thread's latest state: waiting for approval, or the last run's answer. None for an unknown thread."""
+        snap = await self.graph.aget_state({"configurable": {"thread_id": thread_id}})
+        v = snap.values if snap else None
+        if not v:
+            return None
+        waiting = any(getattr(t, "interrupts", None) for t in (snap.tasks or ()))
+        return {"thread_id": thread_id, "run_id": v.get("run_id"),
+                "status": "awaiting_approval" if waiting else "completed", "approval": v.get("approval"),
+                "action_result": v.get("action_result"), "answer": v.get("final_answer")}
