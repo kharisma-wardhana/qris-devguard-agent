@@ -7,7 +7,7 @@
 - [x] 3. Thread history — spec AC: #2, #5
 - [x] 4. Alert receiver — spec AC: #6, #7, #8, #9, #10, #11, #12
 - [x] 5. Alert reader and route — spec AC: #4, #5
-- [ ] 6. Compose service and Langfuse whitelist — spec AC: #20
+- [x] 6. Compose service and Langfuse whitelist — spec AC: #20
 - [ ] 7. UI client and rendering — spec AC: #14, #15, #17
 - [ ] 8. Streamlit pages and launcher — spec AC: #13, #15, #16, #18, #19
 - [ ] 9. CI job for UI tests — spec AC: #13–#19

@@ -28,6 +28,7 @@ def to_mib(limit: str) -> float:
 def test_exactly_the_specified_services():
     assert set(SERVICES) == {
         "postgres", "qdrant", "clickhouse", "minio", "redis", "langfuse-worker", "langfuse-web",
+        "alert-receiver",                                  # p9 (docs/p9-demo-ui-alerts/spec.md Behaviour §5)
     }
 
 
@@ -154,3 +155,31 @@ def test_api_server_refuses_a_non_loopback_host(monkeypatch, capsys):
     assert mod.main(["--port", "1"]) == 1
     assert "loopback only" in capsys.readouterr().err
 
+
+
+# --- p9: alert webhook receiver (docs/p9-demo-ui-alerts/spec.md Behaviour §5, AC #20; threat T18) -------------
+
+def test_alert_receiver_has_no_host_port_and_is_hardened():
+    svc = SERVICES["alert-receiver"]
+    assert "ports" not in svc and "network_mode" not in svc       # compose network only
+    assert svc["profiles"] == ["alerts"]                            # started on demand
+    assert svc["user"] == "65534:65534" and svc["read_only"] is True
+    assert svc["cap_drop"] == ["ALL"] and "no-new-privileges" in svc["security_opt"]
+    assert svc["command"] == ["python", "-I", "/app/receiver.py"]
+    env = svc["environment"]
+    assert env["ALERT_PORT"] == "80" and env["ALERT_BIND"] == "all" and env["ALERT_STORE"] == "/data/alerts.jsonl"
+    assert env["LANGFUSE_ALERT_WEBHOOK_SECRET"].startswith("${LANGFUSE_ALERT_WEBHOOK_SECRET:?")
+
+
+def test_alert_receiver_mounts_only_its_script_read_only_and_the_store():
+    vols = SERVICES["alert-receiver"]["volumes"]
+    assert vols == ["./app/alerts/receiver.py:/app/receiver.py:ro", "./var/alerts:/data"]
+
+
+def test_langfuse_webhook_whitelist_is_exactly_the_receiver():
+    for name in ("langfuse-web", "langfuse-worker"):
+        env = SERVICES[name]["environment"]
+        assert env["LANGFUSE_WEBHOOK_WHITELISTED_HOST"] == "alert-receiver"
+        for wider in ("LANGFUSE_WEBHOOK_WHITELISTED_IPS", "LANGFUSE_WEBHOOK_WHITELISTED_IP_SEGMENTS"):
+            assert wider not in env
+    assert "alert-receiver" in COMPOSE_TEXT.split("services:")[0]   # set once, in the shared Langfuse env
