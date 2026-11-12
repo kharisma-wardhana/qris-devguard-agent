@@ -10,7 +10,7 @@
 - [x] 6. Agent and MCP spans — spec AC: #12, #13, #14, #16
 - [x] 7. Scores — spec AC: #18, #19, #20
 - [x] 8. Fencing and the marker scan — spec AC: #21, #22, #23, #24
-- [ ] 9. Retention command — spec AC: #5, #26, #27
+- [x] 9. Retention command — spec AC: #5, #26, #27
 - [ ] 10. Alerts in the local Langfuse (controlled test) — spec AC: #25
 - [ ] 11. Live pod session (echo before/after, live traces) — spec AC: #23
 - [ ] 12. Report and docs — spec AC: #25, #28

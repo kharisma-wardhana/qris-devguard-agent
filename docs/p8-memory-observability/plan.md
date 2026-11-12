@@ -141,6 +141,11 @@ Not changed: `app/validators/*`, the MCP tool argument models, `app/db/store.py`
      - **Measured on 2026-11-12** (local Qdrant, retrievable documents): 3 sentences in 2 of 278 chunks. That is 2 `secret_variable` in `snap-technical-security-standard` and 1 `tool_invocation` in `synthetic-qris-troubleshooting-sop`; the SOP one is the false positive "Run `validate_test_signature` with the fixture ID."
      - **`eval_agent.py` in CI mode:** 5/5 flows passed with zero fenced sentences.
 9. **Retention.** `app/db/retention.py`, `scripts/purge_retention.py`. (AC 5, 26, 27)
+   - (As built:)
+     - **Checkpoints are dated by their thread.** LangGraph's checkpoint tables have no timestamp, so a checkpoint's age is its thread's `updated_at`. A checkpoint with no thread row is left alone.
+     - **One transaction.** The purge runs as one transaction in foreign-key order. As `devguard_app`, which may delete checkpoints because LangGraph needs to, it fails on the first table it can't delete from and its checkpoint deletes roll back.
+     - **The dry run is exact.** `--dry-run` runs the same deletes and rolls back, because an approval only becomes deletable once its ticket is gone, so separate counts would be wrong.
+     - **Pending approvals are never purged.** Their threads are kept with them.
 10. **Alerts in the local Langfuse.** All on loopback; no pod needed: the p95 alert fires with the delay.
     - **Me:** check that the API sends traces to the local Langfuse, and write `alerts.md`.
     - **You:** create the two alerts in the Langfuse UI (it needs your admin login, which I don't read).
