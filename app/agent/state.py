@@ -53,3 +53,4 @@ class DevGuardState(TypedDict, total=False):
     # p8
     preferences: dict[str, str]              # the caller's active preferences: allowed keys and enum values only
     patterns_shown: list[str]                # memory IDs of verified patterns shown in the prompt (never their text)
+    answer_echo: bool | None                 # composed answer had instruction-shaped text before fencing; None = not composed

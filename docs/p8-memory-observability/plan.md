@@ -131,6 +131,15 @@ Not changed: `app/validators/*`, the MCP tool argument models, `app/db/store.py`
    - `app/agent/fence.py` wired into `compose_diagnosis`, with `answer_echo` measured before the answer fence.
    - `scripts/scan_markers.py`; `eval_security.py` records pre-fence echo.
    - (AC 21, 22, 23 CI part, 24)
+   - (As built:)
+     - **Sentence splitting.** Sentences split at end punctuation or a blank line, never at a single newline: corpus excerpts are hard-wrapped, and splitting at newlines let a wrapped attack sentence pass unmatched (found by the planted-text test).
+     - **Two marker regexes widened** in `configs/security.yaml`, still generic categories rather than P7 canaries: `override` accepts a possessive ("ignore its previous instructions"), and `secret_variable` accepts underscores in the prefix (`MCP_AUTH_SECRET`). The threat model is updated in step 12.
+     - **Patterns are fenced too.** Verified patterns get the same prompt-side replacement as evidence.
+     - **A summary removed entirely** gets a fixed line.
+     - **The run's `trace`** gains `fence` counts (evidence and answer sentences), and the run result gains `answer_echo`.
+     - **`scripts/scan_markers.py`** gets a `--harness` mode, so the subprocess test needs no services, plus a hidden test-only `--plant`. It scans whole chunks, so its count is an upper bound for the prompt.
+     - **Measured on 2026-11-12** (local Qdrant, retrievable documents): 3 sentences in 2 of 278 chunks. That is 2 `secret_variable` in `snap-technical-security-standard` and 1 `tool_invocation` in `synthetic-qris-troubleshooting-sop`; the SOP one is the false positive "Run `validate_test_signature` with the fixture ID."
+     - **`eval_agent.py` in CI mode:** 5/5 flows passed with zero fenced sentences.
 9. **Retention.** `app/db/retention.py`, `scripts/purge_retention.py`. (AC 5, 26, 27)
 10. **Alerts in the local Langfuse.** All on loopback; no pod needed: the p95 alert fires with the delay.
     - **Me:** check that the API sends traces to the local Langfuse, and write `alerts.md`.

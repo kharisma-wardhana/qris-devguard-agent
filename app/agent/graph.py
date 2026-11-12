@@ -32,7 +32,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-from app.agent import answer, classify, config, policy
+from app.agent import answer, classify, config, fence, policy
 from app.agent.llm import compose
 from app.agent.prompts import PROMPT_VERSION, SYSTEM_PROMPT, build_user_turn
 from app.agent.sanitize import redact_text, sanitize
@@ -124,7 +124,7 @@ class Agent:
                 "limitations": [], "policy_actions": [], "tool_calls": [], "validator_results": [],
                 "retrieved_chunks": [], "reranked_chunks": [], "evidence_flags": {}, "clarification": [],
                 "planned_calls": [], "escalate": False, "approval": None, "action_result": None,
-                "patterns_shown": [], "memory_decision": None}       # p8: per run, never carried from the last run
+                "patterns_shown": [], "memory_decision": None, "answer_echo": None}       # p8: per run, never carried from the last run
 
     async def classify_intent(self, s: DevGuardState) -> dict[str, Any]:
         return {"intent": classify.classify_intent(s["user_query"], s["sanitized_context"])}
@@ -235,10 +235,13 @@ class Agent:
         results = s["validator_results"]
         notes += mpolicy.note_lines(s.get("preferences") or {})        # p8: trusted fixed text from configs
         patterns = await self._patterns(s)
-        user = build_user_turn(s["user_query"], evidence, results, notes, patterns)
+        # p8 (spec Behaviour §4): marker sentences replaced in the prompt only; `sources` keep the original quote
+        prompt_evidence, fenced_in = fence.fence_evidence(evidence)
+        user = build_user_turn(s["user_query"], prompt_evidence, results, notes, fence.fence_patterns(patterns))
         with self.tracer.generation("llm.compose", model=config.served_model_name(),
                                     prompt_version=PROMPT_VERSION) as gen:
-            res = await compose(self.llm, SYSTEM_PROMPT, user, {"evidence": evidence, "validator_results": results})
+            res = await compose(self.llm, SYSTEM_PROMPT, user, {"evidence": prompt_evidence,
+                                                                "validator_results": results})
             gen.usage(res.usage.get("prompt_tokens", 0), res.usage.get("completion_tokens", 0))
             gen.set(attempts=res.attempts, fallback=res.data is None, ms=res.ms, error_code=res.error)
         trace = {"llm": {"prompt_version": PROMPT_VERSION, "attempts": res.attempts, "ms": res.ms, **res.usage,
@@ -246,10 +249,14 @@ class Agent:
         shown: dict[str, Any] = {"patterns_shown": [str(p["memory_id"]) for p in patterns]}
         if patterns:
             shown["limitations"] = [*s.get("limitations", []), answer.PATTERNS_SHOWN]
-        if res.data is None:
+        if res.data is None:                             # code-built fallback: no model text to echo
+            trace["fence"] = {"evidence_sentences": fenced_in, "answer_sentences": 0}
             return {"composed": answer.fallback(results), "evidence_flags": {**flags, "fallback": True}, "trace": trace,
-                    **shown}
-        return {"composed": res.data, "trace": trace, **shown}
+                    "answer_echo": False, **shown}
+        echo = fence.echoes(res.data)                    # measured before the answer fence (answer_echo score)
+        composed, removed = fence.fence_answer(res.data)
+        trace["fence"] = {"evidence_sentences": fenced_in, "answer_sentences": removed}
+        return {"composed": composed, "trace": trace, "answer_echo": echo, **shown}
 
     async def _patterns(self, s: DevGuardState) -> list[dict[str, Any]]:
         """p8: active verified patterns tagged with this run's API family or intent. No store, or a database
@@ -427,7 +434,7 @@ class Agent:
                 "approval": out.get("approval"), "action_result": out.get("action_result"),
                 "answer": out["final_answer"], "tool_calls": out.get("tool_calls", []),
                 "policy_actions": out.get("policy_actions", []), "evidence_flags": out.get("evidence_flags", {}),
-                "memory_decision": out.get("memory_decision"), "trace": trace}
+                "memory_decision": out.get("memory_decision"), "answer_echo": out.get("answer_echo"), "trace": trace}
 
     async def run(self, *, sub: str, role: str, message: str, context: dict[str, Any] | None = None,
                   thread_id: str | None = None, hitl: bool = True) -> dict[str, Any]:

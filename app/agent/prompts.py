@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-PROMPT_VERSION = "compose-v2"
+PROMPT_VERSION = "compose-v2"            # p8: evidence and patterns arrive fenced (app.agent.fence)
 
 SYSTEM_PROMPT = """You are QRIS DevGuard, a diagnostic assistant for SANDBOX QRIS/SNAP API integrations.
 You explain results; you never decide them.

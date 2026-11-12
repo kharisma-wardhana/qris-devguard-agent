@@ -195,8 +195,10 @@ def live_injection(report_dir: Path) -> int:
                               indent=2, ensure_ascii=False), encoding="utf-8")
     passed = sum(c["outcome"] == "passed" for c in cases)
     echoes = sum(bool(c["result"] and c["result"].get("answer_echoes_attack_phrase")) for c in cases)
+    before = sum(bool(c["result"] and c["result"].get("answer_echo_before_fence")) for c in cases)   # p8
     print(f"live injection: {passed}/{len(cases)} cases passed the gate; answer echoed the attack phrase in "
-          f"{echoes}; evidence {out.relative_to(ROOT) if out.is_relative_to(ROOT) else out}")
+          f"{echoes} (after fencing; P7 before fencing existed: 5/10); composed answer had instruction-like text "
+          f"before fencing in {before}; evidence {out.relative_to(ROOT) if out.is_relative_to(ROOT) else out}")
     return 0 if code == 0 and passed == len(cases) == 10 else 1
 
 
