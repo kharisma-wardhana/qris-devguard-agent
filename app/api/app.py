@@ -17,9 +17,9 @@ import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Path, Request
+from fastapi import Depends, FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
@@ -49,6 +49,7 @@ MESSAGES = {
 }
 THREAD_ID = r"^[A-Za-z0-9_-]{16,64}$"
 APPROVAL_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+LIST_LIMIT = 50                                             # p9: thread, approval and history lists
 
 
 def approval_view(row: dict[str, Any]) -> dict[str, Any]:
@@ -226,6 +227,14 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         log_route("/api/v1/threads", sub, role, "created", started)
         return {"thread_id": thread_id, "status": "idle"}
 
+    @app.get("/api/v1/threads")
+    async def list_threads(who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        """p9 (spec Behaviour §2, AC #1): the caller's own threads only, newest first."""
+        from app.db import store
+        rows = await db(store.list_threads, who[0], LIST_LIMIT)
+        return {"threads": [{"thread_id": r["thread_id"], "status": r["status"], "created_at": iso(r["created_at"]),
+                             "updated_at": iso(r["updated_at"])} for r in rows]}
+
     @app.post("/api/v1/threads/{thread_id}/messages", response_model=MessageResponse)
     async def post_message(body: ChatRequest, thread_id: str = Path(pattern=THREAD_ID),
                            who: tuple[str, str] = Depends(run_identity)) -> dict[str, Any]:
@@ -256,6 +265,16 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         if row is None or (row["requester_id"] != sub and role not in approver_roles):
             raise ApiError(404, "NOT_FOUND")
         return approval_view(row)
+
+    @app.get("/api/v1/approvals")
+    async def list_approvals(status: Literal["pending"] = Query(), who: tuple[str, str] = Depends(other_identity)
+                             ) -> dict[str, Any]:
+        """p9 (spec Behaviour §4, AC #3): an approver's queue. Only status=pending; approver roles only."""
+        from app.db import store
+        if who[1] not in approver_roles:
+            raise ApiError(403, "FORBIDDEN")
+        rows = await db(store.pending_approvals, LIST_LIMIT)
+        return {"approvals": [approval_view(r) for r in rows]}
 
     @app.post("/api/v1/approvals/{approval_id}/decision")
     async def decide(body: DecisionRequest, approval_id: str = Path(pattern=APPROVAL_ID),
