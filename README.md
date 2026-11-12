@@ -87,3 +87,17 @@ uv run python scripts/purge_audit.py                                  # audit ro
 ```
 
 The API and the MCP server now connect to PostgreSQL as least-privilege roles, and refuse to start without their role passwords rather than fall back to the owner. Every MCP tool call is audited. Both servers rate-limit (per address before auth, per subject after) and refuse oversized bodies, and outbound destinations are checked at start-up. Evidence and the measured go-live checklist are in [`docs/p7-mcp-hardening/security-report.md`](docs/p7-mcp-hardening/security-report.md).
+
+## Memory, tracing and retention (P8)
+
+```bash
+uv run python scripts/db_migrate.py                                   # adds the memory tables (migration 0003)
+uv run python scripts/purge_retention.py --dry-run                    # what retention would delete, counts only
+uv run python scripts/purge_retention.py                              # delete it (owner role)
+uv run python scripts/scan_markers.py                                 # fencing false-positive count over the corpus
+```
+
+Saving memory is opt-in. A user saves a preference (`language`: `id`/`en`, `detail`: `brief`/`detailed`) with `PUT /api/v1/memory/preferences/{key}` or a fixed chat phrase such as `remember: answer in Indonesian`. Team troubleshooting patterns are proposed with `POST /api/v1/memory/patterns` and are shown to the model only after a different support engineer or admin approves them, as untrusted notes that are never cited.
+
+With real `LANGFUSE_*` keys in `.env` and the local Langfuse running, every run is one trace with node, LLM, MCP-call and retrieval spans, plus deterministic scores (`citation_valid`, `answer_supported`, `tool_success`, `policy_pass`, `answer_echo`, `incident_event`, and `user_feedback` from `POST /api/v1/threads/{id}/feedback`). Spans carry IDs, codes and timings only, never message, answer or document text. The alert setup and its controlled test are in [`docs/p8-memory-observability/alerts.md`](docs/p8-memory-observability/alerts.md), and measured results are in [`observability-report.md`](docs/p8-memory-observability/observability-report.md).
+

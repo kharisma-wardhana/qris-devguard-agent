@@ -51,6 +51,18 @@ def thread_owner(conn: psycopg.Connection, thread_id: str) -> str | None:
     return row["owner_id"] if row else None
 
 
+def list_threads(conn: psycopg.Connection, owner_id: str, limit: int) -> list[dict[str, Any]]:
+    """p9: the owner's threads only, most recently updated first (agent_threads_owner index)."""
+    return conn.execute("SELECT thread_id, status, created_at, updated_at FROM agent_threads WHERE owner_id = %s "
+                        "ORDER BY updated_at DESC, thread_id LIMIT %s", (owner_id, limit)).fetchall()
+
+
+def pending_approvals(conn: psycopg.Connection, limit: int) -> list[dict[str, Any]]:
+    """p9: pending approvals, newest first, for an approver's queue. Expiry is still enforced by decide()."""
+    return conn.execute("SELECT * FROM approval_requests WHERE status = 'pending' ORDER BY created_at DESC, "
+                        "approval_id LIMIT %s", (limit,)).fetchall()
+
+
 def set_thread(conn: psycopg.Connection, thread_id: str, status: str, run_id: str | None = None) -> None:
     with conn.transaction():
         conn.execute("UPDATE agent_threads SET status = %s, last_run_id = COALESCE(%s::uuid, last_run_id), "

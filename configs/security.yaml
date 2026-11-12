@@ -83,3 +83,20 @@ citations:
     reference_only: 300     # public documents with no published terms: short quotes only
     team_authored: 1000     # synthetic documents; the SYNTHETIC label must stay attached
   label_synthetic: true
+
+# p8: answer-echo fencing (docs/p8-memory-observability/spec.md §4). Generic categories of instruction-shaped
+# text, not the P7 test canaries. A sentence matching one is removed from evidence excerpts before the prompt
+# (sources keep the original quote) and from generated answer text. Case-insensitive.
+injection_markers:
+  override: '\b(?:ignore|disregard|forget|override)\s+(?:all\s+|any\s+|the\s+|its\s+|your\s+|my\s+|their\s+)?(?:previous|prior|above|earlier|system)\s+(?:instructions?|rules?|prompts?)\b|\bsystem\s+override\b|\byou\s+are\s+now\b|\bnew\s+instructions?\s*:'
+  approval_claim: '\bpre-?(?:approved|authori[sz]ed|granted)\b|\b(?:approval|permission)\s+(?:is\s+|has\s+been\s+)?(?:already\s+)?granted\b|\balready\s+(?:approved|authori[sz]ed)\b'
+  tool_invocation: '\b(?:call|run|execute|invoke|trigger)\s+(?:the\s+)?(?:tool\s+)?`?[a-z]+_[a-z_]+`?\s*(?:\(|tool\b|now\b|with\b)|\b(?:drop|delete\s+from|insert\s+into|update)\s+(?:table\s+)?[a-z_]+\s*(?:;|set\b|values\b)'
+  secret_variable: '(?-i:\b[A-Z][A-Z0-9_]*_(?:API_KEY|SECRET(?:_KEY)?|TOKEN|PASSWORD)\b)'   # case-sensitive: lowercase access_token is ordinary spec text
+  internal_address: '\bcomputeMetadata\b|\bmetadata\.google\.internal\b|\b169\.254\.\d{1,3}\.\d{1,3}\b|\blocalhost:\d{2,5}\b'
+
+# p8: pattern text is refused (not redacted) when it looks like a secret or personal data (spec §1).
+# redact_fields and redact_patterns above apply as well.
+pattern_refusal:
+  email: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+  phone: '(?<!\d)(?:\+?62|0)8\d{7,11}(?!\d)'
+  long_digit_run: '(?<!\d)\d{10,}(?!\d)'

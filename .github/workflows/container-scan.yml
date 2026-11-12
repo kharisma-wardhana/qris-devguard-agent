@@ -29,6 +29,7 @@ jobs:
           - { name: redis, image: "docker.io/library/redis:7.4.12" }
           - { name: langfuse-worker, image: "docker.io/langfuse/langfuse-worker:4.76.0" }
           - { name: langfuse, image: "docker.io/langfuse/langfuse:4.76.0" }
+          - { name: alert-receiver, image: "docker.io/library/python:3.11.14-slim-bookworm" }   # p9
     steps:
       - uses: actions/checkout@v4
       - name: Image is still in docker-compose.yml

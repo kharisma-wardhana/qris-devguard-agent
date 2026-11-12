@@ -13,6 +13,8 @@ SECTIONS = ("summary", "findings", "validation_results", "next_steps", "sources"
 VALIDATORS = ("validate_test_signature", "validate_request_payload", "lookup_response_code")
 KEY_WARNING = ("Secret-looking material (a private key, token or secret field) was removed from your request. "
                "Never send real keys, tokens or signatures; use sandbox fixture IDs instead.")
+PATTERNS_SHOWN = ("Reviewed team troubleshooting notes were shown to the assistant. They are not sources and "
+                  "nothing above cites them.")
 
 
 def decisive(r: dict[str, Any]) -> bool:

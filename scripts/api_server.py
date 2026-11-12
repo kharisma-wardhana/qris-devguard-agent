@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def _load_env_file() -> None:
-    """Fill VLLM_* from the repo's .env when they are not in the environment (values are never printed)."""
+    """Fill VLLM_* (p8: and LANGFUSE_*) from the repo's .env when they are not in the environment (values are never printed)."""
     env = ROOT / ".env"
     if not env.is_file():
         return
@@ -31,6 +31,8 @@ def _load_env_file() -> None:
         key, sep, value = line.partition("=")
         if sep and key.strip() in ("VLLM_BASE_URL", "VLLM_API_KEY") and not os.environ.get(key.strip()):
             os.environ[key.strip()] = value.strip()
+    from app.observability import tracing
+    tracing.load_env_file(ROOT)                         # p8: LANGFUSE_* as well (DEVGUARD_TRACING=0 still wins)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -85,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
         llm = VllmLLM()
         llm_ping = llm.ping
     tools = ToolClient(args.mcp_url, secret)
+    from app.observability import tracing
+    tracer = tracing.build()                            # p8: no-op unless keys, host and config allow it
     if db_info:
         # p6: durable threads and approvals. The checkpointer needs a running loop, so it opens in the lifespan.
         import contextlib
@@ -94,23 +98,28 @@ def main(argv: list[str] | None = None) -> int:
         @contextlib.asynccontextmanager
         async def lifespan(app_):
             async with AsyncPostgresSaver.from_conn_string(db_info) as saver:
-                app_.state.agent = Agent(tools, llm, checkpointer=saver, db_conninfo=db_info)
+                app_.state.agent = Agent(tools, llm, checkpointer=saver, db_conninfo=db_info, tracer=tracer)
                 yield
 
         app = create_app(agent=None, secret=secret, mcp_ping=lambda: http_ping(args.mcp_url), llm_ping=llm_ping,
                          db_conninfo=db_info, lifespan=lifespan)
         mode = "PostgreSQL checkpointer, approvals on"
     else:
-        app = create_app(agent=Agent(tools, llm), secret=secret, mcp_ping=lambda: http_ping(args.mcp_url),
+        app = create_app(agent=Agent(tools, llm, tracer=tracer), secret=secret, mcp_ping=lambda: http_ping(args.mcp_url),
                          llm_ping=llm_ping)
         mode = "no database reachable: in-memory, approvals off (run scripts/db_migrate.py with Postgres up)"
-    print(f"API on http://{api['host']}:{args.port} (loopback only; {mode})", flush=True)
+    app.state.tracer = tracer
+    print(f"API on http://{api['host']}:{args.port} (loopback only; {mode}; tracing "
+          f"{'on' if tracer.enabled else 'off'})", flush=True)
     # Selector loop on every platform: psycopg async (the PostgreSQL checkpointer) cannot run on Windows' Proactor
     # loop, which uvicorn's "asyncio" setting picks on win32 (p6).
     # proxy_headers=False: uvicorn otherwise trusts X-Forwarded-For from loopback, i.e. from every local caller,
     # which could rotate it to dodge the per-address limit. No proxy exists (docs/p7-mcp-hardening/transport.md).
-    uvicorn.run(app, host=api["host"], port=args.port, log_level="warning", access_log=False,
-                loop="asyncio:SelectorEventLoop", proxy_headers=False)
+    try:
+        uvicorn.run(app, host=api["host"], port=args.port, log_level="warning", access_log=False,
+                    loop="asyncio:SelectorEventLoop", proxy_headers=False)
+    finally:
+        tracer.shutdown()                               # flushes pending spans (bounded by the export timeout)
     return 0
 
 

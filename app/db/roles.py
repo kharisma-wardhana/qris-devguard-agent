@@ -34,6 +34,11 @@ GRANTS: dict[str, list[tuple[str, str]]] = {
         ("UPDATE (status, approver_id, decision_reason, decided_at)", "approval_requests"),
         *[("SELECT, INSERT, UPDATE, DELETE", t) for t in CHECKPOINT_DATA],
         ("SELECT", "checkpoint_migrations"),
+        # p8: long-term memory. No DELETE: user deletes are soft deletes that blank the text (and its history);
+        # hard deletes run as the owner in scripts/purge_retention.py.
+        ("SELECT, INSERT, UPDATE", "long_term_memory"),
+        ("SELECT, INSERT", "long_term_memory_history"),
+        ("UPDATE (content_sanitized)", "long_term_memory_history"),
     ],
     # MCP create_support_ticket: read the approval, mark it executed/expired, insert the ticket.
     "ticket": [

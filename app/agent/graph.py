@@ -32,7 +32,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
-from app.agent import answer, classify, config, policy
+from app.agent import answer, classify, config, fence, policy
 from app.agent.llm import compose
 from app.agent.prompts import PROMPT_VERSION, SYSTEM_PROMPT, build_user_turn
 from app.agent.sanitize import redact_text, sanitize
@@ -40,14 +40,24 @@ from app.agent.state import DevGuardState
 from app.agent.tools import ToolClient
 from app.agent.tools import current_run_id as tool_run_id
 from app.mcp_server import config as mcp_config
+from app.memory import policy as mpolicy
+from app.observability.tracing import NOOP, corpus_version, test_delay_ms
 
 Node = Callable[[DevGuardState], Awaitable[dict[str, Any]]]
 
 
-def _timed(name: str, fn: Node) -> Node:
+def _timed(name: str, fn: Node, agent: Any) -> Node:
+    """Times a node into the state's trace dict and (p8) wraps it in a tracing span with the node name and ms only.
+    The test-only delay (DEVGUARD_TEST_DELAY_MS, capped; 0 by default) is applied inside classify_intent."""
     async def wrapper(state: DevGuardState) -> dict[str, Any]:
         started = time.perf_counter()
-        update = await fn(state)
+        with agent.tracer.span(name, node=name) as span:
+            if name == "classify_intent":
+                delay = test_delay_ms()
+                if delay:
+                    await anyio.sleep(delay / 1000)
+            update = await fn(state)
+            span.set(ms=int((time.perf_counter() - started) * 1000))
         trace = dict(state.get("trace") or {})
         trace.setdefault("nodes", {})
         trace["nodes"] = {**trace["nodes"], name: int((time.perf_counter() - started) * 1000)}
@@ -89,9 +99,12 @@ def order_evidence(chunks: list[dict[str, Any]], *, api_family: str | None, endp
 
 class Agent:
     def __init__(self, tools: ToolClient, llm: Any, checkpointer: Any | None = None,
-                 db_conninfo: str | None = None) -> None:
+                 db_conninfo: str | None = None, tracer: Any = None) -> None:
         self.tools = tools
         self.llm = llm
+        self.tracer = tracer or NOOP                       # p8: app.observability.tracing; no-op when off
+        if hasattr(tools, "tracer"):
+            tools.tracer = self.tracer
         self.db_conninfo = db_conninfo                     # p6: approval store; None = P5 draft-only mode
         self.checkpointer = checkpointer or InMemorySaver()
         self.graph = self._build().compile(checkpointer=self.checkpointer)
@@ -110,7 +123,8 @@ class Agent:
                 "approval_status": "not_required", "draft_action": None, "idempotency_key": None, "error": None,
                 "limitations": [], "policy_actions": [], "tool_calls": [], "validator_results": [],
                 "retrieved_chunks": [], "reranked_chunks": [], "evidence_flags": {}, "clarification": [],
-                "planned_calls": [], "escalate": False, "approval": None, "action_result": None}
+                "planned_calls": [], "escalate": False, "approval": None, "action_result": None,
+                "patterns_shown": [], "memory_decision": None, "answer_echo": None}       # p8: per run, never carried from the last run
 
     async def classify_intent(self, s: DevGuardState) -> dict[str, Any]:
         return {"intent": classify.classify_intent(s["user_query"], s["sanitized_context"])}
@@ -219,13 +233,42 @@ class Agent:
             notes.append("Documentation search was unavailable; only validator results are available.")
         evidence = s["reranked_chunks"]
         results = s["validator_results"]
-        user = build_user_turn(s["user_query"], evidence, results, notes)
-        res = await compose(self.llm, SYSTEM_PROMPT, user, {"evidence": evidence, "validator_results": results})
+        notes += mpolicy.note_lines(s.get("preferences") or {})        # p8: trusted fixed text from configs
+        patterns = await self._patterns(s)
+        # p8 (spec Behaviour §4): marker sentences replaced in the prompt only; `sources` keep the original quote
+        prompt_evidence, fenced_in = fence.fence_evidence(evidence)
+        user = build_user_turn(s["user_query"], prompt_evidence, results, notes, fence.fence_patterns(patterns))
+        with self.tracer.generation("llm.compose", model=config.served_model_name(),
+                                    prompt_version=PROMPT_VERSION) as gen:
+            res = await compose(self.llm, SYSTEM_PROMPT, user, {"evidence": prompt_evidence,
+                                                                "validator_results": results})
+            gen.usage(res.usage.get("prompt_tokens", 0), res.usage.get("completion_tokens", 0))
+            gen.set(attempts=res.attempts, fallback=res.data is None, ms=res.ms, error_code=res.error)
         trace = {"llm": {"prompt_version": PROMPT_VERSION, "attempts": res.attempts, "ms": res.ms, **res.usage,
                          "error": res.error}}
-        if res.data is None:
-            return {"composed": answer.fallback(results), "evidence_flags": {**flags, "fallback": True}, "trace": trace}
-        return {"composed": res.data, "trace": trace}
+        shown: dict[str, Any] = {"patterns_shown": [str(p["memory_id"]) for p in patterns]}
+        if patterns:
+            shown["limitations"] = [*s.get("limitations", []), answer.PATTERNS_SHOWN]
+        if res.data is None:                             # code-built fallback: no model text to echo
+            trace["fence"] = {"evidence_sentences": fenced_in, "answer_sentences": 0}
+            return {"composed": answer.fallback(results), "evidence_flags": {**flags, "fallback": True}, "trace": trace,
+                    "answer_echo": False, **shown}
+        echo = fence.echoes(res.data)                    # measured before the answer fence (answer_echo score)
+        composed, removed = fence.fence_answer(res.data)
+        trace["fence"] = {"evidence_sentences": fenced_in, "answer_sentences": removed}
+        return {"composed": composed, "trace": trace, "answer_echo": echo, **shown}
+
+    async def _patterns(self, s: DevGuardState) -> list[dict[str, Any]]:
+        """p8: active verified patterns tagged with this run's API family or intent. No store, or a database
+        error, shows none: a diagnosis never fails because of memory."""
+        if not self.db_conninfo:
+            return []
+        from app.memory import store as memory
+        try:
+            return await self._db(lambda conn: memory.patterns_for_run(conn, api_family=s.get("api_family"),
+                                                                       intent=s.get("intent")))
+        except Exception:  # noqa: BLE001 - memory is optional for a diagnosis
+            return []
 
     async def policy_check(self, s: DevGuardState) -> dict[str, Any]:
         if s["route"] != "read":                         # fixed answers (draft) carry no generated claims
@@ -310,7 +353,25 @@ class Agent:
         return {"action_result": result, "tool_calls": calls, "approval_status": status}
 
     async def memory_decision(self, s: DevGuardState) -> dict[str, Any]:
-        return {"memory_decision": "not_saved"}          # TRD §16 default; the policy arrives in P8
+        """TRD §16 / p8 spec Behaviour §1: default no save. Only a configured explicit phrase saves an allowed
+        preference, never when the run's input held a secret; the model takes no part. Patterns are never
+        saved here (they go through the review routes)."""
+        reason, hit = mpolicy.decide(s["user_query"], route=s["route"], secret_detected=bool(s.get("secret_detected")))
+        update: dict[str, Any] = {"memory_decision": reason}
+        if reason == mpolicy.NOT_UNRECOGNISED:
+            update["limitations"] = [*s.get("limitations", []), mpolicy.saveable_hint()]
+        if hit is None:
+            return update
+        if not self.db_conninfo:
+            return {"memory_decision": mpolicy.NOT_STORE}
+        from app.memory import store as memory
+        key, value = hit
+        try:
+            reason, _ = await self._db(memory.save_preference, s["user_id"], key, value, run_id=s["run_id"],
+                                       thread_id=s["thread_id"])
+        except Exception:  # noqa: BLE001 - a failed save never fails the diagnosis
+            return {"memory_decision": mpolicy.NOT_STORE}
+        return {"memory_decision": reason, "preferences": {**(s.get("preferences") or {}), key: value}}
 
     async def finalize(self, s: DevGuardState) -> dict[str, Any]:
         route, final = s["route"], s.get("final_answer")
@@ -331,7 +392,7 @@ class Agent:
             final = answer.with_action(final, s["approval"], s["action_result"])
         if s.get("secret_detected"):
             final["limitations"] = [answer.KEY_WARNING, *final.get("limitations", [])]
-        return {"final_answer": final, "memory_decision": s.get("memory_decision") or "not_saved"}
+        return {"final_answer": final, "memory_decision": s.get("memory_decision") or mpolicy.NOT_ROUTE}
 
     # --- wiring -------------------------------------------------------------------------------
 
@@ -341,7 +402,7 @@ class Agent:
                  "validate_evidence", "select_tools", "execute_read_tools", "compose_diagnosis", "policy_check",
                  "draft_action", "request_human_approval", "execute_approved_action", "memory_decision", "finalize"]
         for n in names:
-            g.add_node(n, _timed(n, getattr(self, n)))
+            g.add_node(n, _timed(n, getattr(self, n), self))
         g.add_edge(START, "sanitize_input")
         g.add_edge("sanitize_input", "classify_intent")
         g.add_edge("classify_intent", "classify_risk")
@@ -373,7 +434,7 @@ class Agent:
                 "approval": out.get("approval"), "action_result": out.get("action_result"),
                 "answer": out["final_answer"], "tool_calls": out.get("tool_calls", []),
                 "policy_actions": out.get("policy_actions", []), "evidence_flags": out.get("evidence_flags", {}),
-                "memory_decision": out.get("memory_decision"), "trace": trace}
+                "memory_decision": out.get("memory_decision"), "answer_echo": out.get("answer_echo"), "trace": trace}
 
     async def run(self, *, sub: str, role: str, message: str, context: dict[str, Any] | None = None,
                   thread_id: str | None = None, hitl: bool = True) -> dict[str, Any]:
@@ -393,20 +454,111 @@ class Agent:
         msg, ctx, found = sanitize(message, context or {})
         state: DevGuardState = {"thread_id": thread_id, "run_id": run_id, "user_id": sub, "role": role,
                                 "user_query": msg, "sanitized_context": ctx, "secret_detected": bool(found),
-                                "trace": {}, "hitl": hitl}
+                                "trace": {}, "hitl": hitl, "preferences": await self._preferences(sub)}
         started = time.perf_counter()
-        out = await self.graph.ainvoke(state, config={"configurable": {"thread_id": thread_id}})
-        if self.db_conninfo and not out.get("__interrupt__") and not out.get("action_result"):
-            from app.db import store
-            await self._db(store.set_thread, thread_id, "completed", run_id)
-        return self._result(out, started)
+        with self.tracer.run(run_id, name="agent-run", session_id=thread_id, user_id=sub,
+                             tags=[f"prompt:{PROMPT_VERSION}"], **self._trace_meta(thread_id)) as root:
+            out = await self.graph.ainvoke(state, config={"configurable": {"thread_id": thread_id}})
+            if self.db_conninfo and not out.get("__interrupt__") and not out.get("action_result"):
+                from app.db import store
+                await self._db(store.set_thread, thread_id, "completed", run_id)
+            result = self._result(out, started)
+            self._trace_outcome(root, result)
+        self._send_scores(run_id, out)
+        return result
+
+    def _send_scores(self, seed: str, state: dict[str, Any], **kw: Any) -> None:
+        """p8: deterministic scores (app.observability.scores) on the run's trace. Never fails a request."""
+        if not self.tracer.enabled:
+            return
+        from app.observability import scores
+        try:
+            for name, value, comment in scores.compute(state, **kw):
+                self.tracer.score_run(seed, name, value, comment=comment)
+        except Exception:  # noqa: BLE001 - tracing never fails a request
+            return
+
+    @staticmethod
+    def _trace_meta(thread_id: str) -> dict[str, Any]:
+        model, revision = config.model_identity()
+        return {"thread_id": thread_id, "model": model, "model_revision": revision, "prompt_version": PROMPT_VERSION,
+                "corpus_version": corpus_version()}
+
+    @staticmethod
+    def _trace_outcome(root: Any, result: dict[str, Any]) -> None:
+        root.set(intent=result["intent"], risk=result["risk_level"], route=result["route"], status=result["status"],
+                 memory_decision=result.get("memory_decision"), ms=result["trace"].get("total_ms"),
+                 approval_status=(result.get("approval") or {}).get("status"))
+
+    async def _preferences(self, sub: str) -> dict[str, str]:
+        """p8: the caller's own active preferences (owner-scoped, T11). No store, or a database error: none,
+        and the run goes on."""
+        if not self.db_conninfo:
+            return {}
+        from app.memory import store as memory
+        try:
+            return await self._db(memory.get_preferences, sub)
+        except Exception:  # noqa: BLE001
+            return {}
 
     async def resume(self, thread_id: str) -> dict[str, Any]:
         """Continue an interrupted run (after a decision, or after a crash). Exactly-once is enforced by the tool."""
         started = time.perf_counter()
-        out = await self.graph.ainvoke(Command(resume={"resumed": True}),
-                                       config={"configurable": {"thread_id": thread_id}})
-        return self._result(out, started)
+        cfg = {"configurable": {"thread_id": thread_id}}
+        snap = await self.graph.aget_state(cfg)
+        before = (snap.values if snap else None) or {}
+        run_id, sub = str(before.get("run_id") or thread_id), str(before.get("user_id") or "-")
+        # p8: the resumed run is its own trace (seed run_id:resume), linked to the first by session = thread_id.
+        with self.tracer.run(run_id, name="agent-resume", session_id=thread_id, user_id=sub, seed=f"{run_id}:resume",
+                             tags=[f"prompt:{PROMPT_VERSION}"], resumed=True, **self._trace_meta(thread_id)) as root:
+            out = await self.graph.ainvoke(Command(resume={"resumed": True}), config=cfg)
+            await self._approval_wait_span((out.get("approval") or {}).get("approval_id"))
+            result = self._result(out, started)
+            self._trace_outcome(root, result)
+        # only the calls this resume made; the answer scores went with the first run
+        self._send_scores(f"{run_id}:resume", out, since_call=len(before.get("tool_calls") or []),
+                          answer_scores=False)
+        return result
+
+    async def _approval_wait_span(self, approval_id: str | None) -> None:
+        """p8: the approval wait (created_at to decided_at) as a span on the resume trace, carried as `ms`: the wait
+        spans two processes and possibly a restart, so it is recorded once the decision is known."""
+        if not (approval_id and self.db_conninfo and self.tracer.enabled):
+            return
+        from app.db import store
+        try:
+            row = await self._db(store.get_approval, approval_id)
+        except Exception:  # noqa: BLE001 - tracing never fails a request
+            return
+        if row and row.get("decided_at") and row.get("created_at"):
+            wait = int((row["decided_at"] - row["created_at"]).total_seconds() * 1000)
+            with self.tracer.span("approval_wait", ms=wait, approval_status=row.get("status")):
+                pass
+
+    async def history(self, thread_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        """p9 (spec Behaviour §2): one entry per completed run, oldest first, from the checkpoint history.
+
+        A run counts from its newest *finished* checkpoint (no nodes left to run): earlier checkpoints of a run still
+        carry the previous run's final_answer (the input is merged into the thread state), and the input checkpoint
+        of the next run still carries this run's values with nodes pending. A run with no finished checkpoint
+        (waiting for approval, or cut short) is not listed. user_query is the sanitized message (Agent.run sanitizes
+        before the graph), so nothing here needs redacting again."""
+        seen: set[str] = set()
+        runs: list[dict[str, Any]] = []
+        async for snap in self.graph.aget_state_history({"configurable": {"thread_id": thread_id}}):
+            v = snap.values or {}
+            run_id = v.get("run_id")
+            if not run_id or run_id in seen or snap.next:
+                continue
+            seen.add(run_id)
+            if v.get("final_answer"):
+                runs.append({"run_id": run_id, "question": v.get("user_query"), "intent": v.get("intent"),
+                             "risk_level": v.get("risk_level"), "answer": v["final_answer"], "at": snap.created_at})
+                # action_result is not listed: like final_answer it is carried over from earlier runs in the state,
+                # and the thread view (snapshot) already shows the latest one.
+            if len(seen) >= limit:
+                break
+        return list(reversed(runs))
 
     async def snapshot(self, thread_id: str) -> dict[str, Any] | None:
         """The thread's latest state: waiting for approval, or the last run's answer. None for an unknown thread."""

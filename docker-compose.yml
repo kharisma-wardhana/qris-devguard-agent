@@ -39,6 +39,9 @@ x-langfuse-env: &langfuse-env
   REDIS_HOST: redis
   REDIS_PORT: "6379"
   REDIS_AUTH: ${REDIS_AUTH:?run_scripts/init_env.py}
+  # p9: Langfuse refuses webhook targets on private/loopback addresses (SSRF defence). Exactly one compose
+  # service is trusted: the alert receiver below (docs/p9-demo-ui-alerts/spec.md, threat T20).
+  LANGFUSE_WEBHOOK_WHITELISTED_HOST: alert-receiver
 
 services:
   postgres:
@@ -171,6 +174,30 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:?run_scripts/init_env.py}
     ports:
       - 127.0.0.1:3000:3000
+
+  # p9: Langfuse alert webhook receiver (docs/p9-demo-ui-alerts/spec.md Behaviour §5). Langfuse posts to
+  # http://alert-receiver/langfuse/alerts (port 80 is one of the two ports Langfuse delivers to). No host port:
+  # reachable inside the compose network only. Standard-library script mounted read-only into a stock image, so
+  # there is no build. Started on demand: podman compose --profile alerts up -d alert-receiver
+  alert-receiver:
+    image: docker.io/library/python:3.11.14-slim-bookworm
+    profiles: ["alerts"]
+    restart: unless-stopped
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges"]
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "80"
+    command: ["python", "-I", "/app/receiver.py"]
+    environment:
+      LANGFUSE_ALERT_WEBHOOK_SECRET: ${LANGFUSE_ALERT_WEBHOOK_SECRET:?run_scripts/init_env.py}
+      ALERT_BIND: all
+      ALERT_PORT: "80"
+      ALERT_STORE: /data/alerts.jsonl
+    volumes:
+      - ./app/alerts/receiver.py:/app/receiver.py:ro
+      - ./var/alerts:/data
 
 volumes:
   devguard_postgres_data:

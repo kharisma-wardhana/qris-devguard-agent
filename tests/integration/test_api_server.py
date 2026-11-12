@@ -251,3 +251,45 @@ def test_oversized_body_gets_413_before_parsing(api):
     r = httpx.post(f"{base}/api/v1/chat", content=chunks(),
                    headers={**_tok("api-big"), "Content-Type": "application/json"}, timeout=30)
     assert r.status_code == 413 and r.json()["code"] == "PAYLOAD_TOO_LARGE"
+
+
+# --- p8: memory and feedback routes at the real entry point (spec AC #2, #8, #19) --------------------
+
+MEMORY_ROUTES = [("get", "/api/v1/memory/preferences", None),
+                 ("put", "/api/v1/memory/preferences/language", {"value": "id"}),
+                 ("delete", "/api/v1/memory/preferences/language", None),
+                 ("get", "/api/v1/memory/patterns", None),
+                 ("post", "/api/v1/memory/patterns", {"thread_id": "t" * 20, "title": "t", "text": "x"}),
+                 ("post", "/api/v1/memory/patterns/00000000-0000-0000-0000-000000000000/decision", {"decision": "approve"}),
+                 ("post", "/api/v1/threads/" + "t" * 20 + "/feedback", {"rating": "up"})]
+
+
+@pytest.mark.parametrize("name", ["none", "mcp audience", "other secret"])
+@pytest.mark.parametrize("method,path,body", MEMORY_ROUTES)
+def test_memory_routes_authenticate(api, name, method, path, body):
+    base, _ = api
+    tok = {"none": None, "mcp audience": auth.mint("d", "developer", secret=SECRET),
+           "other secret": auth.mint("d", "developer", secret="o" * 48, audience=API_AUD)}[name]
+    headers = {"Authorization": f"Bearer {tok}"} if tok else {}
+    r = httpx.request(method.upper(), base + path, json=body, headers=headers, timeout=30)
+    assert r.status_code == 401 and r.json()["code"] == "UNAUTHENTICATED"
+
+
+@pytest.mark.parametrize("role", ["developer", "kb_maintainer"])
+def test_pattern_decision_needs_an_approver_role(api, role):
+    base, _ = api
+    tok = auth.mint("d", role, secret=SECRET, audience=API_AUD)
+    r = httpx.post(f"{base}/api/v1/memory/patterns/00000000-0000-0000-0000-000000000000/decision",
+                   json={"decision": "approve"}, headers={"Authorization": f"Bearer {tok}"}, timeout=30)
+    assert r.status_code == 403 and r.json()["code"] == "FORBIDDEN"
+
+
+def test_memory_without_a_database_is_503_envelope(api):
+    base, _ = api
+    tok = auth.mint("d", "developer", secret=SECRET, audience=API_AUD)
+    r = httpx.put(f"{base}/api/v1/memory/preferences/language", json={"value": "id"},
+                  headers={"Authorization": f"Bearer {tok}"}, timeout=30)
+    assert r.status_code == 503 and r.json()["code"] == "SERVICE_UNAVAILABLE"
+    r = httpx.put(f"{base}/api/v1/memory/preferences/language", json={"value": "fr"},
+                  headers={"Authorization": f"Bearer {tok}"}, timeout=30)
+    assert r.status_code == 422 and r.json()["code"] == "INVALID_ARGUMENT"   # policy check before the store

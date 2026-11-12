@@ -10,7 +10,7 @@ llm:
   timeout_seconds: 60
   json_retries: 1                      # one retry on malformed JSON, then the deterministic fallback
   enable_thinking: false               # Qwen3 chat template; no reasoning tokens in the answer
-  prompt_version: compose-v1
+  prompt_version: compose-v2           # p8: fenced evidence, preference notes, verified-patterns block
 
 tools:
   mcp_url: http://127.0.0.1:8765/mcp   # configs/mcp.yaml server host/port/path
@@ -69,3 +69,67 @@ ticket_draft:                          # p6: the only side effect; values are sa
   body_max_chars: 4000
   max_evidence_ids: 10
   default_priority: medium
+
+memory:                                # p8: long-term memory policy (TRD §16; docs/p8-memory-observability/spec.md §1)
+  preferences:                         # the only keys and values that can be saved; anything else is refused
+    language: [id, en]
+    detail: [brief, detailed]
+  preference_notes:                    # the trusted <notes> line each saved value adds to the prompt
+    language: {id: "Answer in Indonesian.", en: "Answer in English."}
+    detail: {brief: "Keep the answer brief.", detailed: "Give a detailed answer."}
+  # Explicit chat phrases, matched case-insensitively in the sanitized message. The model never decides a save.
+  phrase_prefix: '\b(?:remember|ingat)\s*:'
+  phrases:
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:always\s+)?(?:answer|reply|respond)\s+in\s+(?:bahasa\s+)?indonesian?\b', key: language, value: id}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:selalu\s+)?jawab\s+(?:dalam|pakai|dengan)\s+bahasa\s+indonesia\b', key: language, value: id}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:always\s+)?(?:answer|reply|respond)\s+in\s+english\b', key: language, value: en}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:selalu\s+)?jawab\s+(?:dalam|pakai|dengan)\s+bahasa\s+inggris\b', key: language, value: en}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:keep\s+(?:it|answers?)\s+)?(?:brief|short)\b', key: detail, value: brief}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*jawab\s+(?:singkat|ringkas)\b', key: detail, value: brief}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*(?:give\s+)?(?:detailed|full)\s+answers?\b', key: detail, value: detailed}
+    - {pattern: '\b(?:remember|ingat)\s*:\s*jawab\s+(?:detail|lengkap|rinci)\b', key: detail, value: detailed}
+  preference_ttl_days: 180             # review date for a preference (§16.2 "separate review/expiry date")
+  pattern_ttl_days: 90                 # §16.2 / §19.3 default
+  max_patterns_in_prompt: 2
+  pattern_title_max_chars: 120
+  pattern_text_max_chars: 1000
+  decision_reason_max_chars: 500
+
+observability:                         # p8: Langfuse tracing (TRD §21; spec §2). Keys and host come from .env.
+  enabled: true                        # also off whenever LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST are missing (CI)
+  host_env: LANGFUSE_HOST
+  public_key_env: LANGFUSE_PUBLIC_KEY
+  secret_key_env: LANGFUSE_SECRET_KEY
+  environment: capstone
+  service_tag: "service:agent"
+  export_timeout_seconds: 2            # refused loopback ports can hang on this machine (CLAUDE.md)
+  test_delay_env: DEVGUARD_TEST_DELAY_MS   # test-only delay inside classify_intent, for the p95 alert test
+  test_delay_max_ms: 5000
+  manifest_path: knowledge_base/manifests/sources.yaml   # corpus version = sha256 prefix of this file
+
+retention:                             # p8: TRD §19.3, run by scripts/purge_retention.py as the owner role
+  checkpoint_days: 30
+  approval_days: 90                    # approvals, their sandbox tickets, and threads with nothing newer
+
+ui:                                    # p9: Streamlit demo UI (docs/p9-demo-ui-alerts/spec.md Behaviour §1, §7)
+  host: 127.0.0.1                      # loopback only; scripts/ui_server.py refuses anything else
+  port: 8501
+  api_url: http://127.0.0.1:8000       # api.host/api.port; the UI calls /api/v1 only
+  token_ttl_minutes: 15                # API-audience demo tokens, minted in-process; re-minted before expiry
+  request_timeout_seconds: 150         # a cold first search loads BGE-M3 (52 s measured in p8)
+  refresh_seconds: 15                  # Alerts page auto-refresh, when switched on
+  read_cache_seconds: 20               # per-session cache of reads; every write and Refresh clears it (api_other bucket)
+  identities:                          # synthetic demo subjects only (demo-only; see the p9 runbook)
+    - {sub: demo-dev, role: developer, label: "Developer (demo-dev)"}
+    - {sub: demo-approver, role: support_engineer, label: "Approver (demo-approver)"}
+
+alerts:                                # p9: Langfuse alert webhook receiver and reader (spec Behaviour §5, §6, Data)
+  store_path: var/alerts/alerts.jsonl  # git-ignored; the receiver writes it, the API reads it
+  secret_env: LANGFUSE_ALERT_WEBHOOK_SECRET   # copied by the developer from the Langfuse webhook; never printed
+  max_body_bytes: 65536
+  max_clock_skew_seconds: 600          # our replay window on the signed t=; Langfuse defines none
+  max_records: 500
+  title_max_chars: 200
+  body_max_chars: 1000
+  langfuse_base_url: http://localhost:3000/   # NEXTAUTH_URL in docker-compose.yml; other permalinks are dropped
+  list_limit: 50

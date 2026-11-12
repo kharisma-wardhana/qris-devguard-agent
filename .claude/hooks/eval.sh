@@ -61,6 +61,16 @@ acts  "deploy-gate asks on purge_audit" .claude/hooks/deploy-gate.sh \
       '{"tool_input":{"command":"uv run python scripts/purge_audit.py"}}'
 quiet "deploy-gate allows reading purge_audit.py" .claude/hooks/deploy-gate.sh \
       '{"tool_input":{"command":"cat scripts/purge_audit.py"}}'
+acts  "deploy-gate asks on purge_retention" .claude/hooks/deploy-gate.sh \
+      '"permissionDecision":"ask"' \
+      '{"tool_input":{"command":"uv run python scripts/purge_retention.py"}}'
+acts  "deploy-gate asks on purge_retention after a dry run" .claude/hooks/deploy-gate.sh \
+      '"permissionDecision":"ask"' \
+      '{"tool_input":{"command":"uv run python scripts/purge_retention.py --dry-run; uv run python scripts/purge_retention.py"}}'
+quiet "deploy-gate allows purge_retention --dry-run" .claude/hooks/deploy-gate.sh \
+      '{"tool_input":{"command":"uv run python scripts/purge_retention.py --dry-run"}}'
+quiet "deploy-gate allows reading purge_retention.py" .claude/hooks/deploy-gate.sh \
+      '{"tool_input":{"command":"cat scripts/purge_retention.py"}}'
 
 if [ -f .claude/monitoring/control_band.py ]; then
   ran=$((ran + 1))

@@ -46,6 +46,7 @@ class ToolClient:
         self.timeout = cfg["timeout_seconds"]
         self.retries = cfg["transient_retries"]
         self.ttl = cfg["token_ttl_minutes"]
+        self.tracer: Any = None                    # p8: set by the Agent; spans carry tool, outcome and ms only
 
     def __repr__(self) -> str:
         return f"ToolClient({self.url!r}, <secret hidden>)"
@@ -69,15 +70,21 @@ class ToolClient:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
                     for name, args in calls:
-                        started = time.perf_counter()
-                        res = await session.call_tool(name, args)
-                        try:
-                            data = json.loads(res.content[0].text)
-                        except (ValueError, IndexError, AttributeError):
-                            data = {"code": "TOOL_BAD_RESPONSE"}
-                        out.append(ToolResult(name, not res.is_error, data,
-                                              int((time.perf_counter() - started) * 1000)))
+                        with self._span(name) as span:
+                            started = time.perf_counter()
+                            res = await session.call_tool(name, args)
+                            try:
+                                data = json.loads(res.content[0].text)
+                            except (ValueError, IndexError, AttributeError):
+                                data = {"code": "TOOL_BAD_RESPONSE"}
+                            r = ToolResult(name, not res.is_error, data, int((time.perf_counter() - started) * 1000))
+                            span.set(outcome=r.error_code or "OK", ms=r.ms)
+                        out.append(r)
         return out
+
+    def _span(self, name: str) -> Any:
+        from app.observability.tracing import NOOP
+        return (self.tracer or NOOP).span(f"mcp.{name}", tool=name)
 
     async def call(self, sub: str, role: str, calls: list[tuple[str, dict[str, Any]]]) -> list[ToolResult]:
         """Run `calls` in one MCP session. Unreachable server -> TOOL_UNAVAILABLE results, never an exception."""
@@ -90,4 +97,7 @@ class ToolClient:
                 return await self._session_calls(token, calls)
             except Exception as exc:  # noqa: BLE001 - transport errors arrive wrapped in ExceptionGroups
                 log.warning("mcp session failed attempt=%d/%d type=%s", attempt + 1, attempts, type(exc).__name__)
+        for name, _ in calls:
+            with self._span(name) as span:
+                span.set(outcome="TOOL_UNAVAILABLE", ms=0)
         return [ToolResult(name, False, {"code": "TOOL_UNAVAILABLE"}) for name, _ in calls]

@@ -8,13 +8,16 @@ QRIS DevGuard AI is a capstone project. `docs/QRIS_DevGuard_AI_PRD_TRD.md` is th
 
 Phase P0 (§27, scope and source inventory) is signed off (2026-11-06). The decision chain is in `docs/scope-and-source-inventory/`.
 - `docs/scope.md` covers the use case, boundaries, roles and data owners.
-- `docs/threat-model.md` lists threats T1–T17, each mapped to the phase that must prove its control.
+- `docs/threat-model.md` lists threats T1–T20, each mapped to the phase that must prove its control.
 - `skills/qris-integration-troubleshooting/SKILL.md` is the SOP outline.
 - `knowledge_base/manifests/sources.yaml` is the source inventory, validated against `source.schema.json`.
 - `configs/security.yaml` defines the role/tool matrix, redaction fields and egress allowlist.
 - `configs/eval_thresholds.yaml` defines the release gates.
 
-Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_server/` (P4), `app/agent/` and `app/api/` (P5), `app/db/` (P6: PostgreSQL checkpointer, approvals, sandbox tickets; P7: least-privilege roles, MCP audit), and `app/security/` (P7: rate limits, body-size limit, egress check). Memory and Langfuse arrive in P8.
+Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_server/` (P4), `app/agent/` and `app/api/` (P5), `app/db/` (P6: PostgreSQL checkpointer, approvals, sandbox tickets; P7: least-privilege roles, MCP audit), and `app/security/` (P7: rate limits, body-size limit, egress check). P8 adds `app/memory/` (policy-gated
+preferences and reviewed team patterns, migration `0003`), `app/observability/` (Langfuse tracing with an
+attribute allowlist and a fail-closed mask hook; deterministic scores), `app/agent/fence.py` and `app/db/retention.py`.
+P9 adds `app/ui/` (Streamlit demo UI, calls `/api/v1` only) and `app/alerts/` (stdlib Langfuse alert webhook receiver, run as the `alert-receiver` compose service, and the API-side reader).
 
 ## Commands
 
@@ -46,8 +49,15 @@ podman compose up -d postgres && uv run python scripts/db_migrate.py   # P6 sche
 uv run pytest -m db                                      # PostgreSQL tests (throwaway schema); skipped with a reason without Postgres
 uv run python scripts/init_env.py --add-missing          # after pulling P7: append missing keys (role passwords) to .env; prints names only
 uv run python scripts/purge_audit.py                     # MCP audit rows older than audit.retention_days (90), as the owner role
+uv run python scripts/purge_retention.py --dry-run       # P8: what retention would delete (checkpoints 30 d; tickets/approvals/threads 90 d; deleted or expired memory), counts only
+uv run python scripts/purge_retention.py                 # the same deletes, as the owner role, in one transaction
+uv run python scripts/scan_markers.py                    # P8: sentences answer-echo fencing would remove, per retrievable document (IDs and counts only)
 uv run python scripts/eval_security.py                   # §22.5 suite + §13.4 checklist -> docs/p7-mcp-hardening/security-report.md
 uv run python scripts/eval_security.py --live-injection  # the 10 injection cases on the real vLLM (pod + tunnel)
+uv sync --extra ui                                       # once: Streamlit for the demo UI
+uv run python scripts/ui_server.py                       # demo UI on http://127.0.0.1:8501; needs the API (demo-only: mints tokens from MCP_AUTH_SECRET)
+podman compose --profile alerts up -d alert-receiver     # Langfuse alert webhook receiver, compose network only (http://alert-receiver/langfuse/alerts)
+uv run python scripts/send_test_alert.py --via-container qris-devguard-agent_langfuse-worker_1   # one signed synthetic alert, from where Langfuse sends
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -123,6 +133,7 @@ All documentation lives under `docs/`, and `docs/index.md` is the table of conte
 - Qdrant collection config or payload fields: add a regression test when either changes (`tests/unit/test_rag_store_ingest.py` pins them).
 - Roles/permissions (MCP tools, later the API): add authentication and authorization integration tests against the real server subprocess (`tests/integration/test_mcp_server.py`), plus the role × tool matrix unit test.
 - PostgreSQL tests: mark them `@pytest.mark.db` and use the throwaway-schema fixtures in `tests/conftest.py`. CI has no PostgreSQL, so they skip there; paste the local `uv run pytest -m db` run in the PR.
+- UI (Streamlit): AppTest end-to-end against the real API and MCP subprocesses (`tests/integration/test_ui_e2e.py`), plus one manual browser pass per release (`docs/p9-demo-ui-alerts/runbook.md`). UI tests use `pytest.importorskip("streamlit")`; the `ui-tests` CI job installs the `ui` extra.
 
 Run `uv run pytest` before reporting a task complete, and paste the output.
 
@@ -150,3 +161,16 @@ Nothing is implemented without an accepted plan. Each feature follows `intent.md
 - A `--live` script must load `VLLM_*` from `.env` (`api_server._load_env_file`) before pinging vLLM, and a live-mode socket guard must allow the configured `VLLM_BASE_URL` port. CI mode (fake LLM) catches neither.
 - `scripts/eval_security.py` grades a skipped test NOT RUN, never PASS. Start Postgres first, or every database case reads NOT RUN.
 - `gh workflow run` only works for a workflow that already exists on `main`. A new workflow first runs through its `pull_request` trigger.
+- A Langfuse container can't reach a listener on the host's `127.0.0.1`, and Langfuse delivers webhooks only to ports 80/443 and refuses private hosts unless whitelisted. Webhook receivers go in the compose network (`alert-receiver`, whitelisted by hostname only).
+- Streamlit re-runs the whole script on every click, so an uncached API read per rerun empties the subject's `api_other` bucket (429) in a few clicks. Read through `read()` (per-session cache) and write through `write()` (clears it) in `app/ui/streamlit_app.py`.
+- Streamlit widget labels and `st.markdown`/`st.info`-style elements render markdown. Show API text (answers, excerpts, approval payloads, alerts) with `st.text` only.
+- On Windows `Popen.terminate()` kills only the launcher, not a child it spawned, and the child keeps the pipes open, so `communicate()` hangs. Launchers run their server in-process (`scripts/ui_server.py` calls `streamlit.web.cli.main`).
+- In LangGraph's checkpoint history, the next run's input checkpoint still carries the previous run's values with nodes pending. Take a run's answer from its newest checkpoint with no `next` (`Agent.history`).
+- Another session's `git commit` takes everything staged, including your files. Stage only at commit time: `git commit --only -- <paths>`.
+- `docker-compose.yml` reads `LANGFUSE_ALERT_WEBHOOK_SECRET` with `:?`, so every `podman compose` command fails until `.env` has it: run `init_env.py --add-missing` after pulling P9.
+- Chaining `uv run pytest ...; git commit` commits on red just like piping does. Commit only inside an `if` on pytest's own exit code.
+- OpenTelemetry records an exception escaping a span as an event carrying its message and stack trace, and `mask_otel_spans` can't change events. Open spans only through the helpers in `app/observability/tracing.py`, which record the class name and re-raise.
+- Langfuse's resource manager is a singleton per public key, and its default set-up replaces the global OpenTelemetry provider. Tests build each tracer with a unique public key and an in-memory exporter (`tracing.build(env, span_exporter=...)`, which also gives it its own `TracerProvider`).
+- The servers load `LANGFUSE_*` from `.env`, so a server started by a test would export to the local Langfuse. `tests/conftest.py` sets `DEVGUARD_TRACING=0`; tracing tests pass explicit env mappings.
+- Corpus excerpts are hard-wrapped. Split sentences at end punctuation or a blank line, never at a single newline, or a wrapped attack sentence slips past `injection_markers`.
+- A failing `db` test prints its fixture URL, which contains the local Postgres password. Filter out `password=` before pasting failing test output anywhere.

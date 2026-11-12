@@ -21,10 +21,14 @@
 │                               store, ingest, search, citations, metrics (P2); rerank (P3)
 │   ├── validators/             deterministic payload, signature (canonical, keys) and response-code validators (P4)
 │   ├── mcp_server/             MCP server: config, auth, strict argument models, error envelope, tools (P4)
-│   ├── agent/                  LangGraph agent: sanitize, classify, MCP client, LLM, prompts, answer, policy, graph, harness (P5)
+│   ├── agent/                  LangGraph agent: sanitize, classify, MCP client, LLM, prompts, answer, policy, graph, harness (P5); fence (P8)
 │   ├── api/                    FastAPI app: /api/v1/chat, health routes, envelope (P5); threads and approvals (P6)
-│   ├── db/                     PostgreSQL: migrations/, migrate, actions (hashing), store (P6); roles, audit (P7)
-│   └── security/               cross-cutting controls: token-bucket rate limiter, body-size limit, egress check (P7)
+│   ├── db/                     PostgreSQL: migrations/, migrate, actions (hashing), store (P6); roles, audit (P7); retention (P8)
+│   ├── memory/                 long-term memory: policy (keys, phrases, refusals, reason codes), store (P8)
+│   ├── observability/          Langfuse tracing (allowlist, mask hook, seeded trace ID), deterministic scores (P8)
+│   ├── security/               cross-cutting controls: token-bucket rate limiter, body-size limit, egress check (P7)
+│   ├── alerts/                 Langfuse alert webhook receiver (stdlib-only, compose service) and the API-side reader (P9)
+│   └── ui/                     Streamlit demo UI: client (no Streamlit import), render (plain text), streamlit_app (P9)
 ├── configs/                    policy-as-config: security.yaml, eval_thresholds.yaml, model.yaml (P1), retrieval.yaml (P2), mcp.yaml (P4), agent.yaml (P5)
 ├── deploy/                     runpod/bootstrap_vllm.sh, postgres/, clickhouse/ (P1)
 ├── docs/                       PRD/TRD, P0 scope + threat model, foundation docs, index
@@ -35,7 +39,8 @@
 │   ├── p4-deterministic-mcp-tools/   feature chain + validator-report
 │   ├── p5-langgraph-agent/           feature chain + agent-flow-report
 │   ├── p6-checkpoint-hitl/           feature chain + agent-flow-report (flows, approval demo, crash/resume)
-│   └── p7-mcp-hardening/             feature chain + security-report (§13.4, §22.5, scans, live injection), transport
+│   ├── p7-mcp-hardening/             feature chain + security-report (§13.4, §22.5, scans, live injection), transport
+│   └── p8-memory-observability/      feature chain + observability-report, alerts
 ├── evals/
 │   ├── datasets/               labelled sets (retrieval_golden.yaml: P2 original 30 + P3 hard 20; agent_flows.yaml: P5; security_cases.yaml, injection_cases.yaml: P7)
 │   └── reports/                eval output (git-ignored except .gitkeep)
@@ -47,7 +52,9 @@
 ├── scripts/                    CLIs: check_sources, init_env, healthcheck, tunnel.sh (P1);
 │                               fetch_models, ingest, search, eval_retrieval (P2);
 │                               gen_test_keys, extract_response_codes, eval_validators, mcp_server, mint_dev_token (P4);
-│                               api_server, eval_agent (P5); db_migrate (P6); purge_audit, eval_security (P7)
+│                               api_server, eval_agent (P5); db_migrate (P6); purge_audit, eval_security (P7);
+│                               ui_server, send_test_alert (P9);
+│                               purge_retention, scan_markers (P8)
 ├── skills/
 │   └── qris-integration-troubleshooting/   SOP skill (SKILL.md)
 └── tests/
@@ -56,7 +63,7 @@
     └── unit/                   pytest unit tests
 ```
 
-`app/rag/` (P2), `app/validators/` and `app/mcp_server/` (P4), `app/agent/` and `app/api/` (P5), `app/db/` (P6) and `app/security/` (P7) exist. The rest of the planned layout, `app/{memory,observability}`, arrives in later phases (TRD §24).
+`app/rag/` (P2), `app/validators/` and `app/mcp_server/` (P4), `app/agent/` and `app/api/` (P5), `app/db/` (P6), `app/security/` (P7), and `app/memory/` and `app/observability/` (P8) exist, which completes the TRD §24 `app/` layout.
 
 ## Naming conventions
 
@@ -109,11 +116,16 @@ The sample is all 5 Python files across 3 directories (`scripts/`, `tests/unit/`
 - **Security evidence is generated, not written.** `evals/datasets/security_cases.yaml` maps each §22.5 bullet and §13.4 control to the tests that prove it; `scripts/eval_security.py` grades them and rewrites the generated block of the report.
 - **The model writes prose; code decides.** Intent, risk, tool choice and tool arguments are deterministic. Verdicts, sources and confidence are assembled from tool output. `policy_check` applies mechanical rules to the model's text, and abstains when nothing supported is left.
 
+- **The demo UI is a client, not a second way in (P9).** `app/ui/` calls `/api/v1` over HTTP only, so the API's auth, limits, redaction and approval checks apply. API text is shown with text elements only. Reads are cached per session (`ui.read_cache_seconds`) so reruns stay inside the `api_other` bucket.
+- **The alert receiver is a separate, minimal process (P9).** Langfuse can't reach a host loopback listener and delivers only to ports 80 and 443, so the receiver runs in the compose network. It is one standard-library file mounted read-only. An alert is stored, never acted on.
+
 ## Deviations
 
 - `docs/QRIS_DevGuard_AI_PRD_TRD.md` uses mixed case with underscores, while the other docs use lowercase kebab-case. TRD §24 also names this file `docs/PRD_TRD.md`, which doesn't match the actual filename.
 - `tests/unit/test_check_sources.py` imports from `scripts/` through `sys.path` manipulation instead of through an installed package. `app/` is importable in tests through pytest's `pythonpath = ["."]`, and the P2 scripts add the repo root to `sys.path` themselves; the project is not installed as a package.
 - `docs/scope.md` and `docs/threat-model.md` are Phase P0 deliverables, but they sit at the `docs/` root rather than in the `docs/scope-and-source-inventory/` feature folder. The folder's spec and plan refer to them at their root paths.
+
+- Received alerts are stored in a capped JSONL file (`var/alerts/`), not PostgreSQL (P9; see `docs/p9-demo-ui-alerts/spec.md`).
 
 ## Dead or vestigial code
 

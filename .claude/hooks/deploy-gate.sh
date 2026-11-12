@@ -25,7 +25,8 @@ DANGER = (r"kubectl|helm +|terraform +(-[^ ]+ +)*(apply|destroy)|aws +|gcloud +|
           r"|docker +push|npm +publish|uv +publish|gh +release +create|alembic +upgrade"
           r"|prisma +migrate +deploy|ssh +|scp +|rsync +|make +deploy|runpodctl|psql +"
           r"|(^|[;&|] *)(bash +|sh +)?\S*(scripts/tunnel|bootstrap_vllm)\.sh"
-          r"|gh +pr +merge|(^|[;&|] *)(uv +run +)?python3? +\S*scripts/purge_audit\.py")
+          r"|gh +pr +merge|(^|[;&|] *)(uv +run +)?python3? +\S*scripts/purge_audit\.py"
+          r"|(^|[;&|] *)(uv +run +)?python3? +\S*scripts/purge_retention\.py(?![^;&|]*--dry-run)")
 
 def emit(decision, reason):
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",

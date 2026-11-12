@@ -7,6 +7,8 @@
 *Amended: 2026-11-10 for p5-langgraph-agent.*
 *Amended: 2026-11-11 for p6-checkpoint-hitl.*
 *Amended: 2026-11-11 for p7-mcp-hardening.*
+*Amended: 2026-11-12 for p9-demo-ui-alerts.*
+*Amended: 2026-11-12 for p8-memory-observability.*
 
 Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` and the feature's `docs/<feature-name>/spec.md` first. The review checks the diff against the spec's acceptance criteria.
 
@@ -46,6 +48,13 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P7:** a change to security behaviour updates the cases that prove it in `evals/datasets/security_cases.yaml` and re-renders `docs/p7-mcp-hardening/security-report.md` with `scripts/eval_security.py`. The generated block is never edited by hand, and a case or a test node is never removed to turn the report green.
 - **P7:** a burst or flood test gets a dedicated server or a lenient limiter, because every loopback caller shares one address bucket. A test that relies on ordering to stay under a limit is a bug.
 - **P7:** a PR touching `app/db/roles.py`, `app/db/audit.py`, a migration, the role DSNs or `GuardedTool` pastes the local `uv run pytest -m db` run and `uv run python scripts/eval_security.py` output. The role matrix and audit tests skip in CI.
+- **P9:** `app/alerts/receiver.py` stays standard-library only (`test_receiver_imports_standard_library_only`), and its limits move together with `configs/agent.yaml` `alerts` (`test_limits_match_configs_agent_yaml`).
+- **P9:** Streamlit reads go through `read()` and writes through `write()` in `app/ui/streamlit_app.py`. A new per-rerun API call outside the cache is a bug: a few clicks then get 429 from the `api_other` bucket.
+- **P9:** `Agent.history` takes each run's answer from its newest checkpoint with no `next`. A PR touching it, or the thread/approval list routes, pastes `uv run pytest -m db tests/unit/test_api_p9_routes.py tests/integration/test_ui_e2e.py`.
+- **P8:** what memory saves is decided only by the configured phrase table in `app/memory/policy.py`; model output never picks a key, a value or whether to save. A run whose input held a secret saves nothing.
+- **P8:** scores are computed in `app/observability/scores.py` from run state, never by an LLM. A new score gets one fixture per value in `test_scores.py`; a score that wasn't measured is not sent, never sent as 0.
+- **P8:** `retention.purge` stays one transaction in foreign-key order, and `--dry-run` rolls back the same deletes. Pending approvals and `awaiting_approval` threads are never purged; `test_retention.py`'s inside/outside rows and app-role test stay.
+- **P8:** a PR touching `app/memory/`, `app/db/retention.py`, migration `0003` or the memory routes pastes the local `uv run pytest -m db` run.
 
 ### Security
 - Nothing under `knowledge_base/sources/` may be tracked except `.gitkeep`. No `.env*` file other than `.env.example`, and no `*.pem`, `*.key` or `*.p12` file, may be added anywhere.
@@ -85,6 +94,13 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P7:** both servers keep `proxy_headers=False` and a loopback host. Trusting forwarded headers needs the proxy design in `docs/p7-mcp-hardening/transport.md` and a threat-model change.
 - **P7:** the body-size and pre-auth limits run before authentication and parsing. Raising a value in `limits.*` (`configs/security.yaml`) needs a stated reason.
 - **P7:** a GitHub Action added for scanning or security is pinned by full commit SHA, not by tag (the `trivy-action` tags were force-pushed in 2026).
+- **P9:** `alert-receiver` in `docker-compose.yml` keeps no `ports:`, `user: "65534:65534"`, `read_only`, `cap_drop: [ALL]`, `no-new-privileges` and a read-only script mount; the receiver keeps the signature check, its 600 s window and the 64 KiB cap. Langfuse's whitelist stays exactly the hostname `alert-receiver`. Adding `LANGFUSE_WEBHOOK_WHITELISTED_IPS` or `_IP_SEGMENTS` is a blocker (T20).
+- **P9:** the UI shows API text only through `st.text`: never `st.markdown`, a widget label or `unsafe_allow_html`. The token never reaches page state, a URL or a log. `scripts/ui_server.py` keeps `127.0.0.1` and usage statistics off.
+- **P9:** `GET /api/v1/alerts` and `GET /api/v1/approvals?status=pending` stay approver-only. A received alert never triggers an action, a tool call or an outbound request.
+- **P8:** spans are opened only through the helpers in `app/observability/tracing.py`, which accept only `ALLOWED_ATTRS` with token-shaped values. Widening the allowlist, or putting message, answer, chunk, argument or memory text into a span, its input/output or a score comment, is a blocker. `mask_otel_spans` never catches its own errors (fail closed). The LangChain callback handler is never used for tracing.
+- **P8:** preference reads stay scoped to `owner_id = sub`; a pattern becomes active only through a different approver (four-eyes CHECK); `devguard_app` keeps no `DELETE` on the memory tables. Secret- or personal-data-shaped pattern text is refused, never redacted.
+- **P8:** fencing works from `injection_markers`. Narrowing that list needs a threat-model change and a fresh `scripts/scan_markers.py` count. Patterns stay in the untrusted block and never become sources.
+- **P8:** `LANGFUSE_HOST` passes the egress check at start-up, and tests keep `DEVGUARD_TRACING=0`.
 
 ### Compliance
 - Public ASPI/SNAP documents are `reference_only`: they are never committed, and any quoted excerpt is at most `citations.max_excerpt_chars.reference_only` (300) characters.
@@ -109,6 +125,9 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P7:** `security-report.md` results are measured and dated. A PARTIAL §13.4 control stays PARTIAL until the missing evidence exists, and the live-injection echo finding (5/10) is reported as measured, never reworded.
 - **P7:** audit rows hold pseudonymous synthetic `sub` values and IDs only. Retention is 90 days through the developer-run `scripts/purge_audit.py`; nothing deletes rows automatically.
 - **P7:** every HIGH or CRITICAL scan finding (pip-audit, Trivy) is fixed by a version bump or listed in `security-report.md` with its code path, reachability and mitigation. An untriaged finding fails the dependency-hygiene control.
+- **P9:** `docs/p9-demo-ui-alerts/demo-report.md` keeps AC #21 (a real Langfuse alert shown) NOT MET until a non-`synthetic-` alert ID, time and screenshot are recorded. A synthetic test alert is never presented as Langfuse evidence.
+- **P8:** `observability-report.md` keeps AC #23 (live part) and AC #25 open until the live echo run and the alert screenshots exist. Deferred steps 10 and 11 are never ticked without evidence; echo rates are labelled measured, against P7's 5/10.
+- **P8:** memory holds only allowed enum values and reviewed pattern text; Langfuse gets synthetic `sub` values only, and real identities would need a hash first.
 
 ## Severity levels
 
@@ -143,6 +162,10 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P7:** the wording of attack phrases in `evals/datasets/injection_cases.yaml` and `tests/fixtures/injection/`. Check only that they are synthetic, keep the SYNTHETIC marker and never reach the approved corpus or Qdrant.
 - **P7:** Trivy findings inside third-party images we don't build. Check only that each HIGH or CRITICAL finding is triaged in `security-report.md`.
 - **P7:** the formatting of the generated block in `security-report.md`. Check only that it was regenerated by the script, not edited.
+- **P9:** Streamlit layout and wording. Check only the plain-text rule and that no token appears.
+- **P9:** the `pandas`, `pyarrow` and `altair` entries in `uv.lock` that arrive with the `ui` extra.
+- **P8:** the wording of `compose-v2`, the preference note lines and the phrase patterns in `configs/agent.yaml` (check only that each phrase maps to an allowed key and value, with a `test_memory_policy.py` case).
+- **P8:** Langfuse SDK internals (`langfuse>=5,<6`, locked). Check only that spans go through the `tracing.py` helpers.
 
 ## What a human must decide
 
@@ -151,3 +174,4 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - Whether a synthetic value could still be mistaken for an official one, for example a path or service code that matches the real SNAP one.
 - When to make `agent-config-eval` blocking (`continue-on-error: false`), and when to enable branch protection on `main`.
 - **Organisation-level controls this repo cannot configure:** OS-level sandboxing for agent sessions, outbound domain allowlisting, and credential isolation (where RunPod, Langfuse and GitHub credentials live). These are managed settings, owned outside this repo.
+- **P8:** whether to keep the measured fencing false positive (the SOP line telling the reader to run a validator) or exempt read-only tool names from `tool_invocation`; and whether to allow one CI secret for an LLM judgement job (triage, changelog).

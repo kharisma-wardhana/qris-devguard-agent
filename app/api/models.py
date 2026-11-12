@@ -70,6 +70,7 @@ class MessageResponse(BaseModel):
     risk_level: str
     answer: dict[str, Any]
     approval: dict[str, Any] | None = None
+    memory_decision: str | None = None       # p8
 
 
 class DecisionRequest(BaseModel):
@@ -77,3 +78,39 @@ class DecisionRequest(BaseModel):
     model_config = _STRICT
     decision: Literal["approve", "reject"]
     reason: str | None = Field(None, max_length=500)
+
+
+# --- p8: long-term memory and feedback (docs/p8-memory-observability/spec.md Behaviour §1, §3) ---------
+
+_MEM = config.agent()["memory"]
+PREF_KEY = r"^[a-z_]{1,32}$"
+INTENT = Literal["signature", "timestamp", "payload", "response_code", "version_question", "general_troubleshooting"]
+
+
+class PreferenceRequest(BaseModel):
+    """PUT /api/v1/memory/preferences/{key}: the value is checked against the configured list by the route."""
+    model_config = _STRICT
+    value: str = Field(min_length=1, max_length=32, pattern=r"^[a-z_]{1,32}$")
+
+
+class PatternProposal(BaseModel):
+    """POST /api/v1/memory/patterns. Text that looks like a secret or personal data is refused, not redacted."""
+    model_config = _STRICT
+    thread_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,64}$")
+    title: str = Field(min_length=1, max_length=_MEM["pattern_title_max_chars"])
+    text: str = Field(min_length=1, max_length=_MEM["pattern_text_max_chars"])
+    api_family: Literal["snap", "qris-mpm"] | None = None
+    intent: INTENT | None = None
+
+
+class PatternDecision(BaseModel):
+    """POST /api/v1/memory/patterns/{id}/decision."""
+    model_config = _STRICT
+    decision: Literal["approve", "reject"]
+    reason: str | None = Field(None, max_length=_MEM["decision_reason_max_chars"])
+
+
+class FeedbackRequest(BaseModel):
+    """POST /api/v1/threads/{id}/feedback: the user_feedback score on the thread's last run."""
+    model_config = _STRICT
+    rating: Literal["up", "down"]

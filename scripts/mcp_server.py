@@ -56,17 +56,25 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     import uvicorn
 
+    from app.observability import tracing
     from app.security.egress import EgressRefused, check_all
+    tracing.load_env_file()                             # p8: LANGFUSE_* from .env when unset (never printed)
     try:
         check_all(destinations())                      # p7 (T9): configured outbound hosts only
         ctx = default_context()                         # p7: ticket and audit roles, never the owner
     except (RolePasswordMissing, EgressRefused) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    ctx.tracer = tracing.build()                        # p8: no-op unless keys, host and config allow it
     app = build_app(build_server(secret, ctx, port=args.port), port=args.port, audit=ctx.audit)
-    print(f"MCP server on http://{cfg['host']}:{args.port}{cfg['path']} (loopback only)", flush=True)
+    print(f"MCP server on http://{cfg['host']}:{args.port}{cfg['path']} (loopback only; tracing "
+          f"{'on' if ctx.tracer.enabled else 'off'})", flush=True)
     # proxy_headers=False: see scripts/api_server.py (X-Forwarded-For from loopback would dodge the per-address limit)
-    uvicorn.run(app, host=cfg["host"], port=args.port, log_level="warning", access_log=False, proxy_headers=False)
+    try:
+        uvicorn.run(app, host=cfg["host"], port=args.port, log_level="warning", access_log=False,
+                    proxy_headers=False)
+    finally:
+        ctx.tracer.shutdown()                           # flushes pending spans (bounded by the export timeout)
     return 0
 
 
