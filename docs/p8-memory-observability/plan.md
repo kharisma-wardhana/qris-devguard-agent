@@ -162,6 +162,7 @@ Not changed: `app/validators/*`, the MCP tool argument models, `app/db/store.py`
     - **Me:** run `eval_security.py --live-injection` (echo before/after fencing) and one live `eval_agent.py --live --api-smoke` run, which gives live traces with real token usage.
     - **You:** terminate the pod.
     - First to cut if time runs short. (AC 23 live part)
+    - (Status 2026-11-12: **deferred by the developer**, not done. Nothing was run on the pod. The CI part of AC 23 passes: `test_injection.py` passes all 10 gate checks with the pre-fence echo recorded. The live echo rate after fencing, the pre-fence rate and live traces with real token usage are not measured.)
 12. **Report and docs.**
     - `observability-report.md` from the measured outputs and the `scan_markers.py` count.
     - Threat model; tech, structure, README and index.

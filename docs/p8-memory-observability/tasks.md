@@ -12,6 +12,6 @@
 - [x] 8. Fencing and the marker scan — spec AC: #21, #22, #23, #24
 - [x] 9. Retention command — spec AC: #5, #26, #27
 - [ ] 10. Alerts in the local Langfuse (controlled test) — spec AC: #25 — **deferred 2026-11-12** (developer decision): Langfuse up, servers ran with tracing on and sent 5 runs (arrival in the UI not yet checked), alerts.md written; alerts not yet created, test not run, no evidence
-- [ ] 11. Live pod session (echo before/after, live traces) — spec AC: #23
+- [ ] 11. Live pod session (echo before/after, live traces) — spec AC: #23 — **deferred 2026-11-12** (developer decision): no pod session; the live echo rate before/after fencing and live traces are not measured, so AC #23's live part stays open
 - [ ] 12. Report and docs — spec AC: #25, #28
 - [ ] 13. `CLAUDE.md` merge — spec AC: #28 (agent configuration)
