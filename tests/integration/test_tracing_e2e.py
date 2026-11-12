@@ -220,7 +220,7 @@ def test_a_read_run_with_evidence_scores_one_everywhere(pair):
     agent_side, _, h = pair
     out, got = _scores_for(agent_side, h, "What does the QR MPM generate endpoint need?", {"api_family": "qris-mpm"})
     assert out["answer"]["sources"]
-    assert got == {"citation_valid": 1, "answer_supported": 1, "policy_pass": 1, "tool_success": 1}
+    assert got == {"citation_valid": 1, "answer_supported": 1, "policy_pass": 1, "tool_success": 1, "answer_echo": 0}
 
 
 def test_a_next_step_with_nothing_to_cite_scores_answer_supported_zero(pair):
@@ -229,7 +229,7 @@ def test_a_next_step_with_nothing_to_cite_scores_answer_supported_zero(pair):
     agent_side, _, h = pair
     out, got = _scores_for(agent_side, h, QUESTION, SIG_CTX)
     assert not any(s["citation_ids"] for s in out["answer"]["next_steps"])
-    assert got == {"citation_valid": 1, "answer_supported": 0, "policy_pass": 1, "tool_success": 1}
+    assert got == {"citation_valid": 1, "answer_supported": 0, "policy_pass": 1, "tool_success": 1, "answer_echo": 0}
 
 
 @pytest.mark.db
