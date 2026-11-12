@@ -32,7 +32,9 @@ Conclusion: a receiver bound to the host's loopback can't be reached from the La
 
 What this proves: the receiver can be reached from inside the Langfuse container on the path Langfuse uses, the signature check and the store work end to end, and the API returns the stored alert only to approver roles. It does **not** prove that Langfuse itself accepts `http://alert-receiver` as a webhook target (the SSRF whitelist and the possible HTTPS requirement). That is AC #21.
 
-## AC #21: a real Langfuse alert shown on the Alerts page (PENDING: developer action)
+## AC #21: a real Langfuse alert shown on the Alerts page (DEFERRED)
+
+**Deferred by developer decision (2026-11-12).** Langfuse accepts the webhook URL, but no real alert has fired since then. To finish: recreate `alert-receiver` after pasting the real webhook secret, make the alert change state (for example one `incident_event`), and record the stored non-`synthetic-` alert ID, its time and a screenshot below. Until then AC #21 is **NOT MET**. It is not reported as passed.
 
 Steps (the developer holds the Langfuse admin login; the agent doesn't):
 
