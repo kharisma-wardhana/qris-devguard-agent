@@ -535,6 +535,31 @@ class Agent:
             with self.tracer.span("approval_wait", ms=wait, approval_status=row.get("status")):
                 pass
 
+    async def history(self, thread_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        """p9 (spec Behaviour §2): one entry per completed run, oldest first, from the checkpoint history.
+
+        A run counts from its newest *finished* checkpoint (no nodes left to run): earlier checkpoints of a run still
+        carry the previous run's final_answer (the input is merged into the thread state), and the input checkpoint
+        of the next run still carries this run's values with nodes pending. A run with no finished checkpoint
+        (waiting for approval, or cut short) is not listed. user_query is the sanitized message (Agent.run sanitizes
+        before the graph), so nothing here needs redacting again."""
+        seen: set[str] = set()
+        runs: list[dict[str, Any]] = []
+        async for snap in self.graph.aget_state_history({"configurable": {"thread_id": thread_id}}):
+            v = snap.values or {}
+            run_id = v.get("run_id")
+            if not run_id or run_id in seen or snap.next:
+                continue
+            seen.add(run_id)
+            if v.get("final_answer"):
+                runs.append({"run_id": run_id, "question": v.get("user_query"), "intent": v.get("intent"),
+                             "risk_level": v.get("risk_level"), "answer": v["final_answer"], "at": snap.created_at})
+                # action_result is not listed: like final_answer it is carried over from earlier runs in the state,
+                # and the thread view (snapshot) already shows the latest one.
+            if len(seen) >= limit:
+                break
+        return list(reversed(runs))
+
     async def snapshot(self, thread_id: str) -> dict[str, Any] | None:
         """The thread's latest state: waiting for approval, or the last run's answer. None for an unknown thread."""
         snap = await self.graph.aget_state({"configurable": {"thread_id": thread_id}})

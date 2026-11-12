@@ -153,3 +153,69 @@ def test_pending_approvals_list_for_an_approver(client, harness):
     rows = client.get("/api/v1/approvals?status=pending", headers=hdr(harness.secret, "boss-1", "admin")).json()
     assert approval_id not in [a["approval_id"] for a in rows["approvals"]]
 
+
+# --- thread history (AC #2) --------------------------------------------------------------------------------------
+
+PLANTED = "S3cr3tValueSYN"
+
+
+@pytest.fixture(scope="module")
+def mem_harness():
+    with McpHarness(rate_limits=False) as h:
+        yield h
+
+
+def test_history_in_memory_lists_completed_runs_in_order_with_redaction(mem_harness):
+    import asyncio
+    agent = Agent(ToolClient(mem_harness.url, mem_harness.secret), FakeLLM())
+
+    async def go():
+        a = await agent.run(sub="dev-1", role="developer", message="what does 4017300 mean?", hitl=False)
+        tid = a["thread_id"]
+        b = await agent.run(sub="dev-1", role="developer", thread_id=tid, hitl=False,
+                            message=f'client_secret: "{PLANTED}" why is my signature rejected?', context=SIG_CTX)
+        return tid, a, b, await agent.history(tid)
+
+    tid, a, b, runs = asyncio.run(go())
+    assert [r["run_id"] for r in runs] == [a["run_id"], b["run_id"]]
+    assert runs[0]["answer"] == a["answer"] and runs[1]["answer"] == b["answer"]     # not the previous run's answer
+    assert "4017300" in runs[0]["question"]
+    assert PLANTED not in str(runs) and "why is my signature rejected?" in runs[1]["question"]
+    assert all(r["at"] for r in runs)
+
+
+def test_history_of_an_unknown_thread_is_empty(mem_harness):
+    import asyncio
+    agent = Agent(ToolClient(mem_harness.url, mem_harness.secret), FakeLLM())
+    assert asyncio.run(agent.history(secrets.token_urlsafe(24))) == []
+
+
+@pytest.mark.db
+def test_history_route_on_postgres_skips_a_run_awaiting_approval(client, harness):
+    dev = f"p9-{secrets.token_hex(4)}"
+    tid = new_thread(client, harness, dev)
+    first = client.post(f"/api/v1/threads/{tid}/messages", json={"message": f'password: "{PLANTED}" what does 4017300 mean?'},
+                        headers=hdr(harness.secret, dev)).json()
+    waiting = client.post(f"/api/v1/threads/{tid}/messages", json=ESCALATE, headers=hdr(harness.secret, dev)).json()
+    assert waiting["status"] == "awaiting_approval"
+    got = client.get(f"/api/v1/threads/{tid}/messages", headers=hdr(harness.secret, dev))
+    assert got.status_code == 200
+    runs = got.json()["runs"]
+    assert [r["run_id"] for r in runs] == [first["run_id"]] and PLANTED not in got.text
+    # approved and resumed -> the escalated run is listed too, with its own answer
+    d = client.post(f"/api/v1/approvals/{waiting['approval']['approval_id']}/decision", json={"decision": "approve"},
+                    headers=hdr(harness.secret, "boss-1", "support_engineer"))
+    assert d.status_code == 200, d.text
+    runs = client.get(f"/api/v1/threads/{tid}/messages", headers=hdr(harness.secret, dev)).json()["runs"]
+    assert [r["run_id"] for r in runs] == [first["run_id"], waiting["run_id"]]
+    assert runs[1]["answer"] != runs[0]["answer"]
+
+
+@pytest.mark.db
+def test_history_of_someone_elses_or_unknown_thread_is_the_same_404(client, harness):
+    owner = f"p9-{secrets.token_hex(4)}"
+    tid = new_thread(client, harness, owner)
+    other = client.get(f"/api/v1/threads/{tid}/messages", headers=hdr(harness.secret, "p9-intruder"))
+    unknown = client.get(f"/api/v1/threads/{secrets.token_urlsafe(24)}/messages", headers=hdr(harness.secret, owner))
+    assert other.status_code == unknown.status_code == 404
+    assert other.json().keys() == unknown.json().keys() and other.json()["code"] == unknown.json()["code"] == "NOT_FOUND"

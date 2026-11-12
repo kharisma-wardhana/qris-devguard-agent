@@ -248,6 +248,14 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         log_route("/api/v1/threads/{id}/messages", sub, role, out["status"], started, out["run_id"])
         return message_out(out)
 
+    @app.get("/api/v1/threads/{thread_id}/messages")
+    async def thread_history(thread_id: str = Path(pattern=THREAD_ID),
+                             who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        """p9 (spec Behaviour §2, AC #2): completed runs of the caller's own thread, oldest first."""
+        await owned_thread(thread_id, who[0])
+        runs = await app.state.agent.history(thread_id, LIST_LIMIT)
+        return {"thread_id": thread_id, "runs": runs}          # "at": the checkpoint's ISO timestamp
+
     @app.get("/api/v1/threads/{thread_id}")
     async def get_thread(thread_id: str = Path(pattern=THREAD_ID), who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
         sub, _ = who
