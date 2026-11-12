@@ -10,6 +10,7 @@ def test_ui_config_is_loopback_and_complete():
     assert ui["host"] == "127.0.0.1"
     assert ui["api_url"].startswith("http://127.0.0.1:")
     assert 1 <= ui["token_ttl_minutes"] <= 60                 # configs/mcp.yaml caps tokens at 60 min
+    assert 5 <= ui["read_cache_seconds"] <= 60                # keeps reruns inside the api_other bucket
     roles = {i["role"] for i in ui["identities"]}
     assert "developer" in roles
     assert roles & set(config.security()["approver_roles"])   # the demo needs an approver

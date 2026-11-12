@@ -118,6 +118,7 @@ ui:                                    # p9: Streamlit demo UI (docs/p9-demo-ui-
   token_ttl_minutes: 15                # API-audience demo tokens, minted in-process; re-minted before expiry
   request_timeout_seconds: 150         # a cold first search loads BGE-M3 (52 s measured in p8)
   refresh_seconds: 15                  # Alerts page auto-refresh, when switched on
+  read_cache_seconds: 20               # per-session cache of reads; every write and Refresh clears it (api_other bucket)
   identities:                          # synthetic demo subjects only (demo-only; see the p9 runbook)
     - {sub: demo-dev, role: developer, label: "Developer (demo-dev)"}
     - {sub: demo-approver, role: support_engineer, label: "Approver (demo-approver)"}
