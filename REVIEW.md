@@ -7,6 +7,7 @@
 *Amended: 2026-11-10 for p5-langgraph-agent.*
 *Amended: 2026-11-11 for p6-checkpoint-hitl.*
 *Amended: 2026-11-11 for p7-mcp-hardening.*
+*Amended: 2026-11-12 for p9-demo-ui-alerts.*
 
 Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` and the feature's `docs/<feature-name>/spec.md` first. The review checks the diff against the spec's acceptance criteria.
 
@@ -46,6 +47,9 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P7:** a change to security behaviour updates the cases that prove it in `evals/datasets/security_cases.yaml` and re-renders `docs/p7-mcp-hardening/security-report.md` with `scripts/eval_security.py`. The generated block is never edited by hand, and a case or a test node is never removed to turn the report green.
 - **P7:** a burst or flood test gets a dedicated server or a lenient limiter, because every loopback caller shares one address bucket. A test that relies on ordering to stay under a limit is a bug.
 - **P7:** a PR touching `app/db/roles.py`, `app/db/audit.py`, a migration, the role DSNs or `GuardedTool` pastes the local `uv run pytest -m db` run and `uv run python scripts/eval_security.py` output. The role matrix and audit tests skip in CI.
+- **P9:** `app/alerts/receiver.py` stays standard-library only (`test_receiver_imports_standard_library_only`), and its limits move together with `configs/agent.yaml` `alerts` (`test_limits_match_configs_agent_yaml`).
+- **P9:** Streamlit reads go through `read()` and writes through `write()` in `app/ui/streamlit_app.py`. A new per-rerun API call outside the cache is a bug: a few clicks then get 429 from the `api_other` bucket.
+- **P9:** `Agent.history` takes each run's answer from its newest checkpoint with no `next`. A PR touching it, or the thread/approval list routes, pastes `uv run pytest -m db tests/unit/test_api_p9_routes.py tests/integration/test_ui_e2e.py`.
 
 ### Security
 - Nothing under `knowledge_base/sources/` may be tracked except `.gitkeep`. No `.env*` file other than `.env.example`, and no `*.pem`, `*.key` or `*.p12` file, may be added anywhere.
@@ -85,6 +89,9 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P7:** both servers keep `proxy_headers=False` and a loopback host. Trusting forwarded headers needs the proxy design in `docs/p7-mcp-hardening/transport.md` and a threat-model change.
 - **P7:** the body-size and pre-auth limits run before authentication and parsing. Raising a value in `limits.*` (`configs/security.yaml`) needs a stated reason.
 - **P7:** a GitHub Action added for scanning or security is pinned by full commit SHA, not by tag (the `trivy-action` tags were force-pushed in 2026).
+- **P9:** `alert-receiver` in `docker-compose.yml` keeps no `ports:`, `user: "65534:65534"`, `read_only`, `cap_drop: [ALL]`, `no-new-privileges` and a read-only script mount; the receiver keeps the signature check, its 600 s window and the 64 KiB cap. Langfuse's whitelist stays exactly the hostname `alert-receiver`. Adding `LANGFUSE_WEBHOOK_WHITELISTED_IPS` or `_IP_SEGMENTS` is a blocker (T20).
+- **P9:** the UI shows API text only through `st.text`: never `st.markdown`, a widget label or `unsafe_allow_html`. The token never reaches page state, a URL or a log. `scripts/ui_server.py` keeps `127.0.0.1` and usage statistics off.
+- **P9:** `GET /api/v1/alerts` and `GET /api/v1/approvals?status=pending` stay approver-only. A received alert never triggers an action, a tool call or an outbound request.
 
 ### Compliance
 - Public ASPI/SNAP documents are `reference_only`: they are never committed, and any quoted excerpt is at most `citations.max_excerpt_chars.reference_only` (300) characters.
@@ -109,6 +116,7 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P7:** `security-report.md` results are measured and dated. A PARTIAL §13.4 control stays PARTIAL until the missing evidence exists, and the live-injection echo finding (5/10) is reported as measured, never reworded.
 - **P7:** audit rows hold pseudonymous synthetic `sub` values and IDs only. Retention is 90 days through the developer-run `scripts/purge_audit.py`; nothing deletes rows automatically.
 - **P7:** every HIGH or CRITICAL scan finding (pip-audit, Trivy) is fixed by a version bump or listed in `security-report.md` with its code path, reachability and mitigation. An untriaged finding fails the dependency-hygiene control.
+- **P9:** `docs/p9-demo-ui-alerts/demo-report.md` keeps AC #21 (a real Langfuse alert shown) NOT MET until a non-`synthetic-` alert ID, time and screenshot are recorded. A synthetic test alert is never presented as Langfuse evidence.
 
 ## Severity levels
 
@@ -143,6 +151,8 @@ Claude reviews pull requests on this repo against this file. Read `CLAUDE.md` an
 - **P7:** the wording of attack phrases in `evals/datasets/injection_cases.yaml` and `tests/fixtures/injection/`. Check only that they are synthetic, keep the SYNTHETIC marker and never reach the approved corpus or Qdrant.
 - **P7:** Trivy findings inside third-party images we don't build. Check only that each HIGH or CRITICAL finding is triaged in `security-report.md`.
 - **P7:** the formatting of the generated block in `security-report.md`. Check only that it was regenerated by the script, not edited.
+- **P9:** Streamlit layout and wording. Check only the plain-text rule and that no token appears.
+- **P9:** the `pandas`, `pyarrow` and `altair` entries in `uv.lock` that arrive with the `ui` extra.
 
 ## What a human must decide
 
