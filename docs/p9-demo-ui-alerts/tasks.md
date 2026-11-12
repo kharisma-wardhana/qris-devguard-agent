@@ -3,7 +3,7 @@
 *Implements: docs/p9-demo-ui-alerts/plan.md*
 
 - [x] 1. Dependency and config — spec AC: #19, #12
-- [ ] 2. Thread list and pending approvals — spec AC: #1, #3, #5
+- [x] 2. Thread list and pending approvals — spec AC: #1, #3, #5
 - [ ] 3. Thread history — spec AC: #2, #5
 - [ ] 4. Alert receiver — spec AC: #6, #7, #8, #9, #10, #11, #12
 - [ ] 5. Alert reader and route — spec AC: #4, #5

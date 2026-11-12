@@ -153,6 +153,10 @@ Not changed: `app/validators/*`, the MCP tool argument models, `app/db/store.py`
     - **You:** take the screenshots of the ALERT state.
     - **Stop point:** if Langfuse insists on a channel that can only be received off loopback, stop and ask (spec Flagged concerns).
     - (AC 25)
+    - (Status 2026-11-12: **deferred by the developer**, not done.)
+      - Done so far: Langfuse 4.76.0 healthy on loopback; migration `0003` applied to the local database; both servers ran with tracing on; 5 baseline runs on the fake LLM (cold start 52.1 s, then 1.2–1.6 s warm); `alerts.md` written with the intended settings.
+      - Not done: the alerts are not yet created in the UI, the controlled test has not run, and there are no screenshots. AC 25 stays open until it does.
+      - The spec's "threshold below the measured baseline" is read as above the warm baseline and below the delayed runs (3,000 ms), because a threshold below the baseline would fire without the delay. This was raised with the developer.
 11. **Live pod session.**
     - **You:** start the pod and the tunnel.
     - **Me:** run `eval_security.py --live-injection` (echo before/after fencing) and one live `eval_agent.py --live --api-smoke` run, which gives live traces with real token usage.
