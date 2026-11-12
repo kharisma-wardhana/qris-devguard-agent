@@ -43,6 +43,6 @@ Steps (the developer holds the Langfuse admin login; the agent doesn't):
 
 | Item | Result |
 |---|---|
-| Langfuse accepted `http://alert-receiver/langfuse/alerts` | _to record_ |
-| Alert ID and receive time | _to record_ |
+| Langfuse accepted `http://alert-receiver/langfuse/alerts` | **Yes** (developer, 2026-11-12): the `http://` webhook URL was saved after `langfuse-web`/`langfuse-worker` were recreated with the whitelist. The HTTPS stop rule did not trigger. |
+| Alert ID and receive time | _to record_. Checked at 05:05 UTC: since the restart at 04:55 UTC the worker's `MonitorRunner` logged `published 0 events` on every 30 s run, and the receiver logged no delivery. The only stored alert is the synthetic `synthetic-5dd5b4ee6d04` from AC #20, which is what the Alerts page showed at that point. |
 | Shown on the Alerts page (screenshot) | _to record_ |
