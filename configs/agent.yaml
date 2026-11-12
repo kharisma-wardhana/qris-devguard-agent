@@ -110,3 +110,25 @@ observability:                         # p8: Langfuse tracing (TRD §21; spec §
 retention:                             # p8: TRD §19.3, run by scripts/purge_retention.py as the owner role
   checkpoint_days: 30
   approval_days: 90                    # approvals, their sandbox tickets, and threads with nothing newer
+
+ui:                                    # p9: Streamlit demo UI (docs/p9-demo-ui-alerts/spec.md Behaviour §1, §7)
+  host: 127.0.0.1                      # loopback only; scripts/ui_server.py refuses anything else
+  port: 8501
+  api_url: http://127.0.0.1:8000       # api.host/api.port; the UI calls /api/v1 only
+  token_ttl_minutes: 15                # API-audience demo tokens, minted in-process; re-minted before expiry
+  request_timeout_seconds: 150         # a cold first search loads BGE-M3 (52 s measured in p8)
+  refresh_seconds: 15                  # Alerts page auto-refresh, when switched on
+  identities:                          # synthetic demo subjects only (demo-only; see the p9 runbook)
+    - {sub: demo-dev, role: developer, label: "Developer (demo-dev)"}
+    - {sub: demo-approver, role: support_engineer, label: "Approver (demo-approver)"}
+
+alerts:                                # p9: Langfuse alert webhook receiver and reader (spec Behaviour §5, §6, Data)
+  store_path: var/alerts/alerts.jsonl  # git-ignored; the receiver writes it, the API reads it
+  secret_env: LANGFUSE_ALERT_WEBHOOK_SECRET   # copied by the developer from the Langfuse webhook; never printed
+  max_body_bytes: 65536
+  max_clock_skew_seconds: 600          # our replay window on the signed t=; Langfuse defines none
+  max_records: 500
+  title_max_chars: 200
+  body_max_chars: 1000
+  langfuse_base_url: http://localhost:3000/   # NEXTAUTH_URL in docker-compose.yml; other permalinks are dropped
+  list_limit: 50

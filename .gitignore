@@ -21,3 +21,6 @@ knowledge_base/sources/*
 # Generated reports
 evals/reports/*
 !evals/reports/.gitkeep
+
+# p9: alert webhook store (docs/p9-demo-ui-alerts/spec.md Data)
+var/
