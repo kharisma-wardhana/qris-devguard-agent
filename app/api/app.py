@@ -284,6 +284,16 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         rows = await db(store.pending_approvals, LIST_LIMIT)
         return {"approvals": [approval_view(r) for r in rows]}
 
+    @app.get("/api/v1/alerts")
+    async def list_alerts(who: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        """p9 (spec Behaviour §6, AC #4): Langfuse alerts received by the webhook receiver, newest first, re-validated
+        and redacted. Approver roles only. Read-only: an alert never triggers anything."""
+        from app.alerts import store as alert_store
+        if who[1] not in approver_roles:
+            raise ApiError(403, "FORBIDDEN")
+        alerts, skipped = await run_in_threadpool(alert_store.read_alerts)
+        return {"alerts": alerts, "skipped": skipped}
+
     @app.post("/api/v1/approvals/{approval_id}/decision")
     async def decide(body: DecisionRequest, approval_id: str = Path(pattern=APPROVAL_ID),
                      who: tuple[str, str] = Depends(other_identity)) -> Any:

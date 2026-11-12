@@ -66,7 +66,7 @@ def get(base, path, sub="dev-1", role="developer", token=None, **kw):
     return httpx.get(f"{base}{path}", headers=headers, timeout=10, **kw)
 
 
-ROUTES = ["/api/v1/threads", "/api/v1/approvals?status=pending"]
+ROUTES = ["/api/v1/threads", "/api/v1/approvals?status=pending", "/api/v1/alerts"]
 
 
 @pytest.mark.parametrize("path", ROUTES)
@@ -99,3 +99,15 @@ def test_thread_list_burst_is_rate_limited(base):
     assert 429 in codes and codes[0] != 429
     r = get(base, "/api/v1/threads", sub="p9-burst")
     assert r.status_code == 429 and int(r.headers["Retry-After"]) >= 1
+
+
+@pytest.mark.parametrize("role", ["developer", "kb_maintainer"])
+def test_alerts_forbidden_for_non_approvers(base, role):
+    r = get(base, "/api/v1/alerts", sub=f"p9-a-{role}", role=role)
+    assert r.status_code == 403 and r.json()["code"] == "FORBIDDEN"
+
+
+@pytest.mark.parametrize("role", ["support_engineer", "admin"])
+def test_alerts_for_approvers_with_an_empty_store(base, role):
+    r = get(base, "/api/v1/alerts", sub=f"p9-a-{role}", role=role)
+    assert r.status_code == 200 and r.json() == {"alerts": [], "skipped": 0}
