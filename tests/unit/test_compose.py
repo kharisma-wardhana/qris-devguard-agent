@@ -157,7 +157,7 @@ def test_api_server_refuses_a_non_loopback_host(monkeypatch, capsys):
 
 
 
-# --- p9: alert webhook receiver (docs/p9-demo-ui-alerts/spec.md Behaviour §5, AC #20; threat T18) -------------
+# --- p9: alert webhook receiver (docs/p9-demo-ui-alerts/spec.md Behaviour §5, AC #20; threat T20) -------------
 
 def test_alert_receiver_has_no_host_port_and_is_hardened():
     svc = SERVICES["alert-receiver"]

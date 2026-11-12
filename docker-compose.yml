@@ -40,7 +40,7 @@ x-langfuse-env: &langfuse-env
   REDIS_PORT: "6379"
   REDIS_AUTH: ${REDIS_AUTH:?run_scripts/init_env.py}
   # p9: Langfuse refuses webhook targets on private/loopback addresses (SSRF defence). Exactly one compose
-  # service is trusted: the alert receiver below (docs/p9-demo-ui-alerts/spec.md, threat T18).
+  # service is trusted: the alert receiver below (docs/p9-demo-ui-alerts/spec.md, threat T20).
   LANGFUSE_WEBHOOK_WHITELISTED_HOST: alert-receiver
 
 services:

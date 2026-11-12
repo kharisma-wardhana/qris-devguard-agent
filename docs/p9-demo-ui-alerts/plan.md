@@ -31,7 +31,7 @@
 - `tests/unit/test_compose.py`: expected-service list and pins extended for `alert-receiver`. This is an intentional pin update; every existing assertion stays.
 - `.github/workflows/ci.yml`: a new `ui-tests` job (`uv sync --locked --extra ui`, runs the UI tests). The existing `test` job is untouched; there, UI tests skip because Streamlit isn't installed.
 - `.github/workflows/container-scan.yml`: one matrix entry for the receiver's pinned Python image.
-- `docs/threat-model.md` (T18), `docs/tech.md`, `docs/structure.md`, `docs/index.md`.
+- `docs/threat-model.md` (T20, plus boundary B7; the spec's "T18" was already taken by the GPU pod threat, so the new threat is numbered T20), `docs/tech.md`, `docs/structure.md`, `docs/index.md`.
 - `CLAUDE.md`: append to `## Commands`, `## Test scope` and `## Common mistakes` only.
 
 ## Work sequence
