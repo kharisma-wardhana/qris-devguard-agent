@@ -2,7 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Build. Written: 2026-11-15. Via /aspec:make-it-simple-v2.*
 *Implements: docs/p9-final-evaluation-packaging/plan.md*
 
-- [ ] 1. Config, extra, package skeleton — spec AC: #21
+- [x] 1. Config, extra, package skeleton — spec AC: #21
 - [ ] 2. Golden dataset schema and deterministic checks — spec AC: #7, #8
 - [ ] 3. Golden run script — spec AC: #8, #13
 - [ ] 4. Judge — spec AC: #9, #10, #11, #12

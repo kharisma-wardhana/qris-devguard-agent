@@ -1,0 +1,112 @@
+# Final evaluation and packaging (docs/p9-final-evaluation-packaging/spec.md).
+# Eval-time settings only: nothing under app/ outside app/evaluation/ reads this file.
+# Thresholds are NOT here: they stay in configs/eval_thresholds.yaml and are never edited to reach PASS.
+
+reports_dir: evals/reports
+freshness_days: 14            # evidence older than this reads STALE (user decision, 2026-11-15)
+
+golden:
+  dataset: evals/datasets/answer_golden.yaml
+  schema: evals/datasets/answer_golden.schema.json
+  calibration: evals/datasets/judge_calibration.yaml
+  calibration_size: 20
+  calibration_seed: 20261115
+  max_excerpt_chars: 300      # same cap as public citation quotes (configs/security.yaml)
+
+judge:
+  model: claude-opus-5-5      # user decision; no model fallback (a verdict must come from this model)
+  effort: high
+  prompt_version: "judge-v1"
+  max_tokens: 4000
+  max_reason_chars: 300
+  poll_seconds: 30
+
+bench:
+  # Run inside the pod by the developer (docs/p9-final-evaluation-packaging/runbook.md); the repo only parses.
+  dataset_name: random
+  random_input_len: 1024
+  random_output_len: 256
+  num_prompts: 100
+  seed: 20261115
+  concurrencies: [1, 4]
+  gated_concurrency: 1        # reported against PRD §22 targets, not a release gate
+  targets: {ttft_p95_ms: 5000, tpot_p95_ms: 120}
+
+# How the release gate finds and reads evidence. `glob` is matched in reports_dir; the newest match wins.
+# `modes`: which report modes are accepted (live-only gates never accept `ci`). `null` = the report has no mode.
+gates:
+  rag_candidate_recall_at_20:
+    glob: "retrieval-*.json"
+    value: before_after.all.candidate_recall@20     # all 50 queries (user decision)
+    dataset: {file: evals/datasets/retrieval_golden.yaml, key: dataset_version, report_key: dataset_version}
+    modes: [null]
+  reranked_recall_at_5:
+    glob: "retrieval-*.json"
+    value: before_after.all.reranked_recall@5
+    dataset: {file: evals/datasets/retrieval_golden.yaml, key: dataset_version, report_key: dataset_version}
+    modes: [null]
+  citation_validity:
+    glob: "answers-live-*.json"
+    value: summary.citation_validity
+    dataset: {file: evals/datasets/answer_golden.yaml, key: dataset_version, report_key: dataset_version}
+    modes: [live]
+  citation_support_precision:
+    glob: "judge-*.json"
+    value: metrics.citation_support_precision
+    dataset: {file: evals/datasets/answer_golden.yaml, key: dataset_version, report_key: dataset_version}
+    modes: [live]
+  validator_fixture_accuracy:
+    glob: "validators-*.json"
+    value: min_accuracy
+    dataset: {file: knowledge_base/fixtures/fixtures.yaml, key: fixture_set_version, report_key: fixture_set_version}
+    modes: [null]
+  golden_answer_supported:
+    glob: "judge-*.json"
+    value: metrics.golden_answer_supported
+    dataset: {file: evals/datasets/answer_golden.yaml, key: dataset_version, report_key: dataset_version}
+    modes: [live]
+  agent_scenarios_passed:
+    glob: "agent-flows-live-*.json"
+    value: flows_passed
+    dataset: {file: evals/datasets/agent_flows.yaml, key: dataset_version, report_key: dataset_version}
+    modes: [live]
+  crash_resume:
+    glob: "crash-resume-*.json"
+    value: status_pass
+    modes: [null]
+  hitl_approval_enforced:
+    glob: "security-*.json"
+    value: case_pass_fraction
+    cases: [S11, S12, S14]
+    dataset: {file: evals/datasets/security_cases.yaml, key: version, report_key: dataset_version}
+    modes: [null]
+  langfuse_alert_fired:
+    glob: "alerts-*.json"
+    value: real_alert_fired
+    modes: [live]
+  reproducible_deployment:
+    manifest: docs/p9-final-evaluation-packaging/deployment-manifest.yaml
+    value: manifest_complete
+    modes: [null]
+
+critical:
+  secret_leakage:
+    sources:
+      - {glob: "security-*.json", value: case_fail_count, cases: [S13, G-SECRETS],
+         dataset: {file: evals/datasets/security_cases.yaml, key: version, report_key: dataset_version}, modes: [null]}
+      - {glob: "answers-live-*.json", value: summary.secret_findings,
+         dataset: {file: evals/datasets/answer_golden.yaml, key: dataset_version, report_key: dataset_version}, modes: [live]}
+  unauthorized_side_effects:
+    sources:
+      - {glob: "security-*.json", value: case_fail_count, cases: [S14],
+         dataset: {file: evals/datasets/security_cases.yaml, key: version, report_key: dataset_version}, modes: [null]}
+  approval_bypass:
+    sources:
+      - {glob: "security-*.json", value: case_fail_count, cases: [S02, S11, S12],
+         dataset: {file: evals/datasets/security_cases.yaml, key: version, report_key: dataset_version}, modes: [null]}
+  fabricated_crypto_guidance:
+    sources:
+      - {glob: "answers-live-*.json", value: summary.fabricated_crypto,
+         dataset: {file: evals/datasets/answer_golden.yaml, key: dataset_version, report_key: dataset_version}, modes: [live]}
+      - {glob: "agent-flows-live-*.json", value: flows_crypto_failures,
+         dataset: {file: evals/datasets/agent_flows.yaml, key: dataset_version, report_key: dataset_version}, modes: [live]}
