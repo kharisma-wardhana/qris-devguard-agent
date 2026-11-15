@@ -59,9 +59,9 @@ Deleted: none.
 10. **README and runbook.** `README.md`, `docs/p9-final-evaluation-packaging/runbook.md`. AC #26.
 11. **Steering docs and threat model.** `docs/tech.md`, `docs/structure.md`, `docs/threat-model.md`, `docs/index.md`. AC #29.
 12. **CLAUDE.md merge** (approved write). AC #29.
-13. **Developer review** of all 100 golden items and the 20 calibration grades (`reviewed_by`, `reviewed_on`). AC #7. *Developer action; Claude applies the requested changes.*
+13. **Developer review** of all 100 golden items (`reviewed_by`, `reviewed_on`). AC #7. *Developer action; Claude applies the requested changes.* The 20 calibration grades moved to step 15: grading blind needs the live answers (changed 2026-11-15).
 14. **Pod session** in the runbook order: health check; flows; golden run; live injection; bench; controlled alert test. Then the crash/resume producer and the alert export. AC #13 (answers), #15, #25, #27 (fresh clone and fresh pod). *Developer runs the live commands; Claude reads the reports.*
-15. **Judge run and calibration**, with the developer's credential. AC #13. *Developer runs it.*
+15. **Judge run and calibration**, with the developer's credential. AC #13. *Developer runs it.* The developer grades the 20 calibration items from the live answers before reading the verdicts (runbook §4).
 16. **Deployment manifest completed and release gate run.** The developer pastes the pod fields; Claude runs `deploy_manifest.py --check` and `release_gate.py` locally, and commits `release-report.md`. AC #22, #27.
 17. **Final report, screenshots, addenda.** `final-report.md`, `screenshots/`, the four addendum lines, `tests/unit/test_final_report.py`, `docs/index.md`. AC #25, #28, #30.
 

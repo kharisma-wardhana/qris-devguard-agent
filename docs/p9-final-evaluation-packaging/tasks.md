@@ -14,8 +14,8 @@
 - [x] 10. README and runbook — spec AC: #26
 - [x] 11. Steering docs and threat model — spec AC: #29
 - [x] 12. CLAUDE.md merge — spec AC: #29
-- [ ] 13. Developer review of golden items and calibration grades — spec AC: #7
+- [x] 13. Developer review of golden items — spec AC: #7
 - [ ] 14. Pod session — spec AC: #13, #15, #25, #27
-- [ ] 15. Judge run and calibration — spec AC: #13
+- [ ] 15. Judge run and calibration grades — spec AC: #12, #13
 - [ ] 16. Deployment manifest completed and release gate run — spec AC: #22, #27
 - [ ] 17. Final report, screenshots, addenda — spec AC: #25, #28, #30

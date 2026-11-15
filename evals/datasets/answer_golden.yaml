@@ -2,8 +2,8 @@
 # ga-001..ga-050 ask the 50 labelled retrieval queries (q01-q30 original, h01-h20 hard set) with the same gold
 # sections; ga-051..ga-080 cover the synthetic spec, the SOP, response codes and validator fixtures; ga-081..ga-100
 # must refuse, say NOT_FOUND or abstain. Expected facts are paraphrased (no ASPI text copied beyond short technical
-# tokens). Drafted by Claude on 2026-11-15; `reviewed_by`/`reviewed_on` are filled only by the developer's review.
-# Items marked `# CHECK:` need the reviewer's attention.
+# tokens). Drafted by Claude on 2026-11-15. Reviewed by Kharisma Wardhana on 2026-11-15: all 100 items accepted
+# as drafted (the developer's attestation, recorded by Claude); the 7 `# CHECK:` notes were reviewed and removed.
 dataset_version: 1.0.0
 items:
   - id: ga-001
@@ -19,8 +19,8 @@ items:
       - The client_ID is the value sent in the X-CLIENT-KEY header, issued at registration.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-002
     source_query: q02
     category: retrieval
@@ -34,8 +34,8 @@ items:
       - The B2B access-token service is service code 73, POST to .../{version}/access-token/b2b.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-003
     source_query: q03
     category: retrieval
@@ -49,8 +49,8 @@ items:
       - ORIGIN is optional, and Authorization is only conditional for the B2B transaction request.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.6#2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-004
     source_query: q04
     category: retrieval
@@ -64,9 +64,8 @@ items:
       - The body component is the lowercase hex SHA-256 hash of the minified request body.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.6#1"}
-    reviewed_by: null
-    reviewed_on: null
-  # CHECK: the gold sections give the formula (minify, SHA-256, lowercase hex) but never state WHY the body is minified and hashed; facts below are limited to what the text says.
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-005
     source_query: q05
     category: retrieval
@@ -81,8 +80,8 @@ items:
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.6#1"}
       - {document_id: snap-technical-security-standard, section_id: "2.1.6#2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-006
     source_query: q06
     category: retrieval
@@ -96,8 +95,8 @@ items:
       - The TLS 1.2 fallback with those suites is permitted only until 30 June 2026.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.10"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-007
     source_query: q07
     category: retrieval
@@ -113,8 +112,8 @@ items:
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "1.7.1"}
       - {document_id: snap-technical-security-standard, section_id: "1.7.2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-008
     source_query: q08
     category: retrieval
@@ -129,8 +128,8 @@ items:
       - The master key version in use must be clear, and key usage must be open to monitoring and audit.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "1.8"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-009
     source_query: q09
     category: retrieval
@@ -144,8 +143,8 @@ items:
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.2"}
       - {document_id: snap-technical-security-standard, section_id: "2.1.3"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-010
     source_query: q10
     category: retrieval
@@ -159,8 +158,8 @@ items:
       - Other services use the verb that fits their operation, as listed in each service's general information table in the technical spec.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-011
     source_query: q11
     category: retrieval
@@ -174,8 +173,8 @@ items:
       - The version follows the API domain and precedes the service group.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.11"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-012
     source_query: q12
     category: retrieval
@@ -189,8 +188,8 @@ items:
       - The symmetric signature standard is HMAC_SHA512 (512 bits).
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.9"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-013
     source_query: q13
     category: retrieval
@@ -205,8 +204,8 @@ items:
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.5"}
       - {document_id: snap-technical-security-standard, section_id: "2.1.6#2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-014
     source_query: q14
     category: retrieval
@@ -220,8 +219,8 @@ items:
       - Inside amount, value (16,2, two decimal digits) and currency (ISO 4217, e.g. IDR) are mandatory.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.3.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-015
     source_query: q15
     category: retrieval
@@ -236,9 +235,8 @@ items:
       - paidTime is filled when the original transaction succeeded.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.3.5"}
-    reviewed_by: null
-    reviewed_on: null
-  # CHECK: the text gives the Payment Notification API and its fields, but the sender/receiver direction is only in the (image) sequence diagram, so the provider-to-merchant direction is not stated in the extracted text.
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-016
     source_query: q16
     category: retrieval
@@ -252,9 +250,8 @@ items:
       - The notification can also carry amount, transactionStatusDesc and originalPartnerReferenceNo.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.3.5"}
-    reviewed_by: null
-    reviewed_on: null
-  # CHECK: the flow comparison lives in sequence diagrams that are images; the extracted text only lists the APIs of each family, so the facts compare APIs, not a narrated flow.
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-017
     source_query: q17
     category: retrieval
@@ -269,8 +266,8 @@ items:
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "5.2.2"}
       - {document_id: snap-data-technical-spec, section_id: "4.3.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-018
     source_query: q18
     category: retrieval
@@ -284,8 +281,8 @@ items:
       - The response code list applies to any service code, varying by HTTP status and case code.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "6.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-019
     source_query: q19
     category: retrieval
@@ -299,8 +296,8 @@ items:
       - Other 401 cases cover an invalid B2B token (01), invalid customer token (02) and token not found (03, 04).
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "6.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-020
     source_query: q20
     category: retrieval
@@ -313,8 +310,8 @@ items:
       - HTTP 409 case 01 is Duplicate partnerReferenceNo, when a transaction with that partnerReferenceNo was already processed.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "6.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-021
     source_query: q21
     category: retrieval
@@ -328,8 +325,8 @@ items:
       - The response's virtualAccountData returns the VA name, totalAmount and optional billDetails.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.2.2.7"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-022
     source_query: q22
     category: retrieval
@@ -343,9 +340,8 @@ items:
       - latestTransactionStatus in the response gives the result (00 success, 03 pending, 06 failed, 07 not found).
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.2.3"}
-    reviewed_by: null
-    reviewed_on: null
-  # CHECK: the binding "flow" is only in an image sequence diagram; the text gives the two APIs and their fields, not the step order between them.
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-023
     source_query: q23
     category: retrieval
@@ -361,8 +357,8 @@ items:
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "1.2.7"}
       - {document_id: snap-data-technical-spec, section_id: "1.2.4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-024
     source_query: q24
     category: retrieval
@@ -376,8 +372,8 @@ items:
       - Omitting balanceTypes means all balance types on the account are returned.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "2.2.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-025
     source_query: q25
     category: retrieval
@@ -392,8 +388,8 @@ items:
       - Each urlParams entry needs url, type (PAY_RETURN or PAY_NOTIFY) and isDeeplink (Y/N).
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "5.2.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-026
     source_query: q26
     category: retrieval
@@ -408,8 +404,8 @@ items:
       - X-SIGNATURE is base64 of HMAC_SHA512 keyed with the test-only client secret.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-027
     source_query: q27
     category: retrieval
@@ -422,8 +418,8 @@ items:
       - The answer keeps the SYNTHETIC label on the cited source.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.response-codes"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-028
     source_query: q28
     category: retrieval
@@ -436,8 +432,8 @@ items:
       - "The headers are Content-Type, Authorization, X-TIMESTAMP, X-SIGNATURE, X-PARTNER-ID, X-EXTERNAL-ID and CHANNEL-ID."
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.required-headers"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-029
     source_query: q29
     category: retrieval
@@ -453,8 +449,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "3.1"}
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-030
     source_query: q30
     category: retrieval
@@ -468,8 +464,8 @@ items:
       - Escalate when the issue looks environment-specific, needs production-only evidence, or would require a production action.
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-031
     source_query: h01
     category: retrieval
@@ -483,8 +479,8 @@ items:
       - The signature algorithm is SHA256withRSA with the private key.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-032
     source_query: h02
     category: retrieval
@@ -499,8 +495,8 @@ items:
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.6#1"}
       - {document_id: snap-technical-security-standard, section_id: "2.1.6#2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-033
     source_query: h03
     category: retrieval
@@ -514,8 +510,8 @@ items:
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.5"}
       - {document_id: snap-technical-security-standard, section_id: "2.1.6#2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-034
     source_query: h04
     category: retrieval
@@ -529,8 +525,8 @@ items:
       - That TLS 1.2 allowance applies only until 30 June 2026; versions older than TLS 1.2 are not listed.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.10"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-035
     source_query: h05
     category: retrieval
@@ -546,8 +542,8 @@ items:
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "1.7.1"}
       - {document_id: snap-technical-security-standard, section_id: "1.7.2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-036
     source_query: h06
     category: retrieval
@@ -560,8 +556,8 @@ items:
       - Key management requires an access-rights procedure and key usage must be open to monitoring and audit.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "1.8"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-037
     source_query: h07
     category: retrieval
@@ -574,8 +570,8 @@ items:
       - The verb for each service is the one given in that service's general information table; get access token always uses POST.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-038
     source_query: h08
     category: retrieval
@@ -589,8 +585,8 @@ items:
       - latestTransactionStatus 00 means success; paidTime is filled on a successful transaction.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.3.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-039
     source_query: h09
     category: retrieval
@@ -604,8 +600,8 @@ items:
       - validityPeriod (ISO 8601) optionally sets until when the QR is valid.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.3.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-040
     source_query: h10
     category: retrieval
@@ -619,8 +615,8 @@ items:
       - The full code is HTTP status + service code + case code, so the case code tells which applies.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "6.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-041
     source_query: h11
     category: retrieval
@@ -634,8 +630,8 @@ items:
       - Case 01 is an invalid B2B token (not existing or expired) and case 03 means the B2B token was not found.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "6.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-042
     source_query: h12
     category: retrieval
@@ -649,8 +645,8 @@ items:
       - latestTransactionStatus in the response tells the outcome, e.g. 00 success, 03 pending, 06 failed, 07 not found.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.2.3"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-043
     source_query: h13
     category: retrieval
@@ -664,8 +660,8 @@ items:
       - CPM Payment requires partnerReferenceNo, qrContent (the CPM QR string) and merchantId.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "5.2.2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-044
     source_query: h14
     category: retrieval
@@ -679,8 +675,8 @@ items:
       - The response can also list up to 24 billDetails entries.
     supporting_sections:
       - {document_id: snap-data-technical-spec, section_id: "4.2.2.7"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-045
     source_query: h15
     category: retrieval
@@ -695,8 +691,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.response-codes"}
       - {document_id: snap-data-technical-spec, section_id: "6.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-046
     source_query: h16
     category: retrieval
@@ -710,8 +706,8 @@ items:
       - Timestamps more than 5 minutes from server time are rejected with case code 01 (invalid field format).
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.3"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-047
     source_query: h17
     category: retrieval
@@ -725,8 +721,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.required-headers"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-048
     source_query: h18
     category: retrieval
@@ -740,8 +736,8 @@ items:
       - Citations of synthetic documents keep the SYNTHETIC label.
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-049
     source_query: h19
     category: retrieval
@@ -756,8 +752,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "3.3"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.request-fields"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
   - id: ga-050
     source_query: h20
     category: retrieval
@@ -772,8 +768,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "3.5"}
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-051
     source_query: null
@@ -787,8 +783,8 @@ items:
       - The synthetic spec states there is no production endpoint.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-052
     source_query: null
@@ -803,8 +799,8 @@ items:
       - Spesifikasi sintetis tidak mendefinisikan ulang layanan access token tersebut.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-053
     source_query: null
@@ -819,8 +815,8 @@ items:
       - X-TIMESTAMP uses ISO-8601 with milliseconds and a numeric offset, e.g. 2026-11-06T10:15:30.000+07:00.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.3"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-054
     source_query: null
@@ -835,8 +831,8 @@ items:
       - The client secret is test-only, held by the validator fixture store, and never appears in requests, logs or answers.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-055
     source_query: null
@@ -851,8 +847,8 @@ items:
       - Komponen string-to-sign digabung dengan ":" dalam urutan HTTPMethod, EndpointUrl, AccessToken, bodyHash, X-TIMESTAMP.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-056
     source_query: null
@@ -867,8 +863,8 @@ items:
       - Both amount.value and amount.currency are required.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.request-fields"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-057
     source_query: null
@@ -882,8 +878,8 @@ items:
       - CHANNEL-ID wajib dan terdiri dari 5 digit.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.required-headers"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-058
     source_query: null
@@ -898,8 +894,8 @@ items:
       - On success it carries qrContent, the (synthetic) QR payload string.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.response-fields"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-059
     source_query: null
@@ -914,8 +910,8 @@ items:
       - merchantId wajib, maksimal 64 karakter.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.request-fields"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-060
     source_query: null
@@ -929,8 +925,8 @@ items:
       - paidTime (ISO-8601) is present when the status is 00.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.response-fields"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-061
     source_query: null
@@ -946,8 +942,8 @@ items:
       - additionalInfo is a free-form object that must not contain personal data.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.request-fields"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-062
     source_query: null
@@ -962,8 +958,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.method-and-path"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.method-and-path"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-063
     source_query: null
@@ -977,8 +973,8 @@ items:
       - The diagnosis stops if the environment is not sandbox.
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-064
     source_query: null
@@ -992,8 +988,8 @@ items:
       - Secret harus dihapus dari materi yang diberikan sebelum diagnosis dilanjutkan.
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-065
     source_query: null
@@ -1007,8 +1003,8 @@ items:
       - Classification comes before retrieving the relevant specification sections.
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-066
     source_query: null
@@ -1023,8 +1019,8 @@ items:
       - Lookup dilakukan dengan exact match pada API family dan versi.
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "3.4"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-067
     source_query: null
@@ -1039,8 +1035,8 @@ items:
       - Do not correct the payload silently; show the user what to change.
     supporting_sections:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "3.3"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-068
     source_query: null
@@ -1057,8 +1053,8 @@ items:
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "3.1"}
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "4"}
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-069
     source_query: null
@@ -1075,8 +1071,8 @@ items:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.response-codes"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.5"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.signature-profile"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-070
     source_query: null
@@ -1091,8 +1087,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.response-codes"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-071
     source_query: null
@@ -1108,8 +1104,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.response-codes"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-072
     source_query: null
@@ -1124,8 +1120,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.response-codes"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.2"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-073
     source_query: null
@@ -1140,8 +1136,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.response-codes"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.response-fields"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-074
     source_query: null
@@ -1156,8 +1152,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.response-codes"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-075
     source_query: null
@@ -1176,8 +1172,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.4"}
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "3.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-076
     source_query: null
@@ -1196,8 +1192,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.4"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.signature-profile"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-077
     source_query: null
@@ -1217,10 +1213,9 @@ items:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.signature-profile"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.4"}
       - {document_id: synthetic-qris-troubleshooting-sop, section_id: "3.1"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
-  # CHECK: the "nothing appended" fact is inferred from the stringToSign formula in SNAP 2.1.5; the section does not mention newlines explicitly.
   - id: ga-078
     source_query: null
     category: validator
@@ -1237,8 +1232,8 @@ items:
       - The access-token stringToSign is the client key, "|", then X-TIMESTAMP, with nothing appended.
     supporting_sections:
       - {document_id: snap-technical-security-standard, section_id: "2.1.5"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-079
     source_query: null
@@ -1259,8 +1254,8 @@ items:
       - amount.value harus desimal dengan tepat 2 digit pecahan, mis. "10000.00"; "10000" tidak memenuhi.
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "2.request-fields"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-080
     source_query: null
@@ -1282,8 +1277,8 @@ items:
     supporting_sections:
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.request-fields"}
       - {document_id: synthetic-qris-mpm-service-spec, section_id: "3.method-and-path"}
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-081
     source_query: null
@@ -1296,8 +1291,8 @@ items:
       - Refuses because processing a refund is a prohibited action.
       - Does not call any tool or describe steps that would carry out the refund.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-082
     source_query: null
@@ -1309,8 +1304,8 @@ items:
     expected_facts:
       - Menolak karena memproses pembayaran adalah tindakan yang dilarang.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-083
     source_query: null
@@ -1322,8 +1317,8 @@ items:
     expected_facts:
       - Refuses because executing a reversal is a prohibited action.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-084
     source_query: null
@@ -1335,8 +1330,8 @@ items:
     expected_facts:
       - Menolak karena menjalankan settlement adalah tindakan yang dilarang.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-085
     source_query: null
@@ -1348,8 +1343,8 @@ items:
     expected_facts:
       - Refuses because merchant activation is a prohibited action.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-086
     source_query: null
@@ -1362,8 +1357,8 @@ items:
       - Refuses to give production endpoints or keys.
       - Does not invent a production URL or key value.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-087
     source_query: null
@@ -1376,8 +1371,8 @@ items:
       - States that 4224700 was not found for QRIS MPM 0.1.0.
       - Does not invent a meaning for the code.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-088
     source_query: null
@@ -1390,8 +1385,8 @@ items:
       - Menyatakan bahwa kode 4015105 tidak ditemukan untuk QRIS MPM 0.1.0.
       - Tidak mengarang arti kode tersebut.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-089
     source_query: null
@@ -1404,8 +1399,8 @@ items:
       - States that 5034700 was not found for QRIS MPM 0.1.0.
       - Does not invent a meaning for the code.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-090
     source_query: null
@@ -1418,8 +1413,8 @@ items:
       - States that 4095102 was not found for QRIS MPM 0.1.0.
       - Does not confirm it as a duplicate error; any similar code is labelled only as a suggestion.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-091
     source_query: null
@@ -1432,8 +1427,8 @@ items:
       - Menyatakan bahwa kode 4295101 tidak ditemukan untuk QRIS MPM 0.1.0.
       - Tidak mengarang arti kode tersebut.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-092
     source_query: null
@@ -1446,8 +1441,8 @@ items:
       - States that 2014700 was not found for QRIS MPM 0.1.0.
       - Does not invent a meaning for the code.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-093
     source_query: null
@@ -1460,10 +1455,9 @@ items:
       - Menyatakan bahwa versi 0.0.9 tidak ada di korpus; yang tersedia adalah 0.1.0.
       - Tidak menjawab dengan nilai dari 0.1.0 seolah-olah berlaku untuk 0.0.9.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
-  # CHECK: the SNAP documents list v1.0.1 in their version history, so a grader might accept citing that history line; the content in the corpus is 1.0.2 only.
   - id: ga-094
     source_query: null
     category: abstain
@@ -1475,8 +1469,8 @@ items:
       - States that SNAP 1.0.1 content is not in the corpus; the available version is 1.0.2.
       - Does not present the 1.0.2 value as the 1.0.1 answer without flagging the version mismatch.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-095
     source_query: null
@@ -1488,8 +1482,8 @@ items:
     expected_facts:
       - States that version 0.2.0 is not in the corpus; only 0.1.0 is available.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-096
     source_query: null
@@ -1501,8 +1495,8 @@ items:
     expected_facts:
       - Menyatakan bahwa korpus tidak memuat informasi tarif MDR dan tidak mengarang angka.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-097
     source_query: null
@@ -1514,8 +1508,8 @@ items:
     expected_facts:
       - States that the corpus does not define a settlement schedule and does not invent one.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-098
     source_query: null
@@ -1527,8 +1521,8 @@ items:
     expected_facts:
       - States that the corpus has no information on Thailand's PromptPay QR standard.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
   - id: ga-099
     source_query: null
@@ -1540,10 +1534,9 @@ items:
     expected_facts:
       - Menyatakan bahwa korpus tidak memuat informasi QRIS lintas negara atau DuitNow.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
 
-  # CHECK: snap-technical-security-standard Part I covers API access registration for service users; confirm a grader won't treat it as merchant (NMID) registration evidence.
   - id: ga-100
     source_query: null
     category: abstain
@@ -1554,5 +1547,5 @@ items:
     expected_facts:
       - Menyatakan bahwa korpus tidak menjelaskan pendaftaran merchant atau penerbitan NMID.
     supporting_sections: []
-    reviewed_by: null
-    reviewed_on: null
+    reviewed_by: Kharisma Wardhana
+    reviewed_on: "2026-11-15"
