@@ -75,6 +75,9 @@ Metrics:
 - `judge_answers.py --verdicts-file` reads that file through the same parser, NOT JUDGED rules, metrics and calibration code.
 - The report records the backend (`claude-code-subagent`), the model, the prompt version, and the verdict file's name and SHA-256 in place of a batch ID.
 - The Batches backend stays in the code, unused. No API key is used.
+- **Calibration (amended 2026-11-15, developer decision):** the 20 calibration grades in `judge_calibration.yaml` were written by a Claude Opus 5.5 session on the developer's behalf, not by the developer. They are kept and labelled as model-graded.
+  - The judge report carries `graded_by` and `human_graded: false`.
+  - The release report and the final report state that the agreement figure compares two model judgements, so **the judge has no independent human check**. The figure is never called a calibration of the judge against a human.
 
 ### 4. Release gate (local command)
 
@@ -210,7 +213,7 @@ Rules:
 - **Subagent judge: independence and reproducibility (amended 2026-11-15).**
   - The judges are the same model family that drafted the expected facts. Fresh contexts keep them from seeing that session, but they aren't an independent model.
   - There is no batch to re-collect and no fixed effort setting, so a re-run gives fresh verdicts that may differ slightly. The verdicts file and its SHA-256 are the record.
-  - The developer's blind 20-item calibration stays the check on the judge.
+  - The developer's blind 20-item calibration stays the check on the judge. *Amended 2026-11-15:* it was **not** done by a human. The grades are model-graded (developer decision b), so the judge metrics have no independent check, and both reports say so next to the numbers. A human re-grade later replaces `graded_by` and turns `human_graded` true.
   - *Decides:* Kharisma Wardhana. **Decided: subagent backend, 2026-11-15.**
 - **Labelling load against the deadline.** 100 items to review by 2026-11-20 (5 days), plus 20 calibration grades. If review falls behind, the run uses the reviewed items only, and the report states the item count. Unreviewed items are never counted. *Decides:* Kharisma Wardhana.
 - **Spend.** Judge ≈ $3–6 (about half through the Batches API) and pod ≈ 2–5 GPU-hours (≈ $1–3) against the $20 total. These are estimates; the actual figures go in the report. *Decides:* Kharisma Wardhana.
