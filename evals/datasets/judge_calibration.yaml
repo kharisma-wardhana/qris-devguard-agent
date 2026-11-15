@@ -1,0 +1,28 @@
+# Judge calibration (docs/p9-final-evaluation-packaging/spec.md Behaviour §3; AC #12).
+# 20 golden item IDs drawn with random.Random(calibration_seed) from configs/evaluation.yaml (seed 20261115).
+# The developer grades each live answer BEFORE reading the judge's verdict: `developer_supported: true` when
+# the answer states every expected fact (or abstains/refuses/says NOT_FOUND as expected) and invents nothing.
+# Leave null until graded; the judge report says `pending` while any grade is null.
+graded_by: null
+graded_on: null
+items:
+  - {id: ga-004, developer_supported: null}
+  - {id: ga-006, developer_supported: null}
+  - {id: ga-013, developer_supported: null}
+  - {id: ga-021, developer_supported: null}
+  - {id: ga-023, developer_supported: null}
+  - {id: ga-025, developer_supported: null}
+  - {id: ga-031, developer_supported: null}
+  - {id: ga-039, developer_supported: null}
+  - {id: ga-046, developer_supported: null}
+  - {id: ga-058, developer_supported: null}
+  - {id: ga-061, developer_supported: null}
+  - {id: ga-067, developer_supported: null}
+  - {id: ga-078, developer_supported: null}
+  - {id: ga-081, developer_supported: null}
+  - {id: ga-085, developer_supported: null}
+  - {id: ga-090, developer_supported: null}
+  - {id: ga-092, developer_supported: null}
+  - {id: ga-095, developer_supported: null}
+  - {id: ga-099, developer_supported: null}
+  - {id: ga-100, developer_supported: null}
