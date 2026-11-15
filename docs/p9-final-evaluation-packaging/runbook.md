@@ -34,10 +34,11 @@ If the golden run is interrupted, re-run it: it writes a new answers file each t
 
 ## 2. Benchmark inside the pod
 
-Check the flag names first. The dataset and seed flags of vLLM 0.32.0 were not verifiable from its source, so `--help` decides:
+`bootstrap_vllm.sh` installs vLLM into `/root/vllm-venv`, which isn't on the SSH shell's `PATH`, so put it there first. Then check the flag names. The plain `--help` lists only the group names, so use `--help=all`. All of these flags were confirmed on vLLM 0.32.0 on 2026-11-15:
 
 ```bash
-vllm bench serve --help | grep -E -- '--(dataset-name|random-input-len|random-output-len|num-prompts|seed|max-concurrency|ignore-eos|percentile-metrics|metric-percentiles|save-result|result-dir|result-filename|tokenizer)'
+export PATH=/root/vllm-venv/bin:$PATH
+vllm bench serve --help=all | grep -E -- '--(dataset-name|random-input-len|random-output-len|num-prompts|seed|max-concurrency|ignore-eos|percentile-metrics|metric-percentiles|save-result|result-dir|result-filename|tokenizer)\b'
 ```
 
 Then run both concurrencies. Values come from `configs/evaluation.yaml` `bench:` and `configs/model.yaml`:
