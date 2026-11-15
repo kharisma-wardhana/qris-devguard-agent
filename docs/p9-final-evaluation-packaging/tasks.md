@@ -23,8 +23,12 @@
     - row 4: 100 golden answers
     - row 5: injection 10/10, echo 1/10 against the 5/10 baseline
     - row 6: bench at concurrency 1, p95 TTFT 117.3 ms, p95 TPOT 15.7 ms
-  - **Alert test:** 15 delayed runs (5.9–7.6 s) and one `APPROVAL_MISMATCH` incident were sent, and the receiver path was verified with a synthetic alert. But Langfuse's worker logged `MonitorRunner(1/1): published 0 events` throughout, so nothing was delivered. AC #25 and P9 AC #21 stay open, and `langfuse_alert_fired` reads NOT RUN. The step stays unticked.
+  - **Alert test:** 15 delayed runs (5.9–7.6 s) and one `APPROVAL_MISMATCH` incident were sent, and the receiver path was verified with a synthetic alert. But Langfuse's worker logged `MonitorRunner(1/1): published 0 events` throughout, so nothing was delivered. AC #25 and P9 AC #21 stay open. `langfuse_alert_fired` reads **FAIL**: an `export_alerts.py` run at 05:23 UTC found 0 real deliveries (the original note said NOT RUN, which was corrected once that export came to light). The step stays unticked.
 - [x] 15. Judge run and calibration grades — spec AC: #12, #13
   - *2026-11-15:* subagent backend, 100/100 judged, 0 NOT JUDGED. `golden_answer_supported` 0.27, `citation_support_precision` 0.4356. Calibration is **model-graded** (decision b): agreement 1.0, kappa 1.0, with no independent human check.
-- [ ] 16. Deployment manifest completed and release gate run — spec AC: #22, #27
+- [x] 16. Deployment manifest completed and release gate run — spec AC: #22, #27
+  - *2026-11-15:* the manifest was filled with the GPU, CUDA, vLLM and images. The fresh clone was **not done** (developer decision), `fresh_pod.followed_readme` was not confirmed, and 1 unlisted step was recorded, so `reproducible_deployment` is FAIL.
+  - Release gate verdict: **FAIL**.
+    - 9 of the 15 gates pass, including all 4 critical gates.
+    - Not passing: `reranked_recall_at_5` 0.80, `citation_support_precision` 0.4356, `golden_answer_supported` 0.27, `agent_scenarios_passed` 3/4, `langfuse_alert_fired`, `reproducible_deployment`.
 - [ ] 17. Final report, screenshots, addenda — spec AC: #25, #28, #30

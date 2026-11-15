@@ -3,11 +3,11 @@
 # fresh_pod.*) are pasted by the developer from the pod shell. Versions, digests and hashes only:
 # never an IP, pod ID, hostname or secret (checked by `--check` and the release gate).
 manifest_version: 1
-updated_at: '2026-11-15T02:53:47+00:00'
+updated_at: '2026-11-15T06:55:10+00:00'
 gpu:
-  sku: null
-  driver: null
-  cuda: null
+  sku: NVIDIA RTX PRO 4000 Blackwell
+  driver: 595.91.07
+  cuda: '13.2'
   data_center: null
 model:
   id: Qwen/Qwen3-8B-FP8
@@ -17,7 +17,7 @@ model:
   max_model_len: 16384
 vllm:
   version: 0.32.0
-  image: null
+  image: pip vllm==0.32.0 in uv venv /root/vllm-venv (RunPod PyTorch template; deploy/runpod/bootstrap_vllm.sh)
 images:
   alert-receiver:
     image: docker.io/library/python:3.11.14-slim-bookworm
@@ -52,7 +52,13 @@ fresh_clone:
   setup_report_sha256: null
   healthcheck_all_pass: null
   checks_passed: null
+  note: 'not done (developer decision, 2026-11-15): the only setup run was in the
+    existing checkout (fresh_clone: false)'
 fresh_pod:
-  date: null
+  date: '2026-11-15'
   followed_readme: null
-unlisted_steps: []
+  note: pod created for the 2026-11-15 session; whether it needed only README/runpod-deployment.md
+    steps was not confirmed by the developer
+unlisted_steps:
+- vllm bench serve needed `export PATH=/root/vllm-venv/bin:$PATH` in the pod shell
+  (bootstrap installs vLLM into its own venv); fixed in runbook §2, commit 8398046
