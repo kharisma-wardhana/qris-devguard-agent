@@ -67,6 +67,15 @@ Metrics:
 - `golden_answer_supported` = supported answers ÷ 100. An abstain/NOT_FOUND item counts as supported only when the agent abstained or said NOT_FOUND.
 - `citation_support_precision` = citations judged `supports_claim: yes` ÷ all citations judged.
 
+**Amendment (2026-11-15, developer decision): the judge backend.** The judge runs as **Claude Code subagents on Claude Opus 5.5** in the developer's session, not through the Message Batches API:
+
+- Each subagent starts with a fresh context, so it doesn't see the session that drafted the golden items and read the live answers.
+- Each one receives exactly the per-item payloads `build_payload()` produces, plus the versioned rubric (`judge-v1`) and the verdict schema. Nothing else.
+- About 25 items go to each subagent, and the verdicts are written to one file.
+- `judge_answers.py --verdicts-file` reads that file through the same parser, NOT JUDGED rules, metrics and calibration code.
+- The report records the backend (`claude-code-subagent`), the model, the prompt version, and the verdict file's name and SHA-256 in place of a batch ID.
+- The Batches backend stays in the code, unused. No API key is used.
+
 ### 4. Release gate (local command)
 
 A local command reads `configs/eval_thresholds.yaml` and, for each of the 11 gates and 4 critical gates, the newest matching evidence in `evals/reports/`. It runs no eval itself. For each gate it prints and writes:
@@ -110,7 +119,7 @@ Rules:
 
 - **The release gate reads reports and never runs evals.** Live evals cost pod time and the reranked eval takes hours on CPU. A judge that only reads is fast, deterministic and testable against fixture reports. This follows the existing "evidence is generated, not written" decision (`docs/structure.md`).
 - **The golden run and the judge are two commands.** The pod session only produces answers. Judging can be redone, or recalibrated, without a pod, and the Anthropic credential never meets the pod or the servers.
-- **The judge uses the Batches API.** It is offline work, about half the cost, and the batch ID makes it resumable. Fixed model ID, effort and prompt version live in `configs/`, not in code.
+- **The judge uses the Batches API.** It is offline work, about half the cost, and the batch ID makes it resumable. Fixed model ID, effort and prompt version live in `configs/`, not in code. *Amended 2026-11-15:* the backend actually used is fresh-context Claude Code subagents (Behaviour §3, Amendment), with the same payload, rubric and parser. Each subagent writes verdicts to a file whose SHA-256 is the record.
 - **The judge is an eval tool, not part of the product.** It lives under `scripts/`, plus a small library module beside the existing eval code. Nothing in `app/` imports it, and the runtime egress allowlist (`configs/security.yaml`) is unchanged. The `anthropic` SDK goes into a new optional extra (`judge`), so the runtime, CI's `test` job and the container images never install it. **Departure from `docs/tech.md`:** a first external LLM API, and a new extra. It is recorded there and in the threat model as a new eval-time data flow (eval host → Anthropic API), not a runtime one.
 - **The deterministic checks stay deterministic.** Citation validity, fabricated crypto guidance and the secret scan run in code on the answers file. The judge grades only answer support and citation support. This keeps the "LLM never decides crypto or payload validity" invariant.
 - **The setup script is bash and only chains existing scripts.** That matches the user decision and `scripts/tunnel.sh`, and adds no second implementation of any step. It uses `set -u -o pipefail` with an explicit check after every step instead of `set -e`, so each failure gets its own message.
@@ -160,7 +169,7 @@ Rules:
 8. The golden run writes one answers file record per item. Its citation-validity, fabricated-crypto-guidance and secret-scan checks are computed in code. Unit tests feed planted violations (an unretrieved citation ID, a "signature is valid" claim without a VALID validator result, a secret-shaped value) and each one is counted.
 9. The judge payload for an item contains only the question, the expected facts and sections, the answer, and excerpts each ≤ 300 characters after redaction. A test with a planted secret and a 1,000-character excerpt proves both are removed or capped before the request is built.
 10. With a fake client, a refusal, an error, an expired result and an unparseable verdict each count as NOT JUDGED and count against both metrics. The metrics match hand-computed values on a 6-item fixture.
-11. The judge report records the model ID `claude-opus-5-5` (from `configs/`), effort, prompt version and batch ID. Re-running with that batch ID collects results without submitting a new batch.
+11. The judge report records the model ID `claude-opus-5-5` (from `configs/`), effort, prompt version and batch ID. Re-running with that batch ID collects results without submitting a new batch. *Amended 2026-11-15:* for the subagent backend, the report records `backend: claude-code-subagent` and the verdicts file name and SHA-256 in place of the batch ID. A verdict missing from the file, or one that fails the schema, is NOT JUDGED.
 12. Calibration: with a 20-item label file and fake verdicts, the report shows percent agreement and Cohen's kappa matching hand-computed values.
 13. Live: the golden run and the judge run once over all 100 items. The measured `golden_answer_supported`, `citation_support_precision` and `citation_validity`, and the calibration agreement, are recorded in the release report. *(Measured, not targeted.)*
 
@@ -198,6 +207,11 @@ Rules:
 - **Third-party egress of excerpts (privacy and licensing).** Cited excerpts from `reference_only` ASPI/SNAP documents, which have no published terms, are sent to Anthropic's API for judging. They are capped at 300 characters per citation, the same limit as public quoting, and redacted first. *Decides:* Kharisma Wardhana. **Decided: option (a), 2026-11-15.**
 - **Credential handling.** The judge needs the developer's Anthropic credential. The agent never reads, prints or uses it, and CI uses a fake client. The threat model gains the eval-time data flow and its controls. *Decides:* Kharisma Wardhana.
 - **LLM-graded metrics (evaluation validity).** `golden_answer_supported` and `citation_support_precision` are decided by a model, a different one from the agent's Qwen. The 20-item calibration and its agreement figure are the only check on the judge, and the report states them next to the metrics. *Decides:* Kharisma Wardhana.
+- **Subagent judge: independence and reproducibility (amended 2026-11-15).**
+  - The judges are the same model family that drafted the expected facts. Fresh contexts keep them from seeing that session, but they aren't an independent model.
+  - There is no batch to re-collect and no fixed effort setting, so a re-run gives fresh verdicts that may differ slightly. The verdicts file and its SHA-256 are the record.
+  - The developer's blind 20-item calibration stays the check on the judge.
+  - *Decides:* Kharisma Wardhana. **Decided: subagent backend, 2026-11-15.**
 - **Labelling load against the deadline.** 100 items to review by 2026-11-20 (5 days), plus 20 calibration grades. If review falls behind, the run uses the reviewed items only, and the report states the item count. Unreviewed items are never counted. *Decides:* Kharisma Wardhana.
 - **Spend.** Judge ≈ $3–6 (about half through the Batches API) and pod ≈ 2–5 GPU-hours (≈ $1–3) against the $20 total. These are estimates; the actual figures go in the report. *Decides:* Kharisma Wardhana.
 - **Gates expected to FAIL.** `reranked_recall_at_5` (0.80 on all 50) and possibly `agent_scenarios_passed` (3/4 last live run). They are reported as measured, and thresholds are not edited. Whether the capstone is submitted with a FAIL verdict and stated limitations is a human call. *Decides:* Kharisma Wardhana.
@@ -219,7 +233,7 @@ Rules:
 ## Resolved questions
 
 - **Golden-answer dataset:** a new 100-item synthetic dataset (about 50 from the labelled retrieval queries, about 30 new synthetic questions, about 20 abstain/NOT_FOUND/refuse). Claude drafts it and the developer reviews every item. *(User decision, 2026-11-15.)*
-- **How support is judged:** Claude Opus 5.5 (`claude-opus-5-5`) as the judge for answer support and citation support, through the Batches API, run by the developer with their credential. It receives excerpts capped at 300 characters per citation plus the synthetic question and answer, after redaction (option a). Citation validity, crypto guidance and the secret scan stay deterministic. A 20-item calibration reports agreement. *(User decision.)*
+- **How support is judged:** Claude Opus 5.5 (`claude-opus-5-5`) as the judge for answer support and citation support, through the Batches API, run by the developer with their credential. It receives excerpts capped at 300 characters per citation plus the synthetic question and answer, after redaction (option a). Citation validity, crypto guidance and the secret scan stay deterministic. A 20-item calibration reports agreement. *(User decision.)* *Amended 2026-11-15 (developer decision):* run as fresh-context Claude Code subagents on Claude Opus 5.5 instead of the Batches API, with the same payload, rubric and parser (Behaviour §3, Amendment).
 - **TTFT/TPOT:** `vllm bench serve` inside the pod, 1024/256 tokens, 100 prompts, fixed seed. Concurrency 1 is the baseline, concurrency 4 is informational, and the tunnel TTFT is shown for information. GPU: the RTX PRO 4000 if available, otherwise the A5000 with its FP8-fallback note. *(User decision.)*
 - **`reproducible_deployment`:** a complete manifest, plus a green setup-script health check (7/7) on a fresh clone, plus a fresh pod created only from the README's steps. Any unlisted step is a FAIL and gets fixed in the README. *(User decision.)*
 - **Release-gate evidence:** it reads the newest reports and never re-runs. 14-day freshness and a matching dataset version are required, or the gate reads STALE. Live-only gates accept only live evidence. Retrieval is judged on all 50 queries. *(User decision.)*
