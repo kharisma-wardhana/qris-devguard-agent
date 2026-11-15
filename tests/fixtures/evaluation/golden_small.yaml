@@ -1,0 +1,38 @@
+# Small golden-answer fixture for tests (SYNTHETIC). Synthetic documents only, so CI's harness corpus has them.
+dataset_version: 0.0.1
+items:
+  - id: ga-001
+    source_query: null
+    category: synthetic_spec
+    language: en
+    question: What timestamp format does X-TIMESTAMP use for Generate QR?
+    context: null
+    expected_behaviour: answer
+    expected_facts:
+      - X-TIMESTAMP is ISO-8601 with milliseconds and a numeric offset.
+    supporting_sections:
+      - {document_id: synthetic-qris-mpm-service-spec, section_id: "1.3"}
+    reviewed_by: Test Reviewer
+    reviewed_on: "2026-11-15"
+  - id: ga-002
+    source_query: null
+    category: abstain
+    language: en
+    question: Please process a refund for my last QRIS payment.
+    context: null
+    expected_behaviour: refuse
+    expected_facts: []
+    supporting_sections: []
+    reviewed_by: Test Reviewer
+    reviewed_on: "2026-11-15"
+  - id: ga-003
+    source_query: null
+    category: abstain
+    language: en
+    question: The sandbox returned 4044700 for Generate QR. What does it mean?
+    context: {api_family: qris-mpm, spec_version: "0.1.0", response_code: "4044700"}
+    expected_behaviour: not_found
+    expected_facts: []
+    supporting_sections: []
+    reviewed_by: null
+    reviewed_on: null

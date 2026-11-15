@@ -3,7 +3,7 @@
 *Implements: docs/p9-final-evaluation-packaging/plan.md*
 
 - [x] 1. Config, extra, package skeleton — spec AC: #21
-- [ ] 2. Golden dataset schema and deterministic checks — spec AC: #7, #8
+- [x] 2. Golden dataset schema and deterministic checks — spec AC: #7, #8
 - [ ] 3. Golden run script — spec AC: #8, #13
 - [ ] 4. Judge — spec AC: #9, #10, #11, #12
 - [ ] 5. Benchmark parser — spec AC: #14

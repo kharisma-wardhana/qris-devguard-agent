@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "answer_golden.schema.json",
+  "title": "Golden-answer dataset (docs/p9-final-evaluation-packaging/spec.md, Data)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dataset_version", "items"],
+  "properties": {
+    "dataset_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "items": {"type": "array", "items": {"$ref": "#/$defs/item"}}
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "section_id"],
+      "properties": {
+        "document_id": {"type": "string", "minLength": 1},
+        "section_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "language", "question", "expected_behaviour", "expected_facts",
+                   "supporting_sections", "reviewed_by", "reviewed_on"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^ga-\\d{3}$"},
+        "source_query": {"type": ["string", "null"], "pattern": "^[qh]\\d{2}$"},
+        "category": {"enum": ["retrieval", "synthetic_spec", "sop", "response_code", "validator", "abstain"]},
+        "language": {"enum": ["id", "en"]},
+        "question": {"type": "string", "minLength": 10, "maxLength": 400},
+        "context": {"type": ["object", "null"]},
+        "expected_behaviour": {"enum": ["answer", "abstain", "not_found", "refuse"]},
+        "expected_facts": {"type": "array", "maxItems": 5,
+                           "items": {"type": "string", "minLength": 3, "maxLength": 200}},
+        "supporting_sections": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/section"}},
+        "reviewed_by": {"type": ["string", "null"]},
+        "reviewed_on": {"type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+      },
+      "allOf": [
+        {"if": {"properties": {"expected_behaviour": {"const": "answer"}}},
+         "then": {"properties": {"expected_facts": {"minItems": 1}, "supporting_sections": {"minItems": 1}}}}
+      ]
+    }
+  }
+}
