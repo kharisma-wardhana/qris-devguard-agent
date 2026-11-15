@@ -34,7 +34,7 @@ Each phase has its own folder under `docs/` with its spec, plan and measured rep
 | bash | Linux/macOS bash, or Git Bash on Windows (the setup script and the tunnel are bash) |
 | Disk | Several GB free: the CPU embedding stack, two pinned model snapshots and the container images (sizes not measured here) |
 | RunPod account + SSH key | Only for the GPU part (vLLM). Everything else runs locally |
-| Anthropic API key | Only for the golden-answer judge (`uv sync --extra judge`); never needed to run the system |
+| Anthropic API key | Only for the golden-answer judge (`uv sync --extra embed --extra ui --extra judge`); never needed to run the system |
 
 Two public ASPI SNAP PDFs are **reference-only**: they are not in the repository. Download them by hand from the portal pages in [`knowledge_base/manifests/sources.yaml`](knowledge_base/manifests/sources.yaml) and save them at its `local_path`s. The setup script checks them and tells you exactly which file is missing; it never downloads them.
 
@@ -89,7 +89,7 @@ uv run pytest                                              # the test suite (no 
 uv run python scripts/eval_validators.py                   # validator fixtures, must be 100%
 uv run python scripts/eval_security.py                     # §22.5 security suite (start PostgreSQL first)
 uv run python scripts/eval_crash_resume.py                 # crash/resume evidence (needs PostgreSQL)
-uv sync --extra judge                                      # once, for the judge
+uv sync --extra embed --extra ui --extra judge            # all three: a sync without an extra uninstalls it
 uv run python scripts/judge_answers.py evals/reports/answers-live-<timestamp>.json   # Claude Opus 5.5 judge (your API key)
 uv run python scripts/export_alerts.py                     # real Langfuse alert deliveries
 uv run python scripts/deploy_manifest.py --check           # deployment manifest completeness

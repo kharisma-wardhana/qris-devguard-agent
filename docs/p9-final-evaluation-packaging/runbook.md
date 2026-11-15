@@ -77,7 +77,7 @@ Follow [`docs/p8-memory-observability/alerts.md`](../p8-memory-observability/ale
 ## 4. Judge and calibration (after the pod, no GPU)
 
 ```bash
-uv sync --extra judge
+uv sync --extra embed --extra ui --extra judge   # all three: a sync without an extra uninstalls it
 export ANTHROPIC_API_KEY=...                # your key, in this shell only; never in .env or a file in the repo
 uv run python scripts/judge_answers.py evals/reports/answers-live-<timestamp>.json
 ```
