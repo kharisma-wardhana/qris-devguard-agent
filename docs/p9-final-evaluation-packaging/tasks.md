@@ -13,7 +13,7 @@
 - [x] 9. Setup script — spec AC: #1–#6
 - [x] 10. README and runbook — spec AC: #26
 - [x] 11. Steering docs and threat model — spec AC: #29
-- [ ] 12. CLAUDE.md merge — spec AC: #29
+- [x] 12. CLAUDE.md merge — spec AC: #29
 - [ ] 13. Developer review of golden items and calibration grades — spec AC: #7
 - [ ] 14. Pod session — spec AC: #13, #15, #25, #27
 - [ ] 15. Judge run and calibration — spec AC: #13

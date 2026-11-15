@@ -18,6 +18,7 @@ Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_se
 preferences and reviewed team patterns, migration `0003`), `app/observability/` (Langfuse tracing with an
 attribute allowlist and a fail-closed mask hook; deterministic scores), `app/agent/fence.py` and `app/db/retention.py`.
 P9 adds `app/ui/` (Streamlit demo UI, calls `/api/v1` only) and `app/alerts/` (stdlib Langfuse alert webhook receiver, run as the `alert-receiver` compose service, and the API-side reader).
+P9 final adds `app/evaluation/` (eval-time only, never imported by the product: golden-answer checks, the Claude Opus 5.5 judge, the `vllm bench serve` parser, the release gate, the deployment manifest and the setup helpers) and `scripts/setup.sh` (one-command first-clone setup).
 
 ## Commands
 
@@ -58,6 +59,15 @@ uv sync --extra ui                                       # once: Streamlit for t
 uv run python scripts/ui_server.py                       # demo UI on http://127.0.0.1:8501; needs the API (demo-only: mints tokens from MCP_AUTH_SECRET)
 podman compose --profile alerts up -d alert-receiver     # Langfuse alert webhook receiver, compose network only (http://alert-receiver/langfuse/alerts)
 uv run python scripts/send_test_alert.py --via-container qris-devguard-agent_langfuse-worker_1   # one signed synthetic alert, from where Langfuse sends
+bash scripts/setup.sh                                    # first clone: 13 idempotent steps, stops at the first failure (--quick, --synthetic-only, --help)
+uv run python scripts/eval_answers.py --live             # the 100 golden questions through the real agent + deterministic checks (reviewed items only)
+uv sync --extra judge                                    # once: the anthropic SDK for the judge
+uv run python scripts/judge_answers.py <answers file>    # Claude Opus 5.5 judge via Message Batches, developer's credential only; --batch-id resumes
+uv run python scripts/bench_report.py <bench-c1.json> <bench-c4.json> --gpu <sku> --driver <v> --cuda <v>   # vllm bench serve results copied from the pod
+uv run python scripts/eval_crash_resume.py               # crash/resume evidence: PASS / FAIL / NOT RUN (needs PostgreSQL)
+uv run python scripts/export_alerts.py                   # real (non-synthetic) Langfuse alert deliveries
+uv run python scripts/deploy_manifest.py --check         # deployment manifest; --fill (local fields), --setup-report <setup-*.json>
+uv run python scripts/release_gate.py                    # PASS/FAIL/NOT RUN/STALE per gate from the newest evidence -> release-report.md
 ```
 
 Source manifest rules (enforced by `scripts/check_sources.py`):
@@ -134,6 +144,7 @@ All documentation lives under `docs/`, and `docs/index.md` is the table of conte
 - Roles/permissions (MCP tools, later the API): add authentication and authorization integration tests against the real server subprocess (`tests/integration/test_mcp_server.py`), plus the role × tool matrix unit test.
 - PostgreSQL tests: mark them `@pytest.mark.db` and use the throwaway-schema fixtures in `tests/conftest.py`. CI has no PostgreSQL, so they skip there; paste the local `uv run pytest -m db` run in the PR.
 - UI (Streamlit): AppTest end-to-end against the real API and MCP subprocesses (`tests/integration/test_ui_e2e.py`), plus one manual browser pass per release (`docs/p9-demo-ui-alerts/runbook.md`). UI tests use `pytest.importorskip("streamlit")`; the `ui-tests` CI job installs the `ui` extra.
+- Setup script (bash): run the real `scripts/setup.sh` as a subprocess with a fake toolchain on `PATH` (`tests/integration/test_setup_sh.py`); it skips with a reason where no Git-for-Windows or Linux bash exists (never WSL's `bash.exe`).
 
 Run `uv run pytest` before reporting a task complete, and paste the output.
 
@@ -174,3 +185,11 @@ Nothing is implemented without an accepted plan. Each feature follows `intent.md
 - The servers load `LANGFUSE_*` from `.env`, so a server started by a test would export to the local Langfuse. `tests/conftest.py` sets `DEVGUARD_TRACING=0`; tracing tests pass explicit env mappings.
 - Corpus excerpts are hard-wrapped. Split sentences at end punctuation or a blank line, never at a single newline, or a wrapped attack sentence slips past `injection_markers`.
 - A failing `db` test prints its fixture URL, which contains the local Postgres password. Filter out `password=` before pasting failing test output anywhere.
+- `uv add --optional <extra> <pkg>` re-syncs without your other extras and uninstalls them (torch and streamlit went). Run `uv sync --extra embed --extra ui --extra judge` afterwards.
+- Git Bash paths such as `/c/Users/...` resolve to the wrong place in Windows Python. Convert with `cygpath -m` before passing a path to Python (`ROOT_PY` in `scripts/setup.sh`).
+- In bash, `${*#prefix}` strips the prefix from each argument, not from the joined command line. Match on `all="$*"` instead.
+- `tests/unit/test_repo_hygiene.py` exempts only a quoted `section_id: "…"` value, so a four-part section number under any other key fails it. Label sections with `section_id`, as `answer_golden.yaml` does.
+- `gate_reports.write_all` overrides are keyed by report filename prefix (`answers-live`, `agent-flows-live`, `crash-resume`), and it raises on an unknown key. An ignored override is a test that proves nothing.
+- `vllm bench serve` writes `median_*_ms`, not `p50_*_ms`, and writes `p95_*` only when `--metric-percentiles` includes 95 (the default is 99).
+- `tests/unit/test_alert_receiver.py::test_chunked_body_is_refused` can fail on Windows with WinError 10053, because the receiver closes before the client finishes sending. Re-run it alone before treating it as a regression.
+- Listing `knowledge_base/fixtures/signatures/keys/` is denied by the permission settings. Read `scripts/gen_test_keys.py` for the key file names instead.
