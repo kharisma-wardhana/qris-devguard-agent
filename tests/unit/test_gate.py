@@ -177,3 +177,14 @@ def test_rescored_answers_show_the_earlier_value(tmp_path):
     _, by = grade(tmp_path, **{"answers-live": rescored})
     g = by["fabricated_crypto_guidance"]
     assert g["status"] == "PASS" and "fabricated_crypto was 4" in g["note"] and "answers-live-old.json" in g["note"]
+
+
+def test_model_graded_calibration_is_labelled_in_markdown(tmp_path):
+    cal = {"status": "measured", "percent_agreement": 0.8, "cohens_kappa": 0.5, "graded_by": "Claude Opus 5.5",
+           "human_graded": False}
+    result, _ = grade(tmp_path, judge={"calibration": cal})
+    text = gate.markdown(result)
+    assert "Model-graded calibration" in text and "no independent human check" in text
+    human = {**cal, "graded_by": "Kharisma Wardhana", "human_graded": True}
+    result, _ = grade(tmp_path / "h", judge={"calibration": human})
+    assert "Model-graded" not in gate.markdown(result)

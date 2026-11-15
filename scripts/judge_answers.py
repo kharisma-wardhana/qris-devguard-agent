@@ -31,9 +31,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
-def load_labels(path: Path) -> dict[str, bool | None]:
+def load_labels(path: Path) -> tuple[dict[str, bool | None], str | None]:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return {str(i["id"]): i.get("developer_supported") for i in data.get("items", [])}
+    return {str(i["id"]): i.get("developer_supported") for i in data.get("items", [])}, data.get("graded_by")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -132,7 +132,8 @@ def main(argv: list[str] | None = None) -> int:
                                            [c["citation_id"] for c in r.get("citations", [])]) for r in records}
     metrics = judge.metrics(records, verdicts)
     try:
-        cal = judge.calibration(load_labels(args.calibration), records, verdicts)
+        labels, graded_by = load_labels(args.calibration)
+        cal = judge.calibration(labels, records, verdicts, graded_by)
     except Exception as exc:  # noqa: BLE001
         cal = {"status": "unreadable", "error": type(exc).__name__}
     usage = {k: sum(v.usage.get(k, 0) for v in verdicts.values()) for k in ("input_tokens", "output_tokens")}
@@ -154,7 +155,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{metrics['items']} items judged by {j['model']} ({answers.get('mode')} answers): "
           f"golden_answer_supported {metrics['golden_answer_supported']}, citation_support_precision "
           f"{metrics['citation_support_precision']}, not judged {metrics['not_judged']}; calibration {cal['status']}"
-          + (f" (agreement {cal['percent_agreement']}, kappa {cal['cohens_kappa']})" if cal["status"] == "measured" else "")
+          + (f" (agreement {cal['percent_agreement']}, kappa {cal['cohens_kappa']}"
+             + ("" if cal.get("human_graded") else "; MODEL-GRADED, not an independent check") + ")"
+             if cal["status"] == "measured" else "")
           + f"  report: {out}")
     return 0
 

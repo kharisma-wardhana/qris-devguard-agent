@@ -134,7 +134,8 @@ def test_calibration_agreement_and_kappa_match_hand_values():
     labels = {"ga-001": True, "ga-002": False, "ga-003": False, "ga-004": False}
     cal = judge.calibration(labels, recs, verdicts)
     # pairs (dev, judge): (T,T) (F,T) (F,F) (F,F): agreement 3/4; p_dev .25, p_judge .5; pe = .125+.375 = .5
-    assert cal == {"status": "measured", "items": 4, "percent_agreement": 0.75, "cohens_kappa": 0.5}
+    assert cal == {"status": "measured", "items": 4, "percent_agreement": 0.75, "cohens_kappa": 0.5,
+                   "graded_by": None, "human_graded": False}
 
 
 def test_calibration_pending_until_every_label_is_set():
@@ -189,3 +190,14 @@ def test_payload_lines_are_exactly_build_payload():
     it, rec = item(), record(excerpt="x" * 900)
     (line,) = judge.payload_lines({"ga-001": it}, [rec])
     assert json.loads(line) == {"id": "ga-001", "payload": judge.build_payload(it, rec)}
+
+
+@pytest.mark.parametrize("who,human", [
+    ("Kharisma Wardhana", True),
+    ("Claude Opus 5.5 (Claude Code main session, delegated by Kharisma Wardhana; not a human grade)", False),
+    ("Someone (not a human grade)", False), (None, False), ("", False)])
+def test_calibration_records_grader_and_whether_human(who, human):
+    recs = [record("ga-001")]
+    v = {"ga-001": judge.parse_entry("ga-001", ok(True), ["c1"])}
+    cal = judge.calibration({"ga-001": True}, recs, v, who)
+    assert cal["graded_by"] == who and cal["human_graded"] is human and cal["status"] == "measured"

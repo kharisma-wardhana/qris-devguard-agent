@@ -64,7 +64,8 @@ def test_fake_run_writes_report_with_metrics_and_calibration(tmp_path):
     m = data["metrics"]
     assert m["supported"] == 2 and m["golden_answer_supported"] == round(2 / 3, 4) and m["not_judged_ids"] == ["ga-003"]
     assert data["calibration"] == {"status": "measured", "items": 3, "percent_agreement": round(2 / 3, 4),
-                                   "cohens_kappa": 0.0}
+                                   "cohens_kappa": 0.0, "graded_by": None, "human_graded": False}
+    assert "MODEL-GRADED, not an independent check" in r.stdout
 
 
 def test_batch_id_collects_without_submitting(tmp_path):

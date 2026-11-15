@@ -346,7 +346,10 @@ def markdown(result: dict[str, Any]) -> str:
         lines.append(f"\nJudge: {j.get('model')} ({j.get('prompt_version')}), not judged {j.get('not_judged')}; "
                      f"calibration {cal.get('status')}"
                      + (f": agreement {cal.get('percent_agreement')}, Cohen's kappa {cal.get('cohens_kappa')}"
-                        if cal.get("status") == "measured" else ""))
+                        if cal.get("status") == "measured" else "")
+                     + ("" if cal.get("human_graded") else
+                        f". **Model-graded calibration** (graded by: {cal.get('graded_by') or 'nobody'}): the judge "
+                        "metrics have no independent human check."))
     lines.append(END)
     return "\n".join(lines)
 

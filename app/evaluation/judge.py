@@ -164,9 +164,23 @@ def calibration_sample(item_ids: list[str]) -> list[str]:
     return sorted(random.Random(g["calibration_seed"]).sample(sorted(item_ids), g["calibration_size"]))
 
 
+def is_human_grader(graded_by: str | None) -> bool:
+    """A person named in graded_by, and not a model session (spec Behaviour §3, Calibration amendment)."""
+    g = (graded_by or "").strip().lower()
+    return bool(g) and "not a human grade" not in g and not g.startswith(("claude", "gpt", "gemini", "model"))
+
+
 def calibration(labels: dict[str, bool | None], records: list[dict[str, Any]],
-                verdicts: dict[str, Verdict]) -> dict[str, Any]:
-    """Developer grade vs judge decision on the calibration items. Pending until every label is set."""
+                verdicts: dict[str, Verdict], graded_by: str | None = None) -> dict[str, Any]:
+    """Grader's grade vs judge decision on the calibration items. Pending until every label is set. Carries who
+    graded and whether that was a human: a model-graded calibration is not an independent check on the judge."""
+    who = {"graded_by": graded_by, "human_graded": is_human_grader(graded_by)}
+    out = _calibration(labels, records, verdicts)
+    return {**out, **who}
+
+
+def _calibration(labels: dict[str, bool | None], records: list[dict[str, Any]],
+                 verdicts: dict[str, Verdict]) -> dict[str, Any]:
     by_id = {r["id"]: r for r in records}
     pending = [i for i, v in labels.items() if v is None]
     missing = [i for i in labels if i not in by_id]
