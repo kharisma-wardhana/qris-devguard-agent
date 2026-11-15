@@ -100,3 +100,5 @@ P8 tests by file (collected 2026-11-12): `test_memory_policy.py` 35, `test_memor
 
 Full-suite results per step are in the step commit messages. The run for this report is pasted in the step 12
 commit and in Phase 4.
+
+*Addendum 2026-11-15 (p9-final-evaluation-packaging):* AC #23 live part measured: on the 10 live injection cases the user-visible answer echoed the attack phrase in 1/10 (P7 baseline 5/10), 10/10 gate checks pass ([final report](../p9-final-evaluation-packaging/final-report.md) §3.5). AC #25 still **not met**: the controlled alert test ran (15 delayed runs, one APPROVAL_MISMATCH incident) but Langfuse published 0 monitor events; deferred again by developer decision.
