@@ -4,6 +4,7 @@ Usage:
   uv run python scripts/eval_answers.py --live                 # real MCP server, Qdrant, vLLM (pod + tunnel)
   uv run python scripts/eval_answers.py                        # CI mode: MCP harness + fake LLM (no services)
   uv run python scripts/eval_answers.py --allow-unreviewed     # CI mode only: also run items not yet reviewed
+  uv run python scripts/eval_answers.py --rescore <answers file>   # recompute the answer-text checks; no agent run
 
 Each golden item goes through the real agent. The answers file (evals/reports/answers-<mode>-<ts>.json, git-ignored)
 holds the redacted answer, its citations with excerpts capped at 300 characters, and three deterministic checks:
@@ -54,6 +55,34 @@ async def run_items(items: list[dict[str, Any]], agent: Any, client: Any) -> lis
     return records
 
 
+def rescore_file(path: Path, report_dir: Path) -> int:
+    """A new answers file with the current checks; the source file is kept and named, with its SHA-256."""
+    import hashlib
+
+    from app.evaluation import golden
+
+    try:
+        raw = path.read_bytes()
+        report = json.loads(raw)
+        report["records"]
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: answers file unreadable: {type(exc).__name__}", file=sys.stderr)
+        return 1
+    if report.get("checks_version", 1) >= golden.CHECKS_VERSION:
+        print(f"error: {path.name} already has checks_version {report.get('checks_version')}", file=sys.stderr)
+        return 1
+    new = golden.rescore(report, path.name, hashlib.sha256(raw).hexdigest())
+    report_dir.mkdir(parents=True, exist_ok=True)
+    out = report_dir / f"answers-{report.get('mode')}-{datetime.now().strftime('%Y-%m-%dT%H%M%S')}.json"
+    out.write_text(json.dumps(new, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    old, s = new["rescored_from"]["summary"], new["summary"]
+    print(f"rescored {path.name} (checks v{new['rescored_from']['checks_version']} -> v{golden.CHECKS_VERSION}): "
+          f"fabricated crypto {old.get('fabricated_crypto')} -> {s['fabricated_crypto']}, secret findings "
+          f"{old.get('secret_findings')} -> {s['secret_findings']}, citation validity {s['citation_validity']} (kept)  "
+          f"report: {out}")
+    return exit_code(s)
+
+
 def main(argv: list[str] | None = None) -> int:
     from app.evaluation import golden, settings
 
@@ -63,8 +92,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-unreviewed", action="store_true", help="CI mode only: run unreviewed items too")
     parser.add_argument("--limit", type=int, default=None, help="run only the first N items (smoke runs)")
     parser.add_argument("--report-dir", type=Path, default=ROOT / settings()["reports_dir"])
+    parser.add_argument("--rescore", type=Path, default=None,
+                        help="recompute the answer-text checks of an existing answers file (no agent, no services)")
     args = parser.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
+    if args.rescore:
+        return rescore_file(args.rescore, args.report_dir)
     import logging
     for noisy in ("mcp", "httpx", "httpx2", "devguard.mcp", "devguard.agent", "openai", "uvicorn"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -125,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
             records = asyncio.run(run_items(run, Agent(client, FakeLLM()), client))
 
     summary = golden.summarise(records)
-    report = {"mode": mode, "dataset_version": data.get("dataset_version"),
+    report = {"mode": mode, "dataset_version": data.get("dataset_version"), "checks_version": golden.CHECKS_VERSION,
               "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
               "items_total": len(items), "items_run": len(records), "unreviewed_skipped": len(
                   [i for i in items if i["id"] in pending and not args.allow_unreviewed]),

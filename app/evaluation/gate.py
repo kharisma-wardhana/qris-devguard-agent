@@ -202,6 +202,12 @@ def grade_source(name: str, kind: str, spec: dict[str, Any], threshold: dict[str
                   date.isoformat() if date else None, None if report_version is None else str(report_version),
                   report_mode(data))
     value, note = extract(spec["value"], data, spec)
+    rescored = data.get("rescored_from")
+    if rescored and spec["value"].startswith("summary."):          # both numbers stay visible (decision 2026-11-15)
+        key = spec["value"].split(".", 1)[1]
+        was = (rescored.get("summary") or {}).get(key)
+        note = "; ".join(x for x in (note, f"rescored from {rescored.get('file')} (checks v{rescored.get('checks_version')}: "
+                                           f"{key} was {was})") if x)
     if value is None:
         return GateResult(name, kind, NOT_RUN, threshold=threshold, evidence=[ev], note=note or "value not in report")
     expected_version = _dataset_version(spec.get("dataset"))

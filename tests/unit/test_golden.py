@@ -179,3 +179,45 @@ def test_tool_errors_are_recorded_and_counted():
     assert rec["tool_errors"] == ["RATE_LIMITED", "TOOL_UNAVAILABLE"]
     s = golden.summarise([rec])
     assert s["tool_errors"] == 1 and s["tool_error_ids"] == ["ga-001"]
+
+
+# ---------------------------------------------------------------- checks v2 (developer decision 2026-11-15)
+
+REMOVAL = "A statement that the signature is valid was removed: no validator returned VALID."
+REPLACED = "The signature has not been verified as valid by the deterministic validator."
+
+
+def test_policy_notices_are_the_exact_strings_policy_writes():
+    source = (ROOT / "app" / "agent" / "policy.py").read_text(encoding="utf-8")
+    for notice in golden.POLICY_NOTICES:
+        assert notice in source, notice
+
+
+@pytest.mark.parametrize("a", [
+    answer(limitations=[REMOVAL]),                                                       # live ga-019 / ga-032 shape
+    answer(summary=REPLACED, limitations=[REMOVAL]),                                     # live ga-045 shape
+    answer(limitations=["Tidak ada hasil validasi, sehingga tidak dapat memastikan apakah tanda tangan benar."]),
+])
+def test_guard_output_and_caveats_are_not_claims(a):
+    assert golden.fabricated_crypto(a) == []
+
+
+def test_a_claim_in_findings_or_next_steps_is_still_caught():
+    assert golden.fabricated_crypto(answer(findings=[{"status": "likely", "text": "Your signature is valid.",
+                                                      "citation_ids": []}]))
+    assert golden.fabricated_crypto(answer(next_steps=[{"text": "The signature is correct, so check the body.",
+                                                        "citation_ids": []}]))
+
+
+def test_rescore_recomputes_text_checks_and_records_the_source():
+    rec = golden.build_record(small()["items"][0], {"route": "read", "answer": answer(limitations=[REMOVAL])}, set())
+    rec["checks"]["fabricated_crypto"] = ["signature_valid_claim_without_VALID"]          # as v1 scored it
+    rec["checks"]["citations"] = {"total": 2, "valid": 1, "invalid_ids": ["c9"]}           # kept as recorded
+    old = {"mode": "live", "dataset_version": "1.0.0", "records": [rec], "summary": golden.summarise([rec])}
+    new = golden.rescore(old, "answers-live-x.json", "f" * 64)
+    assert old["summary"]["fabricated_crypto"] == 1 and new["summary"]["fabricated_crypto"] == 0
+    assert new["summary"]["citations_valid"] == 1 and new["records"][0]["answer"] == rec["answer"]
+    assert new["checks_version"] == golden.CHECKS_VERSION == 2
+    assert new["rescored_from"] == {"file": "answers-live-x.json", "sha256": "f" * 64, "checks_version": 1,
+                                    "summary": old["summary"]}
+    assert new["mode"] == "live" and new["dataset_version"] == "1.0.0"

@@ -49,7 +49,7 @@ Deleted: none.
 
 1. **Config, extra, package skeleton.** `configs/evaluation.yaml`, `pyproject.toml`, `uv.lock`, `app/evaluation/__init__.py`. Advances AC #21, and the architecture rule that the judge is not part of the product.
 2. **Golden dataset schema and deterministic checks.** `app/evaluation/golden.py`, `evals/datasets/answer_golden.schema.json`, and a draft `evals/datasets/answer_golden.yaml` (100 items, `reviewed_by: null` until step 13). AC #7 (schema/corpus part), AC #8.
-3. **Golden run script.** `scripts/eval_answers.py`; it counts only reviewed items in `--live`, and with `--allow-unreviewed` in CI mode only. AC #8, and AC #13 (tooling).
+3. **Golden run script.** `scripts/eval_answers.py`; it counts only reviewed items in `--live`, and with `--allow-unreviewed` in CI mode only. AC #8, and AC #13 (tooling). *Changed after the first live run (developer decision, 2026-11-15):* the crypto check moves to checks v2. It reads only the claim fields the agent's rule 3 governs, not the limitations or the policy's fixed notices, which were 4 false positives. `eval_answers.py --rescore` recomputes the answer-text checks on an existing answers file without the pod and records the source file, its SHA-256 and the earlier summary. The gate notes the earlier value.
 4. **Judge.** `app/evaluation/judge.py`, `scripts/judge_answers.py`, `evals/datasets/judge_calibration.yaml` (IDs only; grades are the developer's, step 13). AC #9, #10, #11, #12.
 5. **Benchmark parser.** `app/evaluation/bench.py`, `scripts/bench_report.py`. The `vllm bench serve` result field names are checked against vLLM 0.32.0's source before the fixture is written. AC #14.
 6. **Evidence producers.** `scripts/eval_crash_resume.py`, `scripts/export_alerts.py`. AC #23, #24.

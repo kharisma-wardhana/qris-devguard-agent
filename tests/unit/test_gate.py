@@ -168,3 +168,12 @@ def test_complete_manifest_makes_every_gate_pass(tmp_path):
     m.write_text(manifest.dump(incomplete), encoding="utf-8")
     _, by = grade(tmp_path / "r2", manifest=m)
     assert by["reproducible_deployment"]["status"] == "FAIL" and "gpu.sku is empty" in by["reproducible_deployment"]["note"]
+
+
+def test_rescored_answers_show_the_earlier_value(tmp_path):
+    rescored = {"summary": {"citation_validity": 1.0, "fabricated_crypto": 0, "secret_findings": 0},
+                "rescored_from": {"file": "answers-live-old.json", "sha256": "a" * 64, "checks_version": 1,
+                                  "summary": {"fabricated_crypto": 4, "secret_findings": 0, "citation_validity": 1.0}}}
+    _, by = grade(tmp_path, **{"answers-live": rescored})
+    g = by["fabricated_crypto_guidance"]
+    assert g["status"] == "PASS" and "fabricated_crypto was 4" in g["note"] and "answers-live-old.json" in g["note"]

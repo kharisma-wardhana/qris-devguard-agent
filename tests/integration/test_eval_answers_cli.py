@@ -75,3 +75,26 @@ def test_exit_code_rule():
     assert exit_code({**base, "fabricated_crypto": 1}) == 1
     assert exit_code({**base, "secret_findings": 1}) == 1
     assert exit_code({**base, "items": 0}) == 1
+
+
+def test_rescore_writes_a_new_file_and_keeps_the_source(tmp_path):
+    sys.path.insert(0, str(ROOT))
+    from app.evaluation import golden
+    removal = "A statement that the signature is valid was removed: no validator returned VALID."
+    rec = {"id": "ga-001", "behaviour_match": True, "expected_behaviour": "answer", "observed_behaviour": "answer",
+           "answer": {"summary": "s", "findings": [], "validation_results": [], "next_steps": [],
+                      "limitations": [removal], "confidence": "low"}, "citations": [],
+           "checks": {"citations": {"total": 0, "valid": 0, "invalid_ids": []},
+                      "fabricated_crypto": ["signature_valid_claim_without_VALID"], "secret_findings": []}}
+    src = tmp_path / "answers-live-2026-11-15T112113.json"
+    src.write_text(json.dumps({"mode": "live", "dataset_version": "1.0.0", "records": [rec],
+                               "summary": golden.summarise([rec])}), encoding="utf-8")
+    out_dir = tmp_path / "out"
+    r = run("--rescore", str(src), "--report-dir", str(out_dir))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "fabricated crypto 1 -> 0" in r.stdout and src.exists()
+    (new,) = out_dir.glob("answers-live-*.json")
+    data = json.loads(new.read_text(encoding="utf-8"))
+    assert data["rescored_from"]["file"] == src.name and data["checks_version"] == 2
+    again = run("--rescore", str(new), "--report-dir", str(out_dir))
+    assert again.returncode == 1 and "already has checks_version 2" in again.stderr
