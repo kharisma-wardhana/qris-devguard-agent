@@ -58,3 +58,11 @@ def test_report_carries_hardware_model_and_a5000_note():
     assert any("fallback kernel" in n for n in rep["notes"])
     with pytest.raises(bench.BenchError, match="driver"):
         bench.build_report(rows, {"gpu_sku": "RTX PRO 4000", "driver": "", "cuda": "13.0"}, [])
+
+
+def test_full_nvidia_smi_name_matches_the_planned_sku():
+    rows = [bench.parse_result(load("bench-c1.json"))]
+    hw = {"gpu_sku": "NVIDIA RTX PRO 4000 Blackwell", "driver": "595.91.07", "cuda": "13.2"}
+    assert bench.build_report(rows, hw, [])["notes"] == []
+    other = bench.build_report(rows, {**hw, "gpu_sku": "NVIDIA RTX A6000"}, [])["notes"]
+    assert any("differs from the planned" in n for n in other)

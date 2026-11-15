@@ -79,7 +79,8 @@ def build_report(rows: list[dict[str, Any]], hardware: dict[str, str | None],
     if "A5000" in sku.upper():
         notes.append("RTX A5000 has no native FP8: vLLM ran the FP8 checkpoint through a fallback kernel, so these "
                      "latencies are not the RTX PRO 4000 figures (docs/runpod-deployment.md).")
-    if sku.replace(" ", "").upper() != ident["planned_gpu"].replace(" ", "").upper():
+    # nvidia-smi names carry a vendor prefix and generation ("NVIDIA RTX PRO 4000 Blackwell"); the plan names the SKU.
+    if ident["planned_gpu"].replace(" ", "").upper() not in sku.replace(" ", "").upper():
         notes.append(f"GPU differs from the planned {ident['planned_gpu']}.")
     b = settings()["bench"]
     return {"mode": "live", "hardware": hardware, "model": ident,
