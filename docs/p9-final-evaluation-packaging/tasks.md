@@ -9,7 +9,7 @@
 - [x] 5. Benchmark parser — spec AC: #14
 - [x] 6. Evidence producers — spec AC: #23, #24
 - [x] 7. Release gate — spec AC: #16–#21
-- [ ] 8. Deployment manifest — spec AC: #27
+- [x] 8. Deployment manifest — spec AC: #27
 - [ ] 9. Setup script — spec AC: #1–#6
 - [ ] 10. README and runbook — spec AC: #26
 - [ ] 11. Steering docs and threat model — spec AC: #29

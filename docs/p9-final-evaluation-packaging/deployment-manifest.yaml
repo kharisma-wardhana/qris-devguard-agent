@@ -1,0 +1,58 @@
+# Deployment manifest (docs/p9-final-evaluation-packaging/spec.md Behaviour §5; TRD §26.2 step 15).
+# Local fields: `uv run python scripts/deploy_manifest.py --fill`. Pod fields (gpu.*, vllm.image,
+# fresh_pod.*) are pasted by the developer from the pod shell. Versions, digests and hashes only:
+# never an IP, pod ID, hostname or secret (checked by `--check` and the release gate).
+manifest_version: 1
+updated_at: '2026-11-15T02:53:47+00:00'
+gpu:
+  sku: null
+  driver: null
+  cuda: null
+  data_center: null
+model:
+  id: Qwen/Qwen3-8B-FP8
+  revision: 220b46e3b2180893580a4454f21f22d3ebb187d3
+  served_name: qwen3-8b
+  quantization: fp8
+  max_model_len: 16384
+vllm:
+  version: 0.32.0
+  image: null
+images:
+  alert-receiver:
+    image: docker.io/library/python:3.11.14-slim-bookworm
+    digest: sha256:83f339c1be6340ae1096010fdccf6552ac932d8f410d45d206014916bdf37e48
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:26.3.62.3
+    digest: sha256:6eb24df16477b65c87b772a56eb341a9624529491856c103e74c537db59669f1
+  langfuse-web:
+    image: docker.io/langfuse/langfuse:4.76.0
+    digest: sha256:ba55f5337897e4230458ca7af2d060d5f9dd2e9826b6f811669c58d1d649b1e8
+  langfuse-worker:
+    image: docker.io/langfuse/langfuse-worker:4.76.0
+    digest: sha256:1405bb683bd916247bf48b1aba7954139f8abc459cf64e3850fdbf4ff4fd9cc9
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:053a21cc9dcf3db9f997b5f77f5b5b2973a754631e5369d27aea6341e151d790
+    digest: sha256:053a21cc9dcf3db9f997b5f77f5b5b2973a754631e5369d27aea6341e151d790
+  postgres:
+    image: docker.io/library/postgres:17.11
+    digest: sha256:996e9dc583ba9f0265a2c75547a9c95fb22c251e394749cab205a0a00e1856a1
+  qdrant:
+    image: docker.io/qdrant/qdrant:v1.19.2
+    digest: sha256:0e8273b9130ca3b0dd9dcfaa8f55342066711f8aaeb2aa072e53344c42ecf57f
+  redis:
+    image: docker.io/library/redis:7.4.12
+    digest: sha256:a6dd428750118c2c2c67d3f555faef0aa15a2b71198b40e1cb3b9229b1cf3094
+lockfile:
+  file: uv.lock
+  sha256: 58ffdbc3a01bb4793c61ebea7fa398b384c2d42fe46bec90d38bb4f745e40116
+fresh_clone:
+  date: null
+  commit: null
+  setup_report_sha256: null
+  healthcheck_all_pass: null
+  checks_passed: null
+fresh_pod:
+  date: null
+  followed_readme: null
+unlisted_steps: []

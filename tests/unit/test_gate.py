@@ -151,3 +151,20 @@ def test_markdown_block_is_replaced_in_place(tmp_path):
     text = md.read_text(encoding="utf-8")
     assert "Intro kept." in text and "Outro kept." in text and "\nold\n" not in text
     assert "**Verdict: FAIL**" in text and "| reranked_recall_at_5 |" in text and "Reported, not gated" in text
+
+
+def test_complete_manifest_makes_every_gate_pass(tmp_path):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from test_manifest import complete
+
+    from app.evaluation import manifest
+    m = tmp_path / "manifest.yaml"
+    m.write_text(manifest.dump(complete()), encoding="utf-8")
+    result, by = grade(tmp_path / "r", manifest=m)
+    assert by["reproducible_deployment"]["status"] == "PASS"
+    assert result["verdict"] == "PASS" and result["not_passing"] == []
+    incomplete = complete()
+    incomplete["gpu"]["sku"] = None
+    m.write_text(manifest.dump(incomplete), encoding="utf-8")
+    _, by = grade(tmp_path / "r2", manifest=m)
+    assert by["reproducible_deployment"]["status"] == "FAIL" and "gpu.sku is empty" in by["reproducible_deployment"]["note"]
