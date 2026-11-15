@@ -1,0 +1,6 @@
+{"date": "20261118-103500", "backend": "openai", "label": null, "model_id": "qwen3-8b", "tokenizer_id": "Qwen/Qwen3-8B-FP8",
+ "num_prompts": 100, "request_rate": "inf", "burstiness": 1.0, "max_concurrency": 4,
+ "duration": 301.7, "completed": 100, "failed": 0, "total_input_tokens": 102400, "total_output_tokens": 25600,
+ "request_throughput": 0.331, "output_throughput": 84.9, "total_token_throughput": 424.3,
+ "mean_ttft_ms": 455.0, "median_ttft_ms": 401.3, "std_ttft_ms": 120.4, "p50_ttft_ms": 401.3, "p95_ttft_ms": 702.8,
+ "mean_tpot_ms": 44.2, "median_tpot_ms": 43.9, "std_tpot_ms": 2.0, "p50_tpot_ms": 43.9, "p95_tpot_ms": 47.5}
