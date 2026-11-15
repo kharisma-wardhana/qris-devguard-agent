@@ -46,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dataset", type=Path, default=ROOT / s["golden"]["dataset"])
     parser.add_argument("--calibration", type=Path, default=ROOT / s["golden"]["calibration"])
     parser.add_argument("--report-dir", type=Path, default=ROOT / s["reports_dir"])
+    parser.add_argument("--write-payloads", type=Path, default=None,
+                        help="write the per-item judge payloads (JSONL) for subagent judges, and the rubric beside it; "
+                             "nothing is judged")
+    parser.add_argument("--verdicts-file", type=Path, default=None,
+                        help="subagent backend: read verdicts (JSONL: {id, verdict}) instead of calling the API")
     parser.add_argument("--fake-client", type=Path, nargs="?", const=Path(), default=None,
                         help="tests only (DEVGUARD_TEST_BACKENDS=1): fixed entries from a JSON file, else all supported")
     args = parser.parse_args(argv)
@@ -69,12 +74,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: no records, or records not in the dataset: {unknown[:5]}", file=sys.stderr)
         return 1
 
-    if args.fake_client is not None:
+    if args.write_payloads:
+        lines = judge.payload_lines(items, records)
+        args.write_payloads.parent.mkdir(parents=True, exist_ok=True)
+        args.write_payloads.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        rubric = args.write_payloads.with_suffix(".rubric.txt")
+        rubric.write_text(f"{judge.SYSTEM}\n\nVerdict JSON schema:\n{json.dumps(judge.VERDICT_SCHEMA, indent=1)}\n",
+                          encoding="utf-8")
+        print(f"wrote {len(lines)} payloads to {args.write_payloads} and the rubric to {rubric}")
+        return 0
+
+    if args.verdicts_file is not None:
+        try:
+            client: Any = judge.FileVerdicts(args.verdicts_file)
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"error: verdicts file unreadable: {type(exc).__name__}", file=sys.stderr)
+            return 1
+    elif args.fake_client is not None:
         if os.environ.get("DEVGUARD_TEST_BACKENDS") != "1":
             print("error: --fake-client is for tests only (set DEVGUARD_TEST_BACKENDS=1)", file=sys.stderr)
             return 1
         entries = json.loads(args.fake_client.read_text(encoding="utf-8")) if args.fake_client.is_file() else {}
-        client: Any = judge.FakeBatches(entries)
+        client = judge.FakeBatches(entries)
     else:
         try:
             client = judge.AnthropicBatches()
@@ -84,15 +105,19 @@ def main(argv: list[str] | None = None) -> int:
 
     requests = [{"custom_id": r["id"], "params": judge.request_params(items[r["id"]], r)} for r in records]
     try:
-        if args.batch_id:
+        if args.batch_id and not isinstance(client, judge.FileVerdicts):
             batch_id = args.batch_id
             if isinstance(client, judge.FakeBatches):
                 client.prime(requests)                 # the fake has no server-side batch to read back
             print(f"collecting batch {batch_id} (no new submit)", flush=True)
         else:
             batch_id = client.submit(requests)
-            print(f"submitted {len(requests)} requests as batch {batch_id}; if interrupted, re-run with "
-                  f"--batch-id {batch_id}", flush=True)
+            if isinstance(client, judge.FileVerdicts):
+                print(f"reading {len(client.entries)} verdicts from {args.verdicts_file.name}"
+                      + (f" ({client.ignored} line(s) ignored)" if client.ignored else ""), flush=True)
+            else:
+                print(f"submitted {len(requests)} requests as batch {batch_id}; if interrupted, re-run with "
+                      f"--batch-id {batch_id}", flush=True)
         while not client.ended(batch_id):
             time.sleep(s["judge"]["poll_seconds"])
         entries = {e["custom_id"]: e for e in client.results(batch_id)}
@@ -116,7 +141,12 @@ def main(argv: list[str] | None = None) -> int:
               "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
               "answers_file": args.answers.name, "answers_sha256": hashlib.sha256(raw).hexdigest(),
               "model": j["model"], "effort": j["effort"], "prompt_version": j["prompt_version"], "batch_id": batch_id,
-              "fake_client": isinstance(client, judge.FakeBatches), "usage": usage, "metrics": metrics,
+              "fake_client": isinstance(client, judge.FakeBatches),
+              "backend": ("fake" if isinstance(client, judge.FakeBatches) else
+                          judge.FileVerdicts.BACKEND if isinstance(client, judge.FileVerdicts) else "anthropic-batches"),
+              **({"verdicts_file": args.verdicts_file.name, "verdicts_sha256": hashlib.sha256(client.raw).hexdigest(),
+                  "verdict_lines_ignored": client.ignored} if isinstance(client, judge.FileVerdicts) else {}),
+              "usage": usage, "metrics": metrics,
               "calibration": cal, "items": [verdicts[r["id"]].as_dict() for r in records]}
     args.report_dir.mkdir(parents=True, exist_ok=True)
     out = args.report_dir / f"judge-{datetime.now().strftime('%Y-%m-%dT%H%M%S')}.json"

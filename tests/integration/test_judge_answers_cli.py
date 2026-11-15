@@ -90,3 +90,29 @@ def test_dataset_version_mismatch_is_refused(tmp_path):
     path.write_text(json.dumps(data), encoding="utf-8")
     r = run(str(path), "--dataset", str(SMALL), "--report-dir", str(tmp_path), "--fake-client")
     assert r.returncode == 1 and "answers file is for dataset 9.9.9" in r.stderr
+
+
+def test_write_payloads_then_verdicts_file(tmp_path):
+    answers = answers_file(tmp_path)
+    payloads = tmp_path / "payloads.jsonl"
+    r = run(str(answers), "--dataset", str(SMALL), "--write-payloads", str(payloads), test_backends=False)
+    assert r.returncode == 0, r.stderr
+    lines = [json.loads(x) for x in payloads.read_text(encoding="utf-8").splitlines()]
+    assert [x["id"] for x in lines] == ["ga-001", "ga-002", "ga-003"]
+    assert "Grade only against" in payloads.with_suffix(".rubric.txt").read_text(encoding="utf-8")
+    assert not list(tmp_path.glob("judge-*.json"))
+    verdicts = tmp_path / "verdicts.jsonl"
+    verdicts.write_text("\n".join(json.dumps({"id": x["id"], "verdict": {
+        "supported": True, "reason": "ok",
+        "citations": [{"citation_id": c["citation_id"], "supports_claim": True} for c in x["payload"]["answer_citations"]]}})
+        for x in lines[:2]) + "\n", encoding="utf-8")
+    r = run(str(answers), "--dataset", str(SMALL), "--calibration", str(labels_file(tmp_path, {"ga-001": None})),
+            "--report-dir", str(tmp_path), "--verdicts-file", str(verdicts), test_backends=False)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "reading 2 verdicts from verdicts.jsonl" in r.stdout
+    (rep,) = tmp_path.glob("judge-*.json")
+    data = json.loads(rep.read_text(encoding="utf-8"))
+    assert data["backend"] == "claude-code-subagent" and data["fake_client"] is False
+    assert data["verdicts_file"] == "verdicts.jsonl" and len(data["verdicts_sha256"]) == 64
+    assert data["batch_id"].startswith("file:verdicts.jsonl:")
+    assert data["metrics"]["supported"] == 2 and data["metrics"]["not_judged_ids"] == ["ga-003"]

@@ -164,3 +164,28 @@ def test_request_params_are_known_to_the_installed_sdk():
     import inspect
     accepted = set(inspect.signature(anthropic.Anthropic(api_key="test-not-used").messages.create).parameters)
     assert set(judge.request_params(item(), record())) <= accepted
+
+
+# ---------------------------------------------------------------- subagent backend (amendment 2026-11-15)
+
+def test_file_verdicts_go_through_the_same_parser(tmp_path):
+    good = {"supported": True, "reason": "r", "citations": [{"citation_id": "c1", "supports_claim": True}]}
+    lines = [json.dumps({"id": "ga-001", "verdict": good}),
+             json.dumps({"id": "ga-002", "verdict": {"supported": "yes"}}),           # fails the schema
+             "not json",                                                              # ignored
+             json.dumps({"id": "ga-003", "verdict": good}), json.dumps({"id": "ga-003", "verdict": good})]  # duplicate
+    path = tmp_path / "verdicts.jsonl"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    client = judge.FileVerdicts(path)
+    assert client.ignored == 2 and set(client.entries) == {"ga-001", "ga-002"}
+    entries = {e["custom_id"]: e for e in client.results(client.submit([]))}
+    assert judge.parse_entry("ga-001", entries.get("ga-001"), ["c1"]).judged is True
+    assert judge.parse_entry("ga-002", entries.get("ga-002"), []).not_judged_reason == "unparseable"
+    assert judge.parse_entry("ga-003", entries.get("ga-003"), []).not_judged_reason == "missing"
+    assert client.submit([]).startswith("file:verdicts.jsonl:")
+
+
+def test_payload_lines_are_exactly_build_payload():
+    it, rec = item(), record(excerpt="x" * 900)
+    (line,) = judge.payload_lines({"ga-001": it}, [rec])
+    assert json.loads(line) == {"id": "ga-001", "payload": judge.build_payload(it, rec)}

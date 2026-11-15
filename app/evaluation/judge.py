@@ -220,6 +220,55 @@ class AnthropicBatches:
             yield out
 
 
+class FileVerdicts:
+    """Subagent backend (spec Behaviour §3, Amendment 2026-11-15): verdicts written by fresh-context Claude Code
+    subagents, one JSON object per line: {"id": "ga-001", "verdict": {...VERDICT_SCHEMA...}}. Each verdict goes
+    through the same parse_entry as an API result. A line that isn't JSON, lacks an id or repeats one is ignored and
+    counted; an item with no usable line is NOT JUDGED ("missing")."""
+
+    BACKEND = "claude-code-subagent"
+
+    def __init__(self, path: Any) -> None:
+        self.path = path
+        self.raw = path.read_bytes()
+        self.ignored = 0
+        self.entries: dict[str, dict[str, Any]] = {}
+        seen: set[str] = set()
+        for line in self.raw.decode("utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+                iid = str(obj["id"])
+                verdict = obj["verdict"]
+            except (ValueError, KeyError, TypeError):
+                self.ignored += 1
+                continue
+            if iid in seen:                       # a duplicate makes the item ambiguous: neither line counts
+                self.entries.pop(iid, None)
+                self.ignored += 1
+                continue
+            seen.add(iid)
+            self.entries[iid] = {"custom_id": iid, "type": "succeeded", "stop_reason": "end_turn",
+                                 "text": json.dumps(verdict, ensure_ascii=False)}
+
+    def submit(self, requests: list[dict[str, Any]]) -> str:
+        import hashlib
+        return f"file:{self.path.name}:{hashlib.sha256(self.raw).hexdigest()[:12]}"
+
+    def ended(self, batch_id: str) -> bool:
+        return True
+
+    def results(self, batch_id: str) -> Iterable[dict[str, Any]]:
+        return list(self.entries.values())
+
+
+def payload_lines(items: dict[str, dict[str, Any]], records: list[dict[str, Any]]) -> list[str]:
+    """What a subagent judge receives: one line per item, exactly build_payload()'s output."""
+    return [json.dumps({"id": r["id"], "payload": build_payload(items[r["id"]], r)}, ensure_ascii=False)
+            for r in records]
+
+
 class FakeBatches:
     """Test double: fixed entries by custom_id; anything not listed succeeds as `supported`, all citations true."""
 
