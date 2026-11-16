@@ -168,3 +168,77 @@ def test_approval_flow_approve_reject_and_developer_403(stack):
     appr.button(key=f"reject-{second}").click().run()
     assert "Rejected: nothing was created." in texts(appr)
     assert f"approval: {first}" not in texts(appr) and f"approval: {second}" not in texts(appr)
+
+
+# --- p9 ui-refresh: the new pages against the real API (docs/p9-ui-refresh/spec.md AC #14) -------------------------
+
+import json  # noqa: E402
+
+from app.api import reports  # noqa: E402
+from app.rag import manifest  # noqa: E402
+
+GATE_REPORT = {"generated_at": "2026-11-16T00:00:00+00:00", "verdict": "FAIL", "not_passing": ["g2"],
+               "critical_not_passing": [], "freshness_days": 14, "reported_not_gated": {},
+               "gates": [{"name": "g1", "kind": "critical", "status": "PASS", "value": 0, "threshold": {"max": 0},
+                          "evidence": [{"path": "evals/reports/x.json", "sha256": "ef" * 32, "date": "2026-11-15"}],
+                          "note": ""},
+                         {"name": "g2", "kind": "gate", "status": "FAIL", "value": 0.27, "threshold": {"min": 0.9},
+                          "evidence": [], "note": ""}]}
+
+
+@pytest.fixture(scope="module")
+def refresh(tmp_path_factory):
+    """No PostgreSQL; the release-gate route reads a temp report (evals/reports/ is git-ignored, so CI has none)."""
+    tmp = tmp_path_factory.mktemp("uirefresh")
+    (tmp / "release-gate-2026-11-16T000000.json").write_text(json.dumps(GATE_REPORT), encoding="utf-8")
+    base, procs = _stack(tmp, {"DEVGUARD_DB_DOTENV": str(tmp / "no.env"), reports.REPORTS_DIR_ENV: str(tmp)})
+    yield base
+    _stop(procs)
+
+
+def test_knowledge_base_lists_the_real_manifest(refresh):
+    at = page(refresh, DEV, "Knowledge base")
+    assert not at.error, texts(at)
+    entries = manifest.load_manifest(ROOT / "knowledge_base/manifests/sources.yaml")
+    keep = manifest.retrievable_document_ids(entries)
+    shown = texts(at)
+    for e in entries:
+        assert (e["document_id"] in shown) == (e["document_id"] in keep), e["document_id"]
+        if e.get("local_path"):
+            assert e["local_path"] not in shown
+
+
+def test_evaluations_shows_the_measured_verdict(refresh):
+    at = page(refresh, APPROVER, "Evaluations")
+    assert not at.error, texts(at)
+    shown = texts(at)
+    assert "verdict: FAIL" in shown and "0.27  (threshold >= 0.9)" in shown
+    assert "sha256" not in shown and "evals/reports" not in shown
+
+
+def test_overview_without_a_store_shows_the_envelope_and_still_renders(refresh):
+    at = page(refresh, DEV, "Overview")
+    assert "code: SERVICE_UNAVAILABLE" in texts(at)                       # threads need PostgreSQL
+    bodies = [el.proto.body for el in at.get("html")]
+    assert any("My threads" in b and ">—<" in b for b in bodies)          # no figure, never a placeholder number
+
+
+def test_walking_every_page_stays_inside_the_rate_limit(refresh):
+    at = page(refresh, APPROVER, "Overview")
+    for name in ["Threads and chat", "Approvals", "Alerts", "Knowledge base", "Evaluations", "Overview",
+                 "Knowledge base", "Evaluations"]:
+        at.sidebar.radio(key="page").set_value(name).run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert "code: RATE_LIMITED" not in texts(at), name
+
+
+@pytest.mark.db
+def test_overview_with_a_store_counts_the_developers_threads(stack):
+    at = page(stack, DEV)
+    at.button(key="new_thread").click().run()
+    at.sidebar.radio(key="page").set_value("Overview").run()
+    assert not at.error, texts(at)
+    bodies = [el.proto.body for el in at.get("html")]
+    stats = next(b for b in bodies if "My threads" in b)
+    assert ">—<" not in stats.split("Pending approvals")[0]               # threads and awaiting are real counts
+    assert any(b.key and b.key.startswith("ov-open-") for b in at.button)
