@@ -11,6 +11,7 @@ from configs/agent.yaml `api`. Both functions raise ReportError, never an except
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ from app.rag import manifest
 ROOT = config.ROOT
 SOURCE_FIELDS = ("document_id", "title", "publisher", "kind", "document_version")
 GATE_REQUIRED = ("generated_at", "verdict", "gates")
+REPORTS_DIR_ENV = "DEVGUARD_REPORTS_DIR"     # tests only: a temp directory instead of configs/agent.yaml api.reports_dir
 
 
 class ReportError(Exception):
@@ -77,7 +79,8 @@ def _gate(g: Any) -> dict[str, Any]:
 
 def release_gate(reports_dir: Path | None = None) -> dict[str, Any]:
     api = config.agent()["api"]
-    directory = reports_dir or ROOT / api["reports_dir"]
+    override = os.environ.get(REPORTS_DIR_ENV)
+    directory = reports_dir or (Path(override) if override else ROOT / api["reports_dir"])
     found = [(str(d.get("generated_at") or ""), p.name, d) for p in directory.glob(api["release_gate_glob"])
              if (d := _load(p)) is not None]
     if not found:

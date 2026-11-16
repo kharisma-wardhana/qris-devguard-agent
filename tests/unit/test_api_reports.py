@@ -190,3 +190,9 @@ def test_an_unreadable_manifest_is_unusable(tmp_path, content):
     with pytest.raises(reports.ReportError) as err:
         reports.sources(path)
     assert not err.value.missing and str(tmp_path) not in str(err.value)
+
+
+def test_reports_dir_env_override(tmp_path, monkeypatch):
+    write(tmp_path, "release-gate-x.json", report(gates=[gate("from-override")]))
+    monkeypatch.setenv(reports.REPORTS_DIR_ENV, str(tmp_path))
+    assert [g["name"] for g in reports.release_gate()["gates"]] == ["from-override"]
