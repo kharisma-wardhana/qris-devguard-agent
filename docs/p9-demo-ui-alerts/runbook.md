@@ -58,6 +58,18 @@ AppTest drives the page without a browser (`tests/integration/test_ui_e2e.py`). 
 - a planted markdown link in a message stays literal text;
 - the page works at a narrow window width.
 
+**p9 ui-refresh additions** (`docs/p9-ui-refresh/spec.md` AC #15):
+- Walk all 6 pages (Overview, Investigations, Approvals, Monitoring, Knowledge base, Evaluations) as both identities.
+- Overview: the counts match the thread list. Pending approvals shows "—" for the developer. An example chip opens Investigations with the message filled in.
+- Run one example end to end, then approve one ticket and reject one.
+- Evaluations shows the newest local release-gate verdict as measured (FAIL on 2026-11-15).
+- Check the layout at about 1400, 900 and 400 px wide: the sidebar nav, stat cards and panels follow the reference.
+- Screenshots for `final-report.md`, if taken, are 1 MB or less.
+
+| Date | Who | Identities | Widths | Outcome |
+|---|---|---|---|---|
+| _pending_ | developer | | | not yet run (p9 ui-refresh step 8) |
+
 ## Stop
 
 - Stop the UI with `Ctrl+C` in its terminal (Streamlit runs in the launcher's own process).

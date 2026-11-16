@@ -17,7 +17,7 @@
   - `app/agent/fence.py` removes instruction-like sentences from the prompt's evidence and from the answer.
   - `app/db/retention.py` is the owner-run purge.
 - **Demo UI and alert webhook (P9):**
-  - `app/ui/` is a Streamlit demo UI (identities, threads, history, chat, approvals, alerts) that calls `/api/v1` only, through a plain HTTP client (`app/ui/client.py`). It mints short-lived demo tokens in-process.
+  - `app/ui/` is a Streamlit demo UI (Overview, Investigations, Approvals, Monitoring, Knowledge base, Evaluations; restyled after the developer's HTML prototype in p9 ui-refresh, light theme forced by the launcher) that calls `/api/v1` only, through a plain HTTP client (`app/ui/client.py`). It mints short-lived demo tokens in-process.
   - `app/alerts/receiver.py` is a standard-library-only Langfuse alert webhook receiver. It runs as the `alert-receiver` compose service (profile `alerts`, no host port) and appends checked alerts to the git-ignored `var/alerts/alerts.jsonl`.
   - `app/alerts/store.py` is the API-side reader behind `GET /api/v1/alerts`.
 - **Final evaluation and packaging (P9 final):**

@@ -28,7 +28,7 @@
 │   ├── observability/          Langfuse tracing (allowlist, mask hook, seeded trace ID), deterministic scores (P8)
 │   ├── security/               cross-cutting controls: token-bucket rate limiter, body-size limit, egress check (P7)
 │   ├── alerts/                 Langfuse alert webhook receiver (stdlib-only, compose service) and the API-side reader (P9)
-│   ├── ui/                     Streamlit demo UI: client (no Streamlit import), render (plain text), streamlit_app (P9)
+│   ├── ui/                     Streamlit demo UI: client (no Streamlit import), render (plain text), theme (fixed markup), streamlit_app (P9)
 │   └── evaluation/             eval-time only, never imported by the product: golden checks, judge, bench parser,
 │                               release gate, deployment manifest, setup helpers (P9 final)
 ├── configs/                    policy-as-config: security.yaml, eval_thresholds.yaml, model.yaml (P1), retrieval.yaml (P2), mcp.yaml (P4), agent.yaml (P5), evaluation.yaml (P9 final)
@@ -123,7 +123,7 @@ The sample is all 5 Python files across 3 directories (`scripts/`, `tests/unit/`
 - **Security evidence is generated, not written.** `evals/datasets/security_cases.yaml` maps each §22.5 bullet and §13.4 control to the tests that prove it; `scripts/eval_security.py` grades them and rewrites the generated block of the report.
 - **The model writes prose; code decides.** Intent, risk, tool choice and tool arguments are deterministic. Verdicts, sources and confidence are assembled from tool output. `policy_check` applies mechanical rules to the model's text, and abstains when nothing supported is left.
 
-- **The demo UI is a client, not a second way in (P9).** `app/ui/` calls `/api/v1` over HTTP only, so the API's auth, limits, redaction and approval checks apply. API text is shown with text elements only. Reads are cached per session (`ui.read_cache_seconds`) so reruns stay inside the `api_other` bucket.
+- **The demo UI is a client, not a second way in (P9).** `app/ui/` calls `/api/v1` over HTTP only, so the API's auth, limits, redaction and approval checks apply. API text is shown with text elements only. Reads are cached per session (`ui.read_cache_seconds`) so reruns stay inside the `api_other` bucket. Its look (p9 ui-refresh) comes from `app/ui/theme.py`: a constant stylesheet ported from `docs/p9-ui-refresh/reference/qris-devguard-ui.html`, and helpers whose only variable parts are ints or fixed-dict keys. `st.html` takes only theme output (an AST test checks it), so no API text ever reaches HTML. The Knowledge base and Evaluations pages read `GET /api/v1/sources` and `GET /api/v1/evaluations/release-gate`. `app/api/reports.py` serves both as field allowlists without importing `app/evaluation`.
 - **Evaluation reads evidence; it never produces it (P9 final).** Each eval script writes a dated report to `evals/reports/`, and `scripts/release_gate.py` only grades the newest accepted one per gate against `configs/eval_thresholds.yaml`. Missing evidence is NOT RUN and old or mismatched evidence is STALE, never PASS. The LLM judge grades answer support only; citation validity, crypto guidance and secrets stay deterministic.
 - **The alert receiver is a separate, minimal process (P9).** Langfuse can't reach a host loopback listener and delivers only to ports 80 and 443, so the receiver runs in the compose network. It is one standard-library file mounted read-only. An alert is stored, never acted on.
 

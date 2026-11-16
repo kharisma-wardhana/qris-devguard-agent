@@ -9,4 +9,4 @@
 - [x] 5. Theme module — spec AC: #13 (helpers; the AST check of streamlit_app.py lands with step 6)
 - [x] 6. Pages (theme, sidebar, Overview, Investigations, Approvals, Monitoring, Knowledge base, Evaluations) — spec AC: #7–#13 (amended: answer stays whole in §5 order with a compact tool panel beside it; split_sections removed; light theme forced in the launcher)
 - [x] 7. End to end against the real API — spec AC: #14 (the `-m db` Overview case is written but skipped locally: the scripts cannot reach PostgreSQL with the current .env, see step 8)
-- [ ] 8. Manual browser pass and docs — spec AC: #15, #16
+- [ ] 8. Manual browser pass and docs — spec AC: #15, #16 (docs done: structure, tech, index, CLAUDE.md, runbook checklist; the manual browser pass is pending the developer)

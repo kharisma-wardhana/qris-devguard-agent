@@ -17,7 +17,7 @@ Phase P0 (§27, scope and source inventory) is signed off (2026-11-06). The deci
 Application code so far: `app/rag/` (P2–P3), `app/validators/` and `app/mcp_server/` (P4), `app/agent/` and `app/api/` (P5), `app/db/` (P6: PostgreSQL checkpointer, approvals, sandbox tickets; P7: least-privilege roles, MCP audit), and `app/security/` (P7: rate limits, body-size limit, egress check). P8 adds `app/memory/` (policy-gated
 preferences and reviewed team patterns, migration `0003`), `app/observability/` (Langfuse tracing with an
 attribute allowlist and a fail-closed mask hook; deterministic scores), `app/agent/fence.py` and `app/db/retention.py`.
-P9 adds `app/ui/` (Streamlit demo UI, calls `/api/v1` only) and `app/alerts/` (stdlib Langfuse alert webhook receiver, run as the `alert-receiver` compose service, and the API-side reader).
+P9 adds `app/ui/` (Streamlit demo UI, calls `/api/v1` only; restyled in p9 ui-refresh with `app/ui/theme.py`, plus the read-only `GET /api/v1/sources` and `GET /api/v1/evaluations/release-gate` from `app/api/reports.py`) and `app/alerts/` (stdlib Langfuse alert webhook receiver, run as the `alert-receiver` compose service, and the API-side reader).
 P9 final adds `app/evaluation/` (eval-time only, never imported by the product: golden-answer checks, the Claude Opus 5.5 judge, the `vllm bench serve` parser, the release gate, the deployment manifest and the setup helpers) and `scripts/setup.sh` (one-command first-clone setup).
 
 ## Commands
@@ -175,6 +175,8 @@ Nothing is implemented without an accepted plan. Each feature follows `intent.md
 - A Langfuse container can't reach a listener on the host's `127.0.0.1`, and Langfuse delivers webhooks only to ports 80/443 and refuses private hosts unless whitelisted. Webhook receivers go in the compose network (`alert-receiver`, whitelisted by hostname only).
 - Streamlit re-runs the whole script on every click, so an uncached API read per rerun empties the subject's `api_other` bucket (429) in a few clicks. Read through `read()` (per-session cache) and write through `write()` (clears it) in `app/ui/streamlit_app.py`.
 - Streamlit widget labels and `st.markdown`/`st.info`-style elements render markdown. Show API text (answers, excerpts, approval payloads, alerts) with `st.text` only.
+- In the demo UI, raw HTML goes through `st.html(theme.<helper>(...))` only, and theme helpers take ints or fixed-dict keys, never strings to print. `tests/unit/test_ui_theme.py` parses `streamlit_app.py` and fails on any other `st.html` argument or any `unsafe_allow_html`.
+- A Streamlit widget's state can't be changed after the widget is created in the same run. Page switches from a button (Overview chips, Open, Library) go through an `on_click` callback (`go()` in `streamlit_app.py`), not code after the button.
 - On Windows `Popen.terminate()` kills only the launcher, not a child it spawned, and the child keeps the pipes open, so `communicate()` hangs. Launchers run their server in-process (`scripts/ui_server.py` calls `streamlit.web.cli.main`).
 - In LangGraph's checkpoint history, the next run's input checkpoint still carries the previous run's values with nodes pending. Take a run's answer from its newest checkpoint with no `next` (`Agent.history`).
 - Another session's `git commit` takes everything staged, including your files. Stage only at commit time: `git commit --only -- <paths>`.
