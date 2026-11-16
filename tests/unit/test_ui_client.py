@@ -150,3 +150,25 @@ def test_parse_context(text, expected):
 def test_parse_context_rejects_non_objects(text):
     with pytest.raises(ValueError):
         uic.parse_context(text)
+
+
+# --- p9 ui-refresh: sources and release gate (docs/p9-ui-refresh/spec.md Behaviour §8) ---------------------------
+
+def test_sources_and_release_gate_routes():
+    payloads = {"/api/v1/sources": {"sources": [{"document_id": "a"}]},
+                "/api/v1/evaluations/release-gate": {"verdict": "FAIL", "gates": []}}
+    c, seen = make(lambda request: httpx.Response(200, json=payloads[request.url.path]))
+    assert c.sources() == [{"document_id": "a"}]
+    assert c.release_gate() == {"verdict": "FAIL", "gates": []}
+    assert [(r.method, r.url.path) for r in seen] == [("GET", "/api/v1/sources"),
+                                                     ("GET", "/api/v1/evaluations/release-gate")]
+    assert all(r.headers["Authorization"].startswith("Bearer ") for r in seen)
+
+
+def test_release_gate_not_found_becomes_ui_error():
+    body = {"code": "REPORT_NOT_FOUND", "message": "no release-gate report has been generated yet",
+            "correlation_id": "c" * 32}
+    c, _ = make(ok(body, 404))
+    with pytest.raises(uic.ApiError) as err:
+        c.release_gate()
+    assert err.value.status == 404 and err.value.code == "REPORT_NOT_FOUND"

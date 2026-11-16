@@ -163,3 +163,11 @@ class Client:
 
     def alerts(self) -> dict[str, Any]:
         return self._call("GET", "/api/v1/alerts")
+
+    # --- p9 ui-refresh (docs/p9-ui-refresh/spec.md Behaviour §8) -----------------------------------------------
+
+    def sources(self) -> list[dict[str, Any]]:
+        return self._call("GET", "/api/v1/sources")["sources"]
+
+    def release_gate(self) -> dict[str, Any]:
+        return self._call("GET", "/api/v1/evaluations/release-gate")

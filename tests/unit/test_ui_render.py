@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.ui import render
 
 HOSTILE = "[click here](https://evil.example/steal) <img src=x onerror=alert(1)> **bold**"
@@ -91,3 +93,54 @@ def test_alert_lines():
 
 def test_short_id():
     assert render.short_id("abcdefghijklmnop") == "abcdefghij..." and render.short_id("abc") == "abc"
+
+
+# --- p9 ui-refresh (docs/p9-ui-refresh/spec.md Behaviour §2, §3, §6, §7; AC #8, #9) --------------------------------
+
+def test_split_sections_keeps_every_section_once_in_order():
+    answer = {**ANSWER, "action": {"type": "create_support_ticket", "target": "t", "status": "executed", "ticket_id": "k"},
+              "draft": {"action": "create_support_ticket", "status": "draft", "summary": "s"}}
+    sections = render.answer_sections(answer)
+    left, right = render.split_sections(sections)
+    assert [h for h, _ in left] == ["Summary", "Findings", "Next steps", "Sources", "Confidence and limitations"]
+    assert [h for h, _ in right] == ["Validation results", "Action", "Draft (not executed)"]
+    assert sorted(left + right) == sorted(sections) and len(left) + len(right) == len(sections)
+
+
+def test_overview_counts_from_real_data_and_none_for_no_figure():
+    threads = [{"status": "awaiting_approval"}, {"status": "completed"}, {"status": "awaiting_approval"}]
+    assert render.overview_counts(threads, [{"approval_id": "a"}], {"mcp": "up", "llm": "down"}) == \
+        {"threads": 3, "awaiting": 2, "pending": 1, "checks_up": 1, "checks_total": 2}
+    assert render.overview_counts([], [], {"mcp": "up", "llm": "up"}) == \
+        {"threads": 0, "awaiting": 0, "pending": 0, "checks_up": 2, "checks_total": 2}
+    assert render.overview_counts(None, None, None) == \
+        {"threads": None, "awaiting": None, "pending": None, "checks_up": None, "checks_total": None}
+    assert render.overview_counts(None, None, {})["checks_total"] is None
+
+
+@pytest.mark.parametrize("value, text", [(0.4356, "0.4356"), (0.92, "0.92"), (1.0, "1"), (0, "0"), (True, "true"),
+                                         (False, "false"), (None, "(no value)"), ({"passed": 3, "of": 4}, "passed=3, of=4"),
+                                         ({}, "(no value)")])
+def test_gate_value(value, text):
+    assert render.gate_value(value) == text
+
+
+@pytest.mark.parametrize("threshold, text", [({"min": 0.9}, ">= 0.9"), ({"max": 0}, "<= 0"),
+                                             ({"must_pass": True}, "must pass"), ({"min": 4, "of": 4}, ">= 4 of 4"),
+                                             ({"other": 1}, "other=1"), (None, "(no threshold)"), ({}, "(no threshold)")])
+def test_gate_threshold(threshold, text):
+    assert render.gate_threshold(threshold) == text
+
+
+def test_gate_text_keeps_hostile_strings_literal():
+    assert HOSTILE in render.gate_value(HOSTILE)
+    assert HOSTILE in render.gate_value({HOSTILE: 1})
+    assert HOSTILE in render.gate_threshold({HOSTILE: 1})
+
+
+def test_source_lines():
+    full = {"document_id": "snap-std", "title": HOSTILE, "publisher": "ASPI / Bank Indonesia", "kind": "specification",
+            "document_version": "1.0.2", "effective_date": "2024-09", "synthetic": False}
+    assert render.source_lines(full) == [HOSTILE, "snap-std · ASPI / Bank Indonesia",
+                                         "version 1.0.2, effective 2024-09, specification"]
+    assert render.source_lines({"document_id": "x"}) == ["(untitled)", "x", "(no version or date)"]

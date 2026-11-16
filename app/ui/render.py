@@ -115,3 +115,72 @@ def alert_lines(alert: dict[str, Any]) -> tuple[str, list[str]]:
 
 def short_id(value: str, n: int = 10) -> str:
     return value if len(value) <= n else f"{value[:n]}..."
+
+
+# --- p9 ui-refresh (docs/p9-ui-refresh/spec.md Behaviour §2, §3, §6, §7) ------------------------------------------
+
+RIGHT_SECTIONS = ("Validation results", "Action", "Draft (not executed)")
+
+
+def split_sections(sections: list[tuple[str, list[str]]]) -> tuple[list[tuple[str, list[str]]],
+                                                                   list[tuple[str, list[str]]]]:
+    """(left, right) for the case-detail layout: the diagnosis on the left; validator results and the action or
+    draft on the right. Every section lands in exactly one side, in its original order."""
+    left = [s for s in sections if s[0] not in RIGHT_SECTIONS]
+    right = [s for s in sections if s[0] in RIGHT_SECTIONS]
+    return left, right
+
+
+def overview_counts(threads: list[dict[str, Any]] | None, pending: list[dict[str, Any]] | None,
+                    checks: dict[str, Any] | None) -> dict[str, int | None]:
+    """The Overview stat values. None means "no figure" (the read failed or the identity may not read it); the page
+    shows "—" for it and never a placeholder number."""
+    return {"threads": None if threads is None else len(threads),
+            "awaiting": None if threads is None else sum(1 for t in threads if t.get("status") == "awaiting_approval"),
+            "pending": None if pending is None else len(pending),
+            "checks_up": None if not checks else sum(1 for v in checks.values() if v == "up"),
+            "checks_total": None if not checks else len(checks)}
+
+
+def _num(v: Any) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, float):
+        return f"{v:.4g}"
+    return _s(v)
+
+
+def gate_value(value: Any) -> str:
+    """A measured gate value as text: 0.4356, 3, true, or "passed=3, of=4" for an object. None is "(no value)"."""
+    if value is None:
+        return "(no value)"
+    if isinstance(value, dict):
+        return ", ".join(f"{_s(k)}={_num(v)}" for k, v in value.items()) or "(no value)"
+    return _num(value)
+
+
+def gate_threshold(threshold: Any) -> str:
+    """{"min": 0.9} -> ">= 0.9"; {"max": 0} -> "<= 0"; {"must_pass": true} -> "must pass"; {"min": 4, "of": 4} ->
+    ">= 4 of 4". Anything else is listed as key=value."""
+    if not isinstance(threshold, dict) or not threshold:
+        return "(no threshold)"
+    t = dict(threshold)
+    parts = []
+    if "min" in t:
+        parts.append(f">= {_num(t.pop('min'))}" + (f" of {_num(t.pop('of'))}" if "of" in t else ""))
+    if "max" in t:
+        parts.append(f"<= {_num(t.pop('max'))}")
+    if t.pop("must_pass", None) is True:
+        parts.append("must pass")
+    parts += [f"{_s(k)}={_num(v)}" for k, v in t.items()]
+    return ", ".join(parts)
+
+
+def source_lines(source: dict[str, Any]) -> list[str]:
+    """One Knowledge base or pinned-reference entry as plain text."""
+    meta = ", ".join(x for x in (f"version {_s(source.get('document_version'))}" if source.get("document_version") else "",
+                                 f"effective {_s(source.get('effective_date'))}" if source.get("effective_date") else "",
+                                 _s(source.get("kind"))) if x)
+    return [_s(source.get("title")) or "(untitled)",
+            f"{_s(source.get('document_id'))}" + (f" · {_s(source.get('publisher'))}" if source.get("publisher") else ""),
+            meta or "(no version or date)"]
