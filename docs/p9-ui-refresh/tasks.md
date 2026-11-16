@@ -7,6 +7,6 @@
 - [x] 3. Auth integration for both routes — spec AC: #4, #6 (own server module `test_api_ui_refresh_server.py`, so the shared per-address burst is not exhausted; test-only `DEVGUARD_REPORTS_DIR` override, as `DEVGUARD_ALERT_STORE`)
 - [x] 4. Client and render helpers — spec AC: #8, #9
 - [x] 5. Theme module — spec AC: #13 (helpers; the AST check of streamlit_app.py lands with step 6)
-- [ ] 6. Pages (theme, sidebar, Overview, Investigations, Approvals, Monitoring, Knowledge base, Evaluations) — spec AC: #7–#13
+- [x] 6. Pages (theme, sidebar, Overview, Investigations, Approvals, Monitoring, Knowledge base, Evaluations) — spec AC: #7–#13 (amended: answer stays whole in §5 order with a compact tool panel beside it; split_sections removed; light theme forced in the launcher)
 - [ ] 7. End to end against the real API — spec AC: #14
 - [ ] 8. Manual browser pass and docs — spec AC: #15, #16

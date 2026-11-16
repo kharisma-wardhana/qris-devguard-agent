@@ -97,16 +97,6 @@ def test_short_id():
 
 # --- p9 ui-refresh (docs/p9-ui-refresh/spec.md Behaviour §2, §3, §6, §7; AC #8, #9) --------------------------------
 
-def test_split_sections_keeps_every_section_once_in_order():
-    answer = {**ANSWER, "action": {"type": "create_support_ticket", "target": "t", "status": "executed", "ticket_id": "k"},
-              "draft": {"action": "create_support_ticket", "status": "draft", "summary": "s"}}
-    sections = render.answer_sections(answer)
-    left, right = render.split_sections(sections)
-    assert [h for h, _ in left] == ["Summary", "Findings", "Next steps", "Sources", "Confidence and limitations"]
-    assert [h for h, _ in right] == ["Validation results", "Action", "Draft (not executed)"]
-    assert sorted(left + right) == sorted(sections) and len(left) + len(right) == len(sections)
-
-
 def test_overview_counts_from_real_data_and_none_for_no_figure():
     threads = [{"status": "awaiting_approval"}, {"status": "completed"}, {"status": "awaiting_approval"}]
     assert render.overview_counts(threads, [{"approval_id": "a"}], {"mcp": "up", "llm": "down"}) == \

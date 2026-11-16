@@ -120,3 +120,11 @@ def test_socket_is_not_reachable_on_other_interfaces():
             proc.wait(timeout=15)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+def test_command_line_forces_the_light_theme():
+    """p9 ui-refresh: app/ui/theme.py ports a light-only reference; a dark base would put light text on white panels."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import ui_server
+    cmd = ui_server.command("127.0.0.1", 8501)
+    assert dict(zip(cmd, cmd[1:]))["--theme.base"] == "light"

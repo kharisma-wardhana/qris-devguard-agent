@@ -119,18 +119,6 @@ def short_id(value: str, n: int = 10) -> str:
 
 # --- p9 ui-refresh (docs/p9-ui-refresh/spec.md Behaviour §2, §3, §6, §7) ------------------------------------------
 
-RIGHT_SECTIONS = ("Validation results", "Action", "Draft (not executed)")
-
-
-def split_sections(sections: list[tuple[str, list[str]]]) -> tuple[list[tuple[str, list[str]]],
-                                                                   list[tuple[str, list[str]]]]:
-    """(left, right) for the case-detail layout: the diagnosis on the left; validator results and the action or
-    draft on the right. Every section lands in exactly one side, in its original order."""
-    left = [s for s in sections if s[0] not in RIGHT_SECTIONS]
-    right = [s for s in sections if s[0] in RIGHT_SECTIONS]
-    return left, right
-
-
 def overview_counts(threads: list[dict[str, Any]] | None, pending: list[dict[str, Any]] | None,
                     checks: dict[str, Any] | None) -> dict[str, int | None]:
     """The Overview stat values. None means "no figure" (the read failed or the identity may not read it); the page

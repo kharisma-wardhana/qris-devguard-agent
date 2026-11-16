@@ -183,3 +183,10 @@ Both routes:
 ## Amendments (found while building, 2026-11-16)
 - **Where the API reads `reports_dir`.** `configs/evaluation.yaml` states that nothing under `app/` outside `app/evaluation/` reads it. So the API gets its own keys in `configs/agent.yaml` `api`: `manifest_path`, `reports_dir` and `release_gate_glob`. A unit test pins `api.reports_dir` equal to `configs/evaluation.yaml` `reports_dir`. Behaviour §8 otherwise stands.
 - **The release-gate reports are git-ignored, not committed** (`evals/reports/*` in `.gitignore`). AC #2's "with the committed reports" therefore reads "with the developer's local reports". That check skips with a reason where no report exists, as in CI. In CI, AC #14's Evaluations render covers the `REPORT_NOT_FOUND` empty state, and the FAIL verdict is checked locally.
+- **The Investigations answer stays whole, in §5 order** (step 6). Behaviour §3 split the answer into left (diagnosis) and right (Validation results, Action, Draft) columns. That would reorder the §5 response contract and break the unchanged e2e test that asserts the six subheaders after "Latest answer" in §5 order. Instead:
+  - the left column holds the whole answer, in §5 order, in the keyed diagnosis panel;
+  - the right column holds a compact "Deterministic tool results" panel (`tool -> result` lines, plain text) and the proposed-approval card.
+
+  `render.split_sections` (step 4) is removed with its test, because nothing uses it.
+- **The launcher forces Streamlit's light theme** (`--theme.base light`), because the reference only defines light colours. A regression test is in `tests/integration/test_ui_server_cli.py`.
+- **The API health list keeps its existing `mcp: up` text lines**, which the unchanged e2e test reads, plus a readiness stat card (checks up / total). There are no per-check Online/Offline pills: a check name comes from the server, and the theme renders only fixed keys.

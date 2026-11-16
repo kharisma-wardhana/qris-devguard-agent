@@ -29,6 +29,17 @@ ANSWER = {"summary": f"Invalid signature. {HOSTILE}", "findings": [{"text": HOST
           "sources": [{"citation_id": "C1", "title": "SNAP", "document_id": "d", "document_version": "1",
                        "quote_or_excerpt": HOSTILE, "synthetic": True}]}
 
+SOURCES = [{"document_id": "snap-std", "title": f"SNAP {HOSTILE}", "publisher": "ASPI", "kind": "specification",
+            "document_version": "1.0.2", "effective_date": "2024-09", "synthetic": False},
+           {"document_id": "synthetic-sop", "title": "SOP (SYNTHETIC)", "publisher": None, "kind": "sop",
+            "document_version": "0.1.0", "effective_date": "2026-11-06", "synthetic": True}]
+GATE_REPORT = {"generated_at": "2026-11-15T06:55:20+00:00", "verdict": "FAIL", "not_passing": ["g2"],
+               "critical_not_passing": [],
+               "gates": [{"name": "g1", "kind": "critical", "status": "PASS", "value": 0, "threshold": {"max": 0},
+                          "evidence_date": "2026-11-15", "note": ""},
+                         {"name": f"g2 {HOSTILE}", "kind": "gate", "status": "FAIL", "value": 0.27,
+                          "threshold": {"min": 0.9}, "evidence_date": None, "note": f"note {HOSTILE}"}]}
+
 
 COUNTS: dict[str, int] = {}
 
@@ -70,6 +81,15 @@ class Fake:
 
     def alerts(self):
         return {"alerts": self._alerts, "skipped": 0}
+
+    # p9 ui-refresh (docs/p9-ui-refresh/spec.md Behaviour §8)
+    def sources(self):
+        self._f("sources")
+        return SOURCES
+
+    def release_gate(self):
+        self._f("release_gate")
+        return GATE_REPORT
 
 
 def app(fake_kwargs=None, identity="Developer (demo-dev)", page="Threads and chat"):
@@ -167,3 +187,127 @@ def test_reads_are_cached_across_reruns_and_refresh_clears_them():
     assert COUNTS["list_threads"] == 1
     at.button(key="refresh_threads").click().run()
     assert COUNTS["list_threads"] == 2
+
+
+# --- p9 ui-refresh (docs/p9-ui-refresh/spec.md AC #7-#12) ----------------------------------------------------------
+
+from app.ui import theme  # noqa: E402
+
+NEW_PAGES = ["Overview", "Knowledge base", "Evaluations"]
+APPROVER = "Approver (demo-approver)"
+
+
+def html_bodies(at):
+    return [el.proto.body for el in at.get("html")]
+
+
+def not_in_rich_elements(at, needle):
+    """`needle` appears in no element that renders markdown or HTML, nor in any widget label."""
+    for kind in MARKDOWNISH:
+        assert not any(needle in v for v in values(at, kind)), kind
+    assert not any(needle in b for b in html_bodies(at))
+
+
+@pytest.mark.parametrize("identity", ["Developer (demo-dev)", APPROVER])
+@pytest.mark.parametrize("page", NEW_PAGES)
+def test_new_pages_render_and_never_show_the_token(identity, page):
+    at = app(identity=identity, page=page)
+    assert not at.exception, [e.value for e in at.exception]
+    assert TOKEN not in everything(at) and not any(TOKEN in b for b in html_bodies(at))
+    assert not at.error
+
+
+def test_nav_keeps_option_values_and_shows_reference_labels():
+    at = app(page="Overview")
+    radio = at.sidebar.radio(key="page")
+    assert radio.options == ["Overview", "Investigations", "Approvals", "Monitoring", "Knowledge base", "Evaluations"]
+    assert radio.value == "Overview"
+
+
+def test_hostile_text_on_new_pages_is_plain_text_only():
+    for page in NEW_PAGES:
+        at = app(identity=APPROVER, page=page)
+        not_in_rich_elements(at, "evil.example")
+    kb = app(page="Knowledge base")
+    assert any(HOSTILE in v for v in values(kb, "text"))
+    ev = app(page="Evaluations")
+    shown = "\n".join(values(ev, "text"))
+    assert f"g2 {HOSTILE}" in shown and f"note: note {HOSTILE}" in shown
+
+
+def test_unknown_status_renders_the_unknown_pill(monkeypatch):
+    monkeypatch.setattr(Fake, "list_threads", lambda self: [{"thread_id": TID, "status": HOSTILE,
+                                                           "created_at": "c", "updated_at": "u"}])
+    at = app(page="Overview")
+    assert any(">Unknown<" in b for b in html_bodies(at))
+    not_in_rich_elements(at, "evil.example")
+
+
+def test_overview_counts_for_developer_and_approver():
+    dev = app(page="Overview")
+    stats = next(b for b in html_bodies(dev) if "My threads" in b)
+    assert theme.stat("threads", 1) in stats and theme.stat("awaiting", 1) in stats
+    assert theme.stat("pending_forbidden", None) in stats and theme.stat("ready", 2, total=2) in stats
+    appr = app(identity=APPROVER, page="Overview")
+    stats = next(b for b in html_bodies(appr) if "My threads" in b)
+    assert theme.stat("pending", 1) in stats
+
+
+def test_overview_failed_read_shows_a_dash_and_the_envelope():
+    err = ApiError(503, "SERVICE_UNAVAILABLE", "the thread and approval store is not available", "cid-9")
+    at = app(fake_kwargs={"fail": {"list_threads": err}}, page="Overview")
+    stats = next(b for b in html_bodies(at) if "My threads" in b)
+    assert theme.stat("threads", None) in stats and theme.stat("awaiting", None) in stats
+    assert at.error[0].value == "The request failed." and "code: SERVICE_UNAVAILABLE" in "\n".join(values(at, "text"))
+
+
+def test_overview_chip_creates_a_thread_and_opens_it():
+    at = app(page="Overview")
+    at.button(key="chip-0").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.sidebar.radio(key="page").value == "Threads and chat"
+    assert at.session_state["open_thread"] == TID
+    assert at.text_area(key="message").value == "Why is my access-token signature rejected?"
+    assert f"thread: {TID}" in "\n".join(values(at, "text"))
+
+
+def test_overview_open_and_library_buttons_switch_page():
+    at = app(page="Overview")
+    at.button(key=f"ov-open-{TID}").click().run()
+    assert at.sidebar.radio(key="page").value == "Threads and chat" and at.session_state["open_thread"] == TID
+    at = app(page="Overview")
+    at.button(key="ov-library").click().run()
+    assert at.sidebar.radio(key="page").value == "Knowledge base"
+
+
+def test_evaluations_shows_the_fail_verdict_and_one_row_per_gate():
+    at = app(page="Evaluations")
+    bodies = html_bodies(at)
+    assert theme.pill("gate", "FAIL") in bodies
+    assert sum(1 for b in bodies if b in (theme.pill("gate", "PASS"), theme.pill("gate", "FAIL"))) == 3  # verdict + 2 rows
+    shown = "\n".join(values(at, "text"))
+    assert "verdict: FAIL" in shown and "0.27  (threshold >= 0.9)" in shown and "0  (threshold <= 0)" in shown
+    stats = next(b for b in bodies if "Gates passing" in b)
+    assert theme.stat("gates_passing", 1, total=2) in stats and theme.stat("not_passing", 1) in stats
+
+
+def test_evaluations_without_a_report_shows_the_empty_state():
+    err = ApiError(404, "REPORT_NOT_FOUND", "no release-gate report has been generated yet", "cid-1")
+    at = app(fake_kwargs={"fail": {"release_gate": err}}, page="Evaluations")
+    assert not at.error
+    assert any(v == "No release-gate report yet. Run scripts/release_gate.py." for v in values(at, "info"))
+
+
+def test_evaluations_other_errors_show_the_envelope():
+    err = ApiError(500, "INTERNAL_ERROR", "the request failed", "cid-2")
+    at = app(fake_kwargs={"fail": {"release_gate": err}}, page="Evaluations")
+    assert at.error[0].value == "The request failed." and "code: INTERNAL_ERROR" in "\n".join(values(at, "text"))
+
+
+def test_knowledge_base_lists_every_source_with_its_pill():
+    at = app(page="Knowledge base")
+    bodies = html_bodies(at)
+    assert theme.count_head("sources", 2) in bodies
+    assert theme.pill("source", "synthetic") in bodies and theme.pill("source", "reference") in bodies
+    shown = "\n".join(values(at, "text"))
+    assert "snap-std · ASPI" in shown and "synthetic-sop" in shown

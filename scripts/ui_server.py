@@ -28,7 +28,8 @@ def command(host: str, port: int) -> list[str]:
             "--server.address", host, "--server.port", str(port), "--server.headless", "true",
             "--browser.gatherUsageStats", "false", "--server.enableCORS", "true",
             "--server.enableXsrfProtection", "true", "--global.developmentMode", "false",
-            "--server.fileWatcherType", "none", "--client.toolbarMode", "minimal"]
+            "--server.fileWatcherType", "none", "--client.toolbarMode", "minimal",
+            "--theme.base", "light"]                   # p9 ui-refresh: the reference theme is light-only
 
 
 def main(argv: list[str] | None = None) -> int:
