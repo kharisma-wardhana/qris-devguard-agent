@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from app.agent import config
 from app.rag import manifest
 
@@ -39,7 +41,7 @@ def sources(manifest_path: Path | None = None) -> list[dict[str, Any]]:
     try:
         entries = manifest.load_manifest(path)
         keep = manifest.retrievable_document_ids(entries)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError):
         raise ReportError(missing=False) from None
     out = []
     for e in entries:

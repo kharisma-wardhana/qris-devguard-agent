@@ -296,6 +296,16 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
         alerts, skipped = await run_in_threadpool(alert_store.read_alerts)
         return {"alerts": alerts, "skipped": skipped}
 
+    @app.get("/api/v1/sources")
+    async def list_sources(_: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        """p9 ui-refresh (spec Behaviour §8, AC #1): the approved, retrievable manifest entries as a field allowlist,
+        for every authenticated role. An unreadable manifest: 500 with no path or file text."""
+        from app.api import reports
+        try:
+            return {"sources": await run_in_threadpool(reports.sources)}
+        except reports.ReportError:
+            raise ApiError(500, "INTERNAL_ERROR") from None
+
     @app.get("/api/v1/evaluations/release-gate")
     async def release_gate(_: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
         """p9 ui-refresh (spec Behaviour §8, AC #2, #3): the newest release-gate report as a field allowlist, for

@@ -251,3 +251,27 @@ def test_release_gate_errors_use_the_envelope(bare, monkeypatch, missing, status
     body = r.json()
     assert r.status_code == status and body["code"] == code
     assert set(body) == {"code", "message", "correlation_id"} and "release-gate-" not in r.text
+
+
+# --- p9 ui-refresh: GET /api/v1/sources (docs/p9-ui-refresh/spec.md AC #1) ------------------------------------
+
+def test_sources_needs_a_token(bare):
+    r = bare.get("/api/v1/sources")
+    assert r.status_code == 401 and r.json()["code"] == "UNAUTHENTICATED"
+
+
+@pytest.mark.parametrize("role", ["developer", "support_engineer", "kb_maintainer", "admin"])
+def test_sources_are_for_every_role(bare, role):
+    from app.api import reports
+    r = bare.get("/api/v1/sources", headers=hdr(SECRET, role=role))
+    assert r.status_code == 200 and r.json() == {"sources": reports.sources()}
+
+
+def test_sources_error_uses_the_envelope_without_a_path(bare, monkeypatch):
+    from app.api import reports
+
+    def fail():
+        raise reports.ReportError(missing=False)
+    monkeypatch.setattr(reports, "sources", fail)
+    r = bare.get("/api/v1/sources", headers=hdr(SECRET))
+    assert r.status_code == 500 and r.json()["code"] == "INTERNAL_ERROR" and "sources.yaml" not in r.text
