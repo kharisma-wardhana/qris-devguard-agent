@@ -179,3 +179,7 @@ Both routes:
 - Scope: restyle plus real-data pages (developer, 2026-11-16).
 - Branch: `feature/p9-ui-refresh` (developer, 2026-11-16).
 - Evaluations access: every authenticated role (developer, 2026-11-16).
+
+## Amendments (found while building, 2026-11-16)
+- **Where the API reads `reports_dir`.** `configs/evaluation.yaml` states that nothing under `app/` outside `app/evaluation/` reads it. So the API gets its own keys in `configs/agent.yaml` `api`: `manifest_path`, `reports_dir` and `release_gate_glob`. A unit test pins `api.reports_dir` equal to `configs/evaluation.yaml` `reports_dir`. Behaviour §8 otherwise stands.
+- **The release-gate reports are git-ignored, not committed** (`evals/reports/*` in `.gitignore`). AC #2's "with the committed reports" therefore reads "with the developer's local reports". That check skips with a reason where no report exists, as in CI. In CI, AC #14's Evaluations render covers the `REPORT_NOT_FOUND` empty state, and the FAIL verdict is checked locally.

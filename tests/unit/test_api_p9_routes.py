@@ -219,3 +219,35 @@ def test_history_of_someone_elses_or_unknown_thread_is_the_same_404(client, harn
     unknown = client.get(f"/api/v1/threads/{secrets.token_urlsafe(24)}/messages", headers=hdr(harness.secret, owner))
     assert other.status_code == unknown.status_code == 404
     assert other.json().keys() == unknown.json().keys() and other.json()["code"] == unknown.json()["code"] == "NOT_FOUND"
+
+
+# --- p9 ui-refresh: GET /api/v1/evaluations/release-gate (docs/p9-ui-refresh/spec.md AC #2, #3) ------------------
+
+RELEASE_GATE = "/api/v1/evaluations/release-gate"
+
+
+def test_release_gate_needs_a_token(bare):
+    r = bare.get(RELEASE_GATE)
+    assert r.status_code == 401 and r.json()["code"] == "UNAUTHENTICATED"
+
+
+@pytest.mark.parametrize("role", ["developer", "support_engineer", "kb_maintainer", "admin"])
+def test_release_gate_is_for_every_role(bare, monkeypatch, role):
+    from app.api import reports
+    monkeypatch.setattr(reports, "release_gate", lambda: {"generated_at": "t", "verdict": "FAIL", "not_passing": [],
+                                                          "critical_not_passing": [], "gates": []})
+    r = bare.get(RELEASE_GATE, headers=hdr(SECRET, role=role))
+    assert r.status_code == 200 and r.json()["verdict"] == "FAIL"
+
+
+@pytest.mark.parametrize("missing, status, code", [(True, 404, "REPORT_NOT_FOUND"), (False, 500, "INTERNAL_ERROR")])
+def test_release_gate_errors_use_the_envelope(bare, monkeypatch, missing, status, code):
+    from app.api import reports
+
+    def fail():
+        raise reports.ReportError(missing=missing)
+    monkeypatch.setattr(reports, "release_gate", fail)
+    r = bare.get(RELEASE_GATE, headers=hdr(SECRET))
+    body = r.json()
+    assert r.status_code == status and body["code"] == code
+    assert set(body) == {"code", "message", "correlation_id"} and "release-gate-" not in r.text

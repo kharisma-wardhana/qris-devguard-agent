@@ -2,7 +2,7 @@
 *Author: Kharisma Wardhana. Stage: Plan. Written: 2026-11-16.*
 *Implements: docs/p9-ui-refresh/plan.md*
 
-- [ ] 1. Release-gate reader and route — spec AC: #2, #3, #5
+- [x] 1. Release-gate reader and route — spec AC: #2, #3, #5 (amended: API paths in configs/agent.yaml `api`; reports are git-ignored, so the measured-FAIL check is local-only)
 - [ ] 2. Sources route — spec AC: #1
 - [ ] 3. Auth integration for both routes — spec AC: #4, #6
 - [ ] 4. Client and render helpers — spec AC: #8, #9

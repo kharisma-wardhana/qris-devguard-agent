@@ -46,6 +46,8 @@ MESSAGES = {
     # p7
     "RATE_LIMITED": "too many requests; retry after the number of seconds in Retry-After",
     "PAYLOAD_TOO_LARGE": "the request body is larger than allowed",
+    # p9 ui-refresh
+    "REPORT_NOT_FOUND": "no release-gate report has been generated yet",
 }
 THREAD_ID = r"^[A-Za-z0-9_-]{16,64}$"
 APPROVAL_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -293,6 +295,16 @@ def create_app(*, agent: Any, secret: str, mcp_ping: Callable[[], Awaitable[bool
             raise ApiError(403, "FORBIDDEN")
         alerts, skipped = await run_in_threadpool(alert_store.read_alerts)
         return {"alerts": alerts, "skipped": skipped}
+
+    @app.get("/api/v1/evaluations/release-gate")
+    async def release_gate(_: tuple[str, str] = Depends(other_identity)) -> dict[str, Any]:
+        """p9 ui-refresh (spec Behaviour §8, AC #2, #3): the newest release-gate report as a field allowlist, for
+        every authenticated role. No usable report: 404 REPORT_NOT_FOUND; an unusable one: 500 with no file text."""
+        from app.api import reports
+        try:
+            return await run_in_threadpool(reports.release_gate)
+        except reports.ReportError as err:
+            raise ApiError(404, "REPORT_NOT_FOUND") if err.missing else ApiError(500, "INTERNAL_ERROR") from None
 
     @app.post("/api/v1/approvals/{approval_id}/decision")
     async def decide(body: DecisionRequest, approval_id: str = Path(pattern=APPROVAL_ID),

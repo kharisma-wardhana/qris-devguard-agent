@@ -27,6 +27,10 @@ api:
   port: 8000
   audience: qris-devguard-api          # MCP tokens use qris-devguard-mcp (configs/mcp.yaml); never forwarded
   max_message_chars: 8000              # configs/security.yaml limits.max_message_chars
+  manifest_path: knowledge_base/manifests/sources.yaml   # p9 ui-refresh: GET /api/v1/sources
+  reports_dir: evals/reports           # p9 ui-refresh: GET /api/v1/evaluations/release-gate; must equal
+                                       # configs/evaluation.yaml reports_dir (a test pins it; the API never reads that file)
+  release_gate_glob: "release-gate-*.json"
 
 classify:
   code_regex: '(?<!\d)([2-5]\d{6})(?!\d)'
